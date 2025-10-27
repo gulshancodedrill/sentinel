@@ -1,0 +1,6 @@
+<?php
+
+/**
+ * @file
+ * Defines Drupal hooks for context_ui module.
+ */

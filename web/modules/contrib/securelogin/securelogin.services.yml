@@ -1,0 +1,15 @@
+services:
+  _defaults:
+    autoconfigure: true
+    autowire: true
+  securelogin.manager:
+    class: Drupal\securelogin\SecureLoginManager
+  Drupal\securelogin\SecureLoginManager: '@securelogin.manager'
+  securelogin.path_processor:
+    class: Drupal\securelogin\SecureLoginPathProcessor
+    tags:
+      - { name: path_processor_outbound }
+  securelogin.request_subscriber:
+    class: Drupal\securelogin\SecureLoginRequestSubscriber
+  securelogin.response_subscriber:
+    class: Drupal\securelogin\SecureLoginResponseSubscriber

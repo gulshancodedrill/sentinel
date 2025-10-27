@@ -1,0 +1,53 @@
+id: securelogin_settings
+label: Secure login settings
+migration_tags:
+  - Drupal 7
+  - Configuration
+source:
+  plugin: variable
+  variables:
+    - securelogin_base_url
+    - securelogin_form_comment_form
+    - securelogin_form_node_form
+    - securelogin_form_user_login
+    - securelogin_form_user_login_block
+    - securelogin_form_user_pass
+    - securelogin_form_user_pass_reset
+    - securelogin_form_user_profile_form
+    - securelogin_form_user_register_form
+    - securelogin_form_contact_personal_form
+    - securelogin_form_contact_site_form
+    - securelogin_form_webform_client_form
+    - securelogin_secure_forms
+    - securelogin_all_forms
+    - securelogin_other_forms
+  source_module: securelogin
+process:
+  all_forms: securelogin_all_forms
+  base_url: securelogin_base_url
+  forms:
+    plugin: callback
+    callable:
+      - 'Drupal\securelogin\Form\SecureLoginConfigForm'
+      - migrateForms
+    unpack_source: true
+    source:
+      - securelogin_form_comment_form
+      - securelogin_form_contact_site_form
+      - securelogin_form_node_form
+      - securelogin_form_user_profile_form
+      - securelogin_form_user_login
+      - securelogin_form_user_pass
+      - securelogin_form_user_pass_reset
+      - securelogin_form_user_register_form
+      - securelogin_form_webform_client_form
+  other_forms:
+    plugin: callback
+    callable:
+      - 'Drupal\securelogin\Form\SecureLoginConfigForm'
+      - stringToList
+    source: securelogin_other_forms
+  secure_forms: securelogin_secure_forms
+destination:
+  plugin: config
+  config_name: securelogin.settings

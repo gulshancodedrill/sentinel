@@ -1,0 +1,14 @@
+Certbot
+cleartext
+HSTS
+pvde
+Resecure
+securelogin
+securepages
+Swcf
+Sxto
+Szwr
+Untar
+Webform
+webform
+XLGP

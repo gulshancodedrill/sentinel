@@ -1,0 +1,28 @@
+# Schema for the configuration files of the securelogin module.
+
+securelogin.settings:
+  type: config_object
+  label: 'Secure login settings'
+  mapping:
+    base_url:
+      type: uri
+      label: 'Secure base URL'
+      nullable: true
+    secure_forms:
+      type: boolean
+      label: 'Redirect form pages to secure URL'
+    all_forms:
+      type: boolean
+      label: 'Submit all forms to secure URL'
+    forms:
+      type: sequence
+      label: 'Forms to secure'
+      sequence:
+        type: string
+        label: 'Form ID or base form ID'
+    other_forms:
+      type: sequence
+      label: 'Other forms to secure'
+      sequence:
+        type: string
+        label: 'Form ID or base form ID'
