@@ -1,0 +1,19 @@
+uuid: menu_link_content:portal-admin-area
+langcode: en
+status: true
+dependencies: {  }
+id: menu_link_content:portal-admin-area
+revision_id: 2
+bundle: menu_link_content
+title: 'Admin Area'
+description: 'Administration area'
+menu_name: portal
+link:
+  uri: 'internal:/portal/admin'
+  title: 'Admin Area'
+  options: {  }
+external: false
+enabled: true
+expanded: true
+parent: ''
+weight: 100

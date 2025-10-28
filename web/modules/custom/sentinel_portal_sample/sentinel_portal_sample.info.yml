@@ -1,0 +1,11 @@
+name: 'Sentinel Portal Sample'
+type: module
+description: 'Provides the functionality to check on sentinel systemcheck packs.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_entities
+  - sentinel_portal_module
+  - field
+  - user
+  - system

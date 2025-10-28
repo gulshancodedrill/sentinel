@@ -1,0 +1,61 @@
+sentinel_portal_sample.view:
+  path: '/portal/samples/{sentinel_sample}/view'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::view'
+  requirements:
+    _permission: 'sentinel view own sentinel_sample'
+  options:
+    parameters:
+      sentinel_sample:
+        type: entity:sentinel_sample
+
+sentinel_portal_sample.submit:
+  path: '/portal/sample/submit'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\SentinelSampleSubmissionForm'
+  requirements:
+    _permission: 'sentinel portal sample submit'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.edit:
+  path: '/portal/sample/edit/{sentinel_sample}'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\SentinelSampleEditForm'
+  requirements:
+    _permission: 'sentinel portal sample submit'
+  options:
+    _admin_route: FALSE
+    parameters:
+      sentinel_sample:
+        type: entity:sentinel_sample
+
+sentinel_portal_sample.landlord.autocomplete:
+  path: '/sample_landlord/autocomplete'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::landlordAutocomplete'
+  requirements:
+    _permission: 'sentinel portal sample submit'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.company_address_ajax:
+  path: '/sample/company-address/ajax'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::selectCompanyAddress'
+  requirements:
+    _permission: 'sentinel portal sample submit'
+
+sentinel_portal_sample.sample_address_ajax:
+  path: '/sample/sample-address/ajax'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::selectSampleAddress'
+  requirements:
+    _permission: 'sentinel portal sample submit'
+
+sentinel_portal_sample.landlord_ajax:
+  path: '/sample/landlord/ajax'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::selectLandlord'
+  requirements:
+    _permission: 'sentinel portal sample submit'

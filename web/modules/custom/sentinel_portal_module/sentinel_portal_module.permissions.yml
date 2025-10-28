@@ -1,0 +1,28 @@
+sentinel portal:
+  title: 'Sentinel Portal'
+  description: 'Sentinel portal access.'
+
+sentinel portal administration:
+  title: 'Sentinel Portal Admin'
+  description: 'Sentinel portal Administration access.'
+  restrict access: true
+
+sentinel portal view any certificate:
+  title: 'View any certificate'
+  description: 'Allow user the ability to view any pdf certificate'
+
+sentinel portal regenerate any certificate:
+  title: 'Regenerate any certificate'
+  description: 'Allow user the ability to regenerate any pdf certificate'
+
+sentinel portal send email report:
+  title: 'Send email report'
+  description: 'Allow user the ability to send sample email report'
+
+sentinel portal send api report:
+  title: 'Send api report'
+  description: 'Allow user the ability to send sample api report'
+
+sentinel access the admin splash area:
+  title: 'Access the admin splash screen'
+  description: 'Access the admin splash screen of portal'

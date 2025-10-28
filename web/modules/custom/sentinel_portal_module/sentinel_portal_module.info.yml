@@ -1,0 +1,17 @@
+name: 'Sentinel Portal Master Module'
+type: module
+description: 'Master module for the Sentinel Portal area.'
+core_version_requirement: ^11
+package: Other
+dependencies:
+  - menu_ui
+  - user
+  - system
+  - field
+  - views
+  - context
+  - ctools
+  - features
+  - address
+libraries:
+  - sentinel_portal_module/custom-styling

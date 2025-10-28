@@ -1,0 +1,7 @@
+sentinel portal sample:
+  title: 'Sentinel Portal Sample'
+  description: 'Sentinel portal sample.'
+
+sentinel portal sample submit:
+  title: 'Sentinel Portal Sample Submit'
+  description: 'Sentinel portal sample submit form.'

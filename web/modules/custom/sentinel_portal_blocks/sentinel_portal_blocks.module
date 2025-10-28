@@ -1,0 +1,24 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Portal Blocks theme hooks.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function sentinel_portal_blocks_theme($existing, $type, $theme, $path) {
+  return [
+    'sentinel_portal_analytics_block' => [
+      'variables' => [
+        'passed' => 0,
+        'failed' => 0,
+        'pending' => 0,
+        'total' => 0,
+      ],
+      'template' => 'sentinel-portal-analytics-block',
+      'path' => $path . '/templates',
+    ],
+  ];
+}

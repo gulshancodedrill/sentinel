@@ -1,0 +1,6 @@
+custom-styling:
+  css:
+    theme:
+      css/custom.css: {}
+  dependencies:
+    - core/drupal

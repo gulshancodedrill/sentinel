@@ -2,3 +2,206 @@
  * @file
  * Subtheme specific CSS.
  */
+
+ /* Custom CSS for Sentinel Portal Module */
+
+.page-content {
+    padding: 2em;
+  }
+  
+  @media (min-width: 1200px) {
+    .page-content {
+      padding-right: 0;
+    }
+  }
+  
+  .page-aside {
+    background-color: #f0f0f0;
+    border-right: 1px solid #d0d0d0;
+    border-left: 1px solid #d0d0d0;
+  }
+  
+  .page-content__user-forms {
+    margin: 0 auto;
+    max-width: 35rem;
+    text-align: center;
+  }
+  
+  .page-content__user-forms form {
+    clear: both;
+  }
+  
+  .page-content__user-forms label,
+  .page-content__user-forms input,
+  .page-content__user-forms .description {
+    text-align: left;
+  }
+  
+  .page-content__user-forms .form-actions {
+    margin-top: 2em;
+  }
+  
+  @media (min-width: 768px) {
+    .page-content__user-forms .form-actions {
+      float: right;
+    }
+  }
+  
+  .page-content__user-forms .form-misc-actions {
+    margin-top: 2em;
+    text-align: left;
+  }
+  
+  @media (min-width: 768px) {
+    .page-content__user-forms .form-misc-actions {
+      float: left;
+    }
+  }
+  
+  table {
+    border: 1px solid #d0d0d0;
+    border-collapse: collapse;
+    min-width: 100%;
+    text-align: left;
+  }
+  
+  table thead th,
+  table thead td {
+    background-color: #d0d0d0;
+  }
+  
+  table tbody tr:nth-child(even) th,
+  table tbody tr:nth-child(even) td {
+    background-color: #f0f0f0;
+  }
+  
+  table th,
+  table td {
+    padding: 1em;
+  }
+  
+  .tiles {
+    display: block;
+    margin-bottom: 0;
+    margin-left: 0;
+  }
+  
+  @media (min-width: 768px) {
+    .tiles {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+      align-items: stretch;
+      flex-wrap: wrap;
+      margin-bottom: -1rem;
+      margin-left: -1rem;
+    }
+  
+    .tiles .tiles__tile {
+      flex: 1 1 50%;
+      margin: 0;
+      padding-bottom: 1rem;
+      padding-left: 1rem;
+    }
+  }
+  
+  @media (min-width: 992px) {
+    .tiles .tiles__tile {
+      flex-basis: 25%;
+    }
+  }
+  
+  .tile {
+    display: block;
+    background-color: #d0d0d0;
+    font-weight: 400;
+    overflow: hidden;
+  }
+  
+  .tile--success {
+    display: block;
+    background-color: #d4edda;
+    color: white;
+  }
+  
+  .tile--success .tile__heading {
+    background-color: #c3e6cb;
+  }
+  
+  .tile--fail {
+    display: block;
+    background-color: #f8d7da;
+    color: white;
+  }
+  
+  .tile--fail .tile__heading {
+    background-color: #f5c6cb;
+  }
+  
+  .tile--pending {
+    display: block;
+    background-color: #fff3cd;
+    color: white;
+  }
+  
+  .tile--pending .tile__heading {
+    background-color: #ffeaa7;
+  }
+  
+  .tile__heading,
+  .tile__content {
+    margin: 0 !important;
+    padding: 1em;
+  }
+  
+  .tile__heading {
+    box-shadow: 0 0 0.5em black;
+  }
+  
+  .tile__stat {
+    font-size: 2em;
+    font-weight: 700;
+  }
+  
+  .lozenge--passed {
+    display: inline-block;
+    padding: 0.4em 0.6em;
+    min-width: 7em;
+    border-radius: 100em;
+    color: white;
+    font-weight: 700;
+    text-align: center;
+    background-color: #28a745;
+  }
+  
+  .lozenge--failed {
+    display: inline-block;
+    padding: 0.4em 0.6em;
+    min-width: 7em;
+    border-radius: 100em;
+    color: white;
+    font-weight: 700;
+    text-align: center;
+    background-color: #dc3545;
+  }
+  
+  .lozenge--pending {
+    display: inline-block;
+    padding: 0.4em 0.6em;
+    min-width: 7em;
+    border-radius: 100em;
+    color: white;
+    font-weight: 700;
+    text-align: center;
+    background-color: #ffc107;
+  }
+  
+  .responsive-overflow {
+    display: block;
+    overflow-x: auto;
+    width: 100%;
+  }
+  
+  #edit-field-user-cohorts-und {
+    height: 400px;
+  }

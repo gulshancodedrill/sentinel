@@ -1,0 +1,14 @@
+sample-form:
+  version: 4.3
+  css:
+    theme:
+      css/sentinel_portal_sample_address.css: {}
+  js:
+    js/sentinel_portal_sample.landlord.js: {}
+    js/sentinel_portal_sample_company.address.js: {}
+    js/sentinel_portal_sample_sample.address.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.ajax
+    - core/jquery
+    - core/once

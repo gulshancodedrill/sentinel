@@ -1,0 +1,47 @@
+<article class="tiles">
+  <div class="tiles__tile">
+    <section class="tile--success">
+      <header class="tile__heading">
+        {{ 'Passed Tests'|t }}
+      </header>
+      <main class="tile__content">
+        <span class="tile__stat">{{ passed }}</span>
+      </main>
+    </section>
+  </div>
+  <div class="tiles__tile">
+    <section class="tile--fail">
+      <header class="tile__heading">
+        {{ 'Failed Tests'|t }}
+      </header>
+      <main class="tile__content">
+        <span class="tile__stat">{{ failed }}</span>
+      </main>
+    </section>
+  </div>
+  <div class="tiles__tile">
+    <section class="tile--pending">
+      <header class="tile__heading">
+        {{ 'Pending Tests'|t }}
+      </header>
+      <main class="tile__content">
+        <span class="tile__stat">{{ pending }}</span>
+      </main>
+    </section>
+  </div>
+  <div class="tiles__tile">
+    <section class="tile">
+      <header class="tile__heading">
+        {{ 'Total Tests'|t }}
+      </header>
+      <main class="tile__content">
+        <span class="tile__stat">{{ total }}</span>
+      </main>
+    </section>
+  </div>
+    <div class="portal-welcome">
+    <p>
+      {{ 'Welcome to the Sentinel Portal. Submit SystemCheck pack information, edit incomplete or \'pending\' packs and view reports for completed analyses.'|t }}
+    </p>
+  </div>
+</article>

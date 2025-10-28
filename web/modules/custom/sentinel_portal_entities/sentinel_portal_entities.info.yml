@@ -1,0 +1,22 @@
+name: 'Sentinel Portal Entities'
+type: module
+description: 'This module creates entities for the Sentinel portal.'
+core_version_requirement: ^11
+package: Other
+dependencies:
+  - field
+  - views
+  - rules
+  - sentinel_portal_module
+  - entity
+  - user
+  - system
+  - file
+  - image
+  - text
+  - datetime
+  - options
+  - taxonomy
+  - address
+  - link
+  - telephone

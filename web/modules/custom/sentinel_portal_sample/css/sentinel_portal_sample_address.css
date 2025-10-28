@@ -1,0 +1,60 @@
+/* Legacy D7 selectors */
+#sentinel-portal-sample-submission-form #edit-field-sentinel-sample-address-und-form-field-address,
+#sentinel-portal-sample-submission-form .form-item-landlord {
+    display: none;
+}
+
+/* D11 selectors - Hide address and landlord fields by default */
+.sample-address-fields {
+  display: none;
+}
+
+.sample-landlord-field {
+  display: none;
+}
+
+/* Fieldset styling - All fieldsets should have visible borders */
+fieldset,
+.fieldset,
+details {
+  border: 1px solid #cccccc !important;
+  border-radius: 4px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background-color: #ffffff;
+}
+
+fieldset legend,
+.fieldset legend,
+summary {
+  font-weight: bold;
+  font-size: 1.1em;
+  padding: 0 10px;
+  margin-bottom: 15px;
+  background-color: #ffffff;
+}
+
+/* Nested fieldsets - should also have clear borders */
+fieldset fieldset,
+fieldset .fieldset,
+.fieldset fieldset,
+.fieldset .fieldset {
+  border: 1px solid #999999 !important;
+  background-color: #fafafa;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  padding: 20px;
+}
+
+/* Fieldset description */
+fieldset .fieldset-description,
+.fieldset .fieldset-description {
+  margin-bottom: 10px;
+  font-style: italic;
+  color: #666666;
+}
+
+/* Ensure form wrappers don't interfere */
+.form-wrapper {
+  margin-bottom: 15px;
+}

@@ -1,0 +1,19 @@
+uuid: menu_link_content:portal-main
+langcode: en
+status: true
+dependencies: {  }
+id: menu_link_content:portal-main
+revision_id: 1
+bundle: menu_link_content
+title: 'Your portal'
+description: 'Main portal page'
+menu_name: portal
+link:
+  uri: 'internal:/portal'
+  title: 'Your portal'
+  options: {  }
+external: false
+enabled: true
+expanded: false
+parent: ''
+weight: 0

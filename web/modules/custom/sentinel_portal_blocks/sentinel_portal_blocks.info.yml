@@ -1,0 +1,11 @@
+name: 'Sentinel Portal Blocks'
+type: module
+description: 'Shows blocks with some reporting information to users.'
+core_version_requirement: ^11
+package: Other
+dependencies:
+  - block
+  - context
+  - ctools
+  - sentinel_portal_module
+  - sentinel_portal_entities

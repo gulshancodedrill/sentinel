@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the sentinel_portal module.
+ */
+
+use Drupal\Core\Config\FileStorage;
+use Drupal\Core\Config\InstallStorage;
+use Drupal\Core\Config\StorageInterface;
+
+/**
+ * Implements hook_install().
+ */
+function sentinel_portal_install() {
+  // Set default configuration values.
+  \Drupal::configFactory()->getEditable('sentinel_portal.settings')
+    ->set('new_pack_email', 'phil.norton@accessadvertising.co.uk')
+    ->save();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function sentinel_portal_uninstall() {
+  // Clean up configuration.
+  \Drupal::configFactory()->getEditable('sentinel_portal.settings')->delete();
+}

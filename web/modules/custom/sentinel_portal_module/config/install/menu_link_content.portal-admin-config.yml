@@ -1,0 +1,19 @@
+uuid: menu_link_content:portal-admin-config
+langcode: en
+status: true
+dependencies: {  }
+id: menu_link_content:portal-admin-config
+revision_id: 3
+bundle: menu_link_content
+title: 'Portal Config'
+description: 'Portal configuration'
+menu_name: portal
+link:
+  uri: 'internal:/portal/admin/config'
+  title: 'Portal Config'
+  options: {  }
+external: false
+enabled: true
+expanded: false
+parent: 'menu_link_content:portal-admin-area'
+weight: 50
