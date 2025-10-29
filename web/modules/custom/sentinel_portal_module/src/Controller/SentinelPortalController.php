@@ -8,6 +8,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Link;
 use Drupal\Core\Routing\RouteProviderInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 /**
  * Controller for Sentinel Portal pages.
@@ -17,10 +18,18 @@ class SentinelPortalController extends ControllerBase {
   /**
    * Main portal page callback.
    *
-   * @return array
-   *   A renderable array.
+   * @return array|RedirectResponse
+   *   A renderable array or redirect response.
    */
   public function mainPage() {
+    // If user is anonymous, redirect to login page with destination
+    if ($this->currentUser()->isAnonymous()) {
+      $url = Url::fromRoute('user.login', [], [
+        'query' => ['destination' => '/portal']
+      ]);
+      return new RedirectResponse($url->toString());
+    }
+    
     if ($this->currentUser()->hasPermission('sentinel portal')) {
       // Render the analytics block programmatically
       $block_manager = \Drupal::service('plugin.manager.block');
@@ -34,8 +43,8 @@ class SentinelPortalController extends ControllerBase {
       ];
     }
     else {
-      // If the user doesn't have access, they will get a login page.
-      return [];
+      // If the user doesn't have permission, show access denied
+      throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException();
     }
   }
 

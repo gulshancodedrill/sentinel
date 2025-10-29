@@ -3,7 +3,7 @@ sentinel_portal.portal:
   defaults:
     _controller: '\Drupal\sentinel_portal_module\Controller\SentinelPortalController::mainPage'
   requirements:
-    _permission: 'sentinel portal'
+    _access: 'TRUE'
   options:
     _admin_route: FALSE
 

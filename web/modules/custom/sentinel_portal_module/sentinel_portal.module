@@ -20,4 +20,3 @@ function sentinel_portal_module_theme($existing, $type, $theme, $path) {
 function sentinel_portal_module_preprocess_block(&$variables) {
   SentinelPortalModule::preprocessBlock($variables);
 }
-
