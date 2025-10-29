@@ -40,3 +40,7 @@
 # Ignore multi-site test environment.
 # simpletest
 
+/web/sites/default/default.settings.php
+/web/sites/default/default.services.yml
+/web/sites/default/settings.php
+/web/sites/default/services.yml
