@@ -1,0 +1,19 @@
+sentinel_systemcheck_vaillant_api.submit:
+  path: '/portal/admin/samples/vaillant/{sample_id}/api'
+  defaults:
+    _controller: '\Drupal\sentinel_systemcheck_vaillant_api\Controller\VaillantApiController::submitSample'
+    _title: 'Sample API'
+  requirements:
+    _permission: 'sentinel portal send api report'
+  options:
+    _admin_route: FALSE
+
+sentinel_systemcheck_vaillant_api.config:
+  path: '/admin/config/system/sentinel-vaillant-api'
+  defaults:
+    _form: '\Drupal\sentinel_systemcheck_vaillant_api\Form\VaillantApiConfigForm'
+    _title: 'Vaillant API Configuration'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    _admin_route: TRUE

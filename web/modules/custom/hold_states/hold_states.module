@@ -1,0 +1,169 @@
+<?php
+
+/**
+ * @file
+ * Code for the Hold states feature.
+ */
+
+/**
+ * Implements hook_entity_update().
+ */
+function hold_states_entity_update($entity) {
+  // Only process sentinel_sample entities.
+  if ($entity->getEntityTypeId() == 'sentinel_sample' && $entity->hasField('field_sample_hold_state')) {
+    
+    $original_entity = $entity->original ?? NULL;
+    
+    // Get the current and original hold state values.
+    $current_hold_state = $entity->get('field_sample_hold_state')->target_id ?? NULL;
+    $original_hold_state = NULL;
+    
+    if ($original_entity && $original_entity->hasField('field_sample_hold_state')) {
+      $original_hold_state = $original_entity->get('field_sample_hold_state')->target_id ?? NULL;
+    }
+    
+    // Only proceed if the hold state has changed.
+    if ($current_hold_state && $current_hold_state != $original_hold_state) {
+      
+      // Load the taxonomy term for the hold state.
+      $taxonomy_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+      $hold_state_term = $taxonomy_storage->load($current_hold_state);
+      
+      if ($hold_state_term && $hold_state_term->hasField('field_hold_state_email_to')) {
+        $email_to_value = $hold_state_term->get('field_hold_state_email_to')->value;
+        
+        // Check if we should send an email to the customer.
+        if ($email_to_value == 'customer' || $email_to_value == 'Customer email address') {
+          
+          // Get the client entity.
+          $client_entity = NULL;
+          if ($entity->hasField('field_client') && !$entity->get('field_client')->isEmpty()) {
+            $client_id = $entity->get('field_client')->target_id;
+            $client_storage = \Drupal::entityTypeManager()->getStorage('sentinel_client');
+            $client_entity = $client_storage->load($client_id);
+          }
+          
+          if ($client_entity) {
+            // Build email content from taxonomy fields.
+            $email_content_fields = [
+              'field_hold_state_email_contents',
+              'field_hold_state_email_specs',
+              'field_hold_state_email_issue_rec',
+              'field_hold_state_email_disposal',
+            ];
+            
+            $body_from_fields = [];
+            foreach ($email_content_fields as $field_name) {
+              if ($hold_state_term->hasField($field_name) && !$hold_state_term->get($field_name)->isEmpty()) {
+                $body_from_fields[] = $hold_state_term->get($field_name)->value;
+              }
+            }
+            
+            // Combine email body content.
+            $email_body_content = implode('<br>', $body_from_fields);
+            
+            // Get email subject.
+            $email_subject = 'A fault has been found on your sentinel pack';
+            if ($hold_state_term->hasField('field_email_subject') && !$hold_state_term->get('field_email_subject')->isEmpty()) {
+              $email_subject = $hold_state_term->get('field_email_subject')->value;
+            }
+            
+            // Get email address.
+            $email_address = NULL;
+            if ($client_entity->hasField('field_email') && !$client_entity->get('field_email')->isEmpty()) {
+              $email_address = $client_entity->get('field_email')->value;
+            }
+            
+            if ($email_address) {
+              // Process token replacement.
+              $email_body_content = hold_states_token_replace($email_body_content, $entity, $client_entity);
+              $email_subject = hold_states_token_replace($email_subject, $entity, $client_entity);
+              
+              // Send the email.
+              $mail_manager = \Drupal::service('plugin.manager.mail');
+              $params = [
+                'email_contents' => [$email_body_content],
+                'email_subject' => $email_subject,
+              ];
+              
+              $result = $mail_manager->mail('hold_states', 'fault', $email_address, 'en', $params);
+              
+              if ($result['result']) {
+                \Drupal::logger('hold_states')->info('Hold state email sent to @email', ['@email' => $email_address]);
+              }
+            } else {
+              // Email not found - send notification to default addresses.
+              $default_email = 'susan.mullarkey@sentinelprotects.com; Stacey.killen@sentinelprotects.com';
+              $email_body = [
+                'Hi Susan and Stacey',
+                "We couldn't find the client's email for the following pack {$entity->get('field_pack_reference_number')->value} please see below the email that should have been sent.",
+              ];
+              $email_body[] = $email_body_content;
+              $email_subject = "A fault has been found on a sentinel pack but we couldn't find the client's email";
+              
+              $mail_manager = \Drupal::service('plugin.manager.mail');
+              $params = [
+                'email_contents' => $email_body,
+                'email_subject' => $email_subject,
+              ];
+              
+              $result = $mail_manager->mail('hold_states', 'fault', $default_email, 'en', $params);
+              \Drupal::logger('hold_states')->warning('Could not send email to client, sent notification to admin');
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Token replacement function for hold states.
+ */
+function hold_states_token_replace($content, $sample_entity, $client_entity) {
+  // Basic token replacement.
+  // Replace [sentinel_sample:pack_reference_number]
+  if (strpos($content, '[sentinel_sample:pack_reference_number]') !== FALSE) {
+    if ($sample_entity->hasField('field_pack_reference_number') && !$sample_entity->get('field_pack_reference_number')->isEmpty()) {
+      $content = str_replace('[sentinel_sample:pack_reference_number]', $sample_entity->get('field_pack_reference_number')->value, $content);
+    }
+  }
+  
+  // Replace [sentinel_client:name]
+  if (strpos($content, '[sentinel_client:name]') !== FALSE) {
+    if ($client_entity && $client_entity->hasField('field_company_name') && !$client_entity->get('field_company_name')->isEmpty()) {
+      $content = str_replace('[sentinel_client:name]', $client_entity->get('field_company_name')->value, $content);
+    }
+  }
+  
+  // Add more token replacements as needed.
+  
+  return $content;
+}
+
+/**
+ * Implements hook_mail().
+ */
+function hold_states_mail($key, &$message, $params) {
+  if ($key == 'fault') {
+    $message['subject'] = $params['email_subject'];
+    
+    if (isset($params['email_contents']) && is_array($params['email_contents'])) {
+      foreach ($params['email_contents'] as $content) {
+        $info = explode('<br>', $content);
+        
+        if (is_array($info)) {
+          foreach ($info as $inf) {
+            $message['body'][] = $inf;
+          }
+        } else {
+          $message['body'][] = $info;
+        }
+      }
+      
+      $message['body'][] = t('Thanks, Sentinel');
+    }
+  }
+}
+
+

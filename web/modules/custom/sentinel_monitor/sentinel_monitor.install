@@ -1,0 +1,40 @@
+<?php
+
+/**
+ * @file
+ * Install file for Sentinel Monitor module.
+ */
+
+use Drupal\taxonomy\Entity\Vocabulary;
+use Drupal\user\Entity\Role;
+
+/**
+ * Implements hook_install().
+ */
+function sentinel_monitor_install() {
+  // Create taxonomy vocabulary if it doesn't already exist.
+  $vocab = Vocabulary::load('last_known_statuses');
+  
+  if (!$vocab) {
+    $vocab = Vocabulary::create([
+      'vid' => 'last_known_statuses',
+      'name' => 'Last known statuses',
+      'description' => '',
+      'hierarchy' => 0,
+      'weight' => 0,
+    ]);
+    $vocab->save();
+  }
+
+  // Create Monitor role if it doesn't already exist.
+  $role = Role::load('monitor');
+  
+  if (!$role) {
+    $role = Role::create([
+      'id' => 'monitor',
+      'label' => 'Monitor',
+      'weight' => 8,
+    ]);
+    $role->save();
+  }
+}

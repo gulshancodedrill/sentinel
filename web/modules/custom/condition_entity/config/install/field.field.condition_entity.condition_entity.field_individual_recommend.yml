@@ -1,0 +1,23 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.condition_entity.field_individual_recommend
+    - eck.eck_type.condition_entity.condition_entity
+  module:
+    - text
+id: condition_entity.condition_entity.field_individual_recommend
+field_name: field_individual_recommend
+entity_type: condition_entity
+bundle: condition_entity
+label: 'Event Individual Recommendation'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats: {  }
+field_type: text_long
+
+

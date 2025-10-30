@@ -1,0 +1,6 @@
+sentinel portal send email report:
+  title: 'Send email report'
+  description: 'Allows users to send email reports.'
+  restrict access: true
+
+

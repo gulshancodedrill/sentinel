@@ -1,0 +1,38 @@
+daterangepicker:
+  css:
+    theme:
+      js/jquery-daterangepicker/daterangepicker.min.css: {}
+  js:
+    js/jquery-daterangepicker/moment.min.js: {}
+    js/jquery-daterangepicker/jquery.daterangepicker.min.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+
+d3-hierarchical-pie:
+  css:
+    theme:
+      js/d3-hierarchical-pie/vendor/bootstrap/css/bootstrap.min.css: {}
+      js/d3-hierarchical-pie/vendor/font-awesome/css/font-awesome.min.css: {}
+      js/d3-hierarchical-pie/vendor/prettify/prettify.css: {}
+      js/d3-hierarchical-pie/style.css: {}
+  js:
+    js/d3-hierarchical-pie/vendor/bootstrap/js/bootstrap.min.js: {}
+    js/d3-hierarchical-pie/vendor/d3.min.js: {}
+    js/d3-hierarchical-pie/vendor/mustache.js: {}
+    js/d3-hierarchical-pie/vendor/prettify/prettify.js: {}
+    js/d3-hierarchical-pie/patched/hierarchical-pie.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+
+custom-js:
+  js:
+    js/custom-js/init.js: {}
+    js/custom-js/custom.js: {}
+  dependencies:
+    - sentinel_reports/daterangepicker
+    - sentinel_reports/d3-hierarchical-pie
+    - core/drupal
+    - core/jquery
+    - core/drupalSettings

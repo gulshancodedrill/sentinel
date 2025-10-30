@@ -1,0 +1,30 @@
+id: sentinel_company_addresses_migration
+label: 'Sentinel Company Addresses Migration'
+migration_group: samplesCompanyAddresses
+source:
+  plugin: sentinel_company_addresses_source
+  # Queries from 'company_addresses' table joined with 'sentinel_sample' and 'company_unique_addresses'
+destination:
+  plugin: entity:address
+  default_bundle: company_address
+process:
+  # Map company address fields from database columns to address field structure
+  field_address/country_code:
+    plugin: default_value
+    default_value: 'GB'
+  field_address/premise: COMPANY_ADDRESS1
+  field_address/thoroughfare: COMPANY_ADDRESS2
+  field_address/locality: COMPANY_TOWN
+  field_address/administrative_area: COMPANY_COUNTY
+  field_address/postal_code: COMPANY_POSTCODE
+  field_address/organization_name: COMPANY_NAME
+migration_dependencies:
+  required:
+    - sentinel_samples_migration
+  optional: {}
+migration_tags:
+  - 'Sentinel Company Addresses'
+options:
+  track_changes: true
+
+

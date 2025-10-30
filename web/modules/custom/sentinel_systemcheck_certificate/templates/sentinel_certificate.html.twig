@@ -1,0 +1,74 @@
+{#
+/**
+ * @file
+ * Template for displaying Sentinel certificates.
+ */
+#}
+<div class="sentinel-certificate">
+  <h1>{{ 'Sentinel SystemCheck Certificate'|t }}</h1>
+  
+  {% if content.original_sample_entity %}
+    <div class="certificate-info">
+      <h2>{{ 'Sample Information'|t }}</h2>
+      <p><strong>{{ 'Sample ID:'|t }}</strong> {{ content.original_sample_entity.id }}</p>
+      <p><strong>{{ 'Pack Reference:'|t }}</strong> {{ content.original_sample_entity.pack_reference_number }}</p>
+      <p><strong>{{ 'Analysis Date:'|t }}</strong> {{ 'now'|date('Y-m-d H:i:s') }}</p>
+    </div>
+
+    {% if content.sentinel_sample_result %}
+      <div class="results">
+        <h2>{{ 'Results'|t }}</h2>
+        
+        {% if content.sentinel_sample_result.appearance_result %}
+          <div class="result-item">
+            <strong>{{ 'Visual Appearance:'|t }}</strong> {{ content.sentinel_sample_result.appearance_result.name }}
+            {% if content.sentinel_sample_result.appearance_feedback %}
+              <p>{{ content.sentinel_sample_result.appearance_feedback }}</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if content.sentinel_sample_result.ph_result %}
+          <div class="result-item">
+            <strong>{{ 'pH Level:'|t }}</strong> {{ content.sentinel_sample_result.ph_result.name }}
+            {% if content.sentinel_sample_result.ph_feedback %}
+              <p>{{ content.sentinel_sample_result.ph_feedback }}</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if content.sentinel_sample_result.sentinel_x100_result %}
+          <div class="result-item">
+            <strong>{{ 'Sentinel X100:'|t }}</strong> {{ content.sentinel_sample_result.sentinel_x100_result.name }}
+            {% if content.sentinel_sample_result.x100_feedback %}
+              <p>{{ content.sentinel_sample_result.x100_feedback }}</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if content.sentinel_sample_result.recommendations %}
+          <div class="recommendations">
+            <h3>{{ 'Recommendations'|t }}</h3>
+            <p>{{ content.sentinel_sample_result.recommendations }}</p>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if content.company_address %}
+      <div class="addresses">
+        <h2>{{ 'Addresses'|t }}</h2>
+        <div class="company-address">
+          <strong>{{ 'Company Address:'|t }}</strong> {{ content.company_address }}
+        </div>
+        {% if content.site_address %}
+          <div class="site-address">
+            <strong>{{ 'Site Address:'|t }}</strong> {{ content.site_address }}
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+
+

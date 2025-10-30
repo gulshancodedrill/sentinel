@@ -1,0 +1,31 @@
+id: sentinel_addresses_migration
+label: 'Sentinel Addresses Migration'
+migration_group: samplesAddresses
+source:
+  plugin: sentinel_addresses_source
+  # Queries from 'addresses' table joined with 'sentinel_sample' and 'addresses_unique_addresses'
+destination:
+  plugin: entity:address
+  default_bundle: address
+process:
+  # Map address fields from database columns to address field structure
+  field_address/country_code:
+    plugin: default_value
+    default_value: 'GB'
+  field_address/sub_premise: property_number
+  field_address/thoroughfare: Street
+  field_address/dependent_locality: ADDRESS_3
+  field_address/sub_administrative_area: ADDRESS_4
+  field_address/locality: TOWN_CITY
+  field_address/administrative_area: COUNTY
+  field_address/postal_code: POSTCODE
+migration_dependencies:
+  required:
+    - sentinel_samples_migration
+  optional: {}
+migration_tags:
+  - 'Sentinel Addresses'
+options:
+  track_changes: true
+
+

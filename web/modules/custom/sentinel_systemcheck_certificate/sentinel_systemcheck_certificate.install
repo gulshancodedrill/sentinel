@@ -1,0 +1,73 @@
+<?php
+
+/**
+ * @file
+ * Install file for the Sentinel SystemCheck Certificate module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function sentinel_systemcheck_certificate_install() {
+  _create_vocabularies_and_taxonomy_terms();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function sentinel_systemcheck_certificate_uninstall() {
+  $vocab = \Drupal::entityTypeManager()->getStorage('taxonomy_vocabulary')->loadByProperties(['vid' => 'condition_event_results']);
+  $vocabulary = reset($vocab);
+
+  if ($vocabulary) {
+    $vocabulary->delete();
+  }
+}
+
+/**
+ * Create vocabularies and taxonomy terms for condition event results.
+ */
+function _create_vocabularies_and_taxonomy_terms() {
+  $vocabulary_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_vocabulary');
+  
+  // Check if vocabulary already exists
+  $existing = $vocabulary_storage->loadByProperties(['vid' => 'condition_event_results']);
+  if (!empty($existing)) {
+    return;
+  }
+
+  $vocabulary = $vocabulary_storage->create([
+    'vid' => 'condition_event_results',
+    'name' => 'Condition event results',
+    'description' => 'Sentinel Certificate pass/fail values',
+  ]);
+  $vocabulary->save();
+
+  $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+
+  // Create Pass term
+  $pass_term = $term_storage->create([
+    'vid' => 'condition_event_results',
+    'name' => 'Pass',
+    'description' => 'The pass value for the PDF report',
+  ]);
+  $pass_term->save();
+
+  // Create Fail term
+  $fail_term = $term_storage->create([
+    'vid' => 'condition_event_results',
+    'name' => 'Fail',
+    'description' => 'The fail value for the PDF report',
+  ]);
+  $fail_term->save();
+
+  // Create Warning term
+  $warning_term = $term_storage->create([
+    'vid' => 'condition_event_results',
+    'name' => 'Warning',
+    'description' => 'The warning value for the PDF report',
+  ]);
+  $warning_term->save();
+}
+
+

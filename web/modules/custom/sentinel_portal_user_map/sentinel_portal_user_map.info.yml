@@ -1,0 +1,14 @@
+name: 'Sentinel Portal User Map'
+type: module
+description: 'Map Sentinel Portal Users and their related cohorts.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_module
+  - sentinel_portal_entities
+  - user
+  - system
+  - field
+  - taxonomy
+
+

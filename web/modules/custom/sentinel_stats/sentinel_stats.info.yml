@@ -1,0 +1,14 @@
+name: 'Sentinel Stats'
+type: module
+description: 'Used for creating an entity when a sample is calculated'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - condition_entity
+  - eck
+  - taxonomy
+  - text
+  - views
+  - sentinel_systemcheck_certificate
+
+

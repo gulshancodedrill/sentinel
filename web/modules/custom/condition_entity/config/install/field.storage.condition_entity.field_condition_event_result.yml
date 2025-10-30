@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - taxonomy
+id: condition_entity.field_condition_event_result
+field_name: field_condition_event_result
+entity_type: condition_entity
+type: entity_reference
+settings:
+  target_type: taxonomy_term
+module: core
+locked: false
+cardinality: 1
+translatable: false
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

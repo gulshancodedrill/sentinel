@@ -1,0 +1,14 @@
+name: 'Sentinel SystemCheck Certificate'
+type: module
+description: 'This module provides PDF certificate generation and validation logic for Sentinel SystemCheck results.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_module
+  - sentinel_portal_entities
+  - field
+  - file
+  - user
+  - system
+  - taxonomy
+  - views

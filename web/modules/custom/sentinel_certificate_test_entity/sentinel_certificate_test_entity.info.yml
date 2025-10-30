@@ -1,0 +1,11 @@
+name: 'Sentinel certificate test entity'
+type: module
+description: 'This module allows sentinel to test the certificate generation report'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_module
+  - sentinel_portal_entities
+  - eck
+
+

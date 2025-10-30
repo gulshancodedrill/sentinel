@@ -1,0 +1,99 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Bakery Integration Module.
+ */
+
+use Drupal\user\Entity\Role;
+use Drupal\user\Entity\User;
+
+/**
+ * Implements hook_bakery_receive().
+ */
+function sentinel_bakery_integration_bakery_receive($account, $fields) {
+  // In Drupal 11, Bakery may not exist or may have changed.
+  // This hook implementation maintains compatibility with Bakery if it exists.
+  
+  $new_user_details = [];
+
+  if (isset($fields['data']['roles']) && $account instanceof User) {
+    $role_ids = [];
+
+    // Everybody gets the authenticated user role.
+    $authenticated_role = Role::load('authenticated');
+    if ($authenticated_role) {
+      $role_ids[] = 'authenticated';
+    }
+
+    // Everybody gets the portal user role.
+    $portal_user_role = Role::load('portal_user');
+    if ($portal_user_role) {
+      $role_ids[] = 'portal_user';
+    }
+
+    // Check if the user has the administrator role.
+    if ($account->hasRole('administrator')) {
+      $admin_role = Role::load('administrator');
+      if ($admin_role) {
+        $role_ids[] = 'administrator';
+      }
+    }
+
+    // Find other roles via the bakery payload.
+    if (is_array($fields['data']['roles'])) {
+      foreach ($fields['data']['roles'] as $rid => $role_name) {
+        // Try to load role by machine name or name.
+        $role = Role::load($role_name);
+        if (!$role && is_string($rid)) {
+          // Try by role ID.
+          $role = Role::load($rid);
+        }
+        
+        // If still not found, try to find by name.
+        if (!$role) {
+          $roles = \Drupal::entityTypeManager()
+            ->getStorage('user_role')
+            ->loadByProperties(['label' => $role_name]);
+          if (!empty($roles)) {
+            $role = reset($roles);
+          }
+        }
+        
+        if ($role) {
+          // The role exists on this platform, so we use it.
+          $role_ids[] = $role->id();
+        }
+      }
+    }
+
+    if (count($role_ids) > 0) {
+      // Remove duplicates.
+      $role_ids = array_unique($role_ids);
+      
+      // If we have roles, assign them to the user.
+      // Get existing roles and merge, ensuring we don't remove necessary roles.
+      $existing_roles = $account->getRoles(TRUE);
+      $final_roles = array_unique(array_merge($existing_roles, $role_ids));
+      
+      // Set roles on the account.
+      $account->set('roles', array_values($final_roles));
+      $account->save();
+      
+      \Drupal::logger('sentinel_bakery_integration')->info('Updated roles for user @username via Bakery', [
+        '@username' => $account->getAccountName(),
+      ]);
+    }
+  }
+}
+
+/**
+ * Alternative hook implementation for D11 SSO systems.
+ *
+ * If Bakery doesn't exist in D11, this can be used with other SSO systems.
+ */
+function sentinel_bakery_integration_user_presave(\Drupal\user\Entity\User $account) {
+  // This hook can be used to sync roles from external SSO systems.
+  // Check if account has a flag or field indicating it came from SSO.
+  // This is a placeholder for alternative SSO integration.
+}

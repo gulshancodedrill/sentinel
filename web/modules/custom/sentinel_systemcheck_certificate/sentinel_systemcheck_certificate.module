@@ -1,0 +1,648 @@
+<?php
+
+/**
+ * @file
+ * Sentinel SystemCheck Certificate module.
+ */
+
+use Drupal\sentinel_portal_entities\Entity\SentinelSample;
+use Drupal\Core\File\FileSystemInterface;
+
+/**
+ * Populate results for a sample entity.
+ *
+ * This function processes the results data and populates the sample entity
+ * with the appropriate values based on the analysis results.
+ *
+ * @param object $result_object
+ *   The result object to populate.
+ * @param \Drupal\sentinel_portal_entities\Entity\SentinelSample $sentinel_sample
+ *   The sample entity.
+ * @param object $formatted_results
+ *   Optional formatted results object.
+ */
+function sentinel_systemcheck_certificate_populate_results($result_object, SentinelSample $sentinel_sample, $formatted_results = NULL) {
+  $lang = $sentinel_sample->getSampleCountry();
+  $appearance_result = !empty($sentinel_sample->appearance_result) ? $sentinel_sample->appearance_result : '';
+  $system_6_months = !empty($sentinel_sample->system_6_months) && $sentinel_sample->system_6_months != 'FALSE' && $sentinel_sample->system_6_months != 'TRUE' ? $sentinel_sample->system_6_months : '';
+  $ph = !empty($sentinel_sample->ph_result) ? $sentinel_sample->ph_result : '';
+  $boron_result = !empty($sentinel_sample->boron_result) ? $sentinel_sample->boron_result : '';
+  $boiler_type = !empty($sentinel_sample->boiler_type) ? $sentinel_sample->boiler_type : '';
+  $molybdenum_result = !empty($sentinel_sample->molybdenum_result) ? $sentinel_sample->molybdenum_result : '';
+  $sys_cond_result = !empty($sentinel_sample->sys_cond_result) ? (int)$sentinel_sample->sys_cond_result : '';
+  $mains_cond_result = !empty($sentinel_sample->mains_cond_result) ? (int)$sentinel_sample->mains_cond_result : '';
+  $mains_calcium_result = !empty($sentinel_sample->mains_calcium_result) ? (int)$sentinel_sample->mains_calcium_result : '';
+  $sys_calcium_result = !empty($sentinel_sample->sys_calcium_result) ? $sentinel_sample->sys_calcium_result : '';
+  $dissolved_iron = !empty($sentinel_sample->iron_result) ? $sentinel_sample->iron_result : '';
+  $copper_result = !empty($sentinel_sample->copper_result) ? $sentinel_sample->copper_result : '';
+  $dissolved_aluminium = !empty($sentinel_sample->aluminium_result) ? $sentinel_sample->aluminium_result : '';
+
+  $sys_cl_result = !empty($sentinel_sample->sys_cl_result) ? $sentinel_sample->sys_cl_result : '';
+  $mains_cl_result = !empty($sentinel_sample->mains_cl_result) ? $sentinel_sample->mains_cl_result : '';
+
+  if (!is_numeric($sys_cl_result) || !is_numeric($mains_cl_result)) {
+    $sys_cl_result = '';
+    $mains_cl_result = 0;
+  }
+
+  $sys_cl_result = sentinel_systemcheck_certificate_calculate_excess_cloride_result($sentinel_sample->mains_cl_result, $boron_result, $sys_cl_result);
+
+  $vars = ['aluminium_result', 'copper_result', 'iron_result', 'ph_result', 'mains_cond_result', 'sentinel_x100_result', 'mains_cl_result'];
+
+  if (is_null($formatted_results)) {
+    $formatted_results = new \stdClass();
+  }
+
+  // Make sure all numeric values follow the following number format except legacy samples.
+  foreach ($vars as $var_name) {
+    if (isset($sentinel_sample->{$var_name}) && is_numeric($sentinel_sample->{$var_name})) {
+      $formatted_results->{$var_name} = number_format(max(round($sentinel_sample->{$var_name}, 2), 0), 2);
+    }
+  }
+
+  $recommendations = [];
+
+  $vocabulary = \Drupal::entityTypeManager()->getStorage('taxonomy_vocabulary')->loadByProperties(['vid' => 'condition_event_results']);
+  $vocab = reset($vocabulary);
+
+  if ($vocab) {
+    $result_taxonomies = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties(['vid' => $vocab->id()]);
+  } else {
+    $result_taxonomies = [];
+  }
+
+  $path = _get_injector_file('_sentinel_validation_injector.php');
+  $real_path = \Drupal::service('file_system')->realpath($path);
+
+  if (!file_exists($real_path)) {
+    \Drupal::logger('sentinel_systemcheck_certificate')->critical('Results file inclusion failure!');
+  }
+
+  if (isset($sentinel_sample->pid)) {
+    $pid = $sentinel_sample->pid;
+  } else {
+    // If the pid doesn't exist then this might be a test sample.
+    $pid = 0;
+  }
+
+  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats') && $sentinel_sample->entityType() != 'test_entity') {
+    delete_old_stat_entities_if_any($pid);
+  }
+
+  if (file_exists($real_path)) {
+    include $real_path;
+  }
+
+  $recommendations = _apply_hierachy_conditions_for_overall_recommendations($recommendations, $lang);
+
+  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats') && $sentinel_sample->entityType() != 'test_entity') {
+    delete_stat_recommendations_that_are_not_needed($recommendations, $pid);
+  }
+
+  if ($sentinel_sample->pass_fail == 1 && $recommendations == '') {
+    $recommendations = \Drupal::translation()->translate('Both the system water and the level of Inhibitor are acceptable. Check inhibitor levels annually to maintain protection.', [], ['langcode' => $lang]);
+  }
+
+  $result_object->appearance_result = isset($visual_appearance_pass) ? $result_taxonomies[$visual_appearance_pass] : '';
+  $result_object->appearance_feedback = isset($visual_appearance_feedback) ? $visual_appearance_feedback : '';
+  $result_object->ph_result = isset($ph_level_pass) ? $result_taxonomies[$ph_level_pass] : '';
+  $result_object->ph_feedback = isset($ph_level_feedback) ? $ph_level_feedback : '';
+  $result_object->sys_cond_result = isset($conductivity_pass) ? $result_taxonomies[$conductivity_pass] : '';
+  $result_object->conductivity_feedback = isset($conductivity_feedback) ? $conductivity_feedback : '';
+  $result_object->sys_cl_result = isset($chloride_pass) ? $result_taxonomies[$chloride_pass] : '';
+  $result_object->chloride_feedback = isset($chloride_feedback) ? $chloride_feedback : '';
+  $result_object->iron_result = isset($dissolved_iron_pass) ? $result_taxonomies[$dissolved_iron_pass] : '';
+  $result_object->iron_feedback = isset($dissolved_iron_feedback) ? $dissolved_iron_feedback : '';
+  $result_object->copper_result = isset($dissolved_copper_pass) ? $result_taxonomies[$dissolved_copper_pass] : '';
+  $result_object->copper_feedback = isset($dissolved_copper_feedback) ? $dissolved_copper_feedback : '';
+  $result_object->sentinel_x100_result = isset($x100_pass) ? $result_taxonomies[$x100_pass] : '';
+  $result_object->x100_feedback = isset($x100_feedback) ? $x100_feedback : '';
+  $result_object->recommendations = $recommendations;
+
+  if ($sentinel_sample->getSampleType() != 'vaillant') {
+    // If this is a Vaillant sample then we add more results to the feedback.
+    $result_object->sys_calcium_result = isset($calcium_pass) ? $result_taxonomies[$calcium_pass] : '';
+    $result_object->calcium_feedback = isset($calcium_feedback) ? $calcium_feedback : '';
+    $result_object->aluminium_result = isset($dissolved_aluminium_pass) ? $result_taxonomies[$dissolved_aluminium_pass] : '';
+    $result_object->aluminium_feedback = isset($dissolved_aluminium_feedback) ? $dissolved_aluminium_feedback : '';
+  }
+
+  // Always re-format the number to 2 dp, rounded to the nearest number.
+  $formatted_results->sentinel_x100_result = number_format($formatted_results->sentinel_x100_result, 2);
+
+  _calculate_sentinel_sample_result($result_object, $sentinel_sample);
+}
+
+/**
+ * Get DomPDF object for PDF generation.
+ *
+ * @param string $data
+ *   HTML data to be used by DomPDF to render PDFs.
+ *
+ * @return \Dompdf\Dompdf
+ *   DomPDF object.
+ */
+function sentinel_systemcheck_certificate_get_dompdf_object($data) {
+  // Note: In a real implementation, you would include DomPDF library
+  // For now, return a placeholder object
+  return (object) [
+    'data' => $data,
+    'generated' => TRUE,
+  ];
+}
+
+/**
+ * Calculate excess chloride result.
+ *
+ * @param string $mains_cl_result
+ *   The mains chloride result.
+ * @param string $boron_result
+ *   The boron result.
+ * @param string $sys_cl_result
+ *   The system cl result.
+ *
+ * @return mixed
+ *   The calculated excess chloride result.
+ */
+function sentinel_systemcheck_certificate_calculate_excess_cloride_result($mains_cl_result, $boron_result, $sys_cl_result) {
+  return is_numeric($sys_cl_result) ? ($sys_cl_result - ((($boron_result / 40) * 9) + floatval($mains_cl_result))) : NULL;
+}
+
+/**
+ * Calculate a sample's result based on the result object.
+ *
+ * @param object $result_object
+ *   The result object after a sample has been validated.
+ * @param object $sentinel_sample
+ *   The original sample entity.
+ */
+function _calculate_sentinel_sample_result($result_object, $sentinel_sample) {
+  // Let's assume the sample passes.
+  $sentinel_sample->pass_fail = 1;
+  $total_fail = FALSE;
+  $mappings = sentinel_systemcheck_certificate_get_properties_pass_fail_mappings();
+
+  foreach ($result_object as $key => $property) {
+    if (isset($property->name)) {
+      $status = strtolower($property->name);
+
+      if ($status == 'fail') {
+        $total_fail = TRUE;
+        if ($sentinel_sample->isLegacy() == FALSE) {
+          $sentinel_sample->{$mappings[$key]} = 0;
+        }
+      }
+
+      if ($status == 'pass' || $status == 'warning') {
+        if ($sentinel_sample->isLegacy() == FALSE) {
+          $sentinel_sample->{$mappings[$key]} = 1;
+        }
+      }
+    }
+  }
+
+  if ($total_fail === TRUE) {
+    $sentinel_sample->pass_fail = 0;
+  }
+}
+
+/**
+ * Returns a map between each sample element value and their pass/fail property.
+ *
+ * @return array
+ *   An associative array.
+ */
+function sentinel_systemcheck_certificate_get_properties_pass_fail_mappings() {
+  return [
+    'appearance_result' => 'appearance_pass_fail',
+    'sys_cond_result' => 'cond_pass_fail',
+    'sys_cl_result' => 'cl_pass_fail',
+    'iron_result' => 'iron_pass_fail',
+    'copper_result' => 'copper_pass_fail',
+    'aluminium_result' => 'aluminium_pass_fail',
+    'sys_calcium_result' => 'calcium_pass_fail',
+    'ph_result' => 'ph_pass_fail',
+    'sentinel_x100_result' => 'sentinel_x100_pass_fail',
+  ];
+}
+
+/**
+ * Apply hierarchy conditions for overall recommendations.
+ *
+ * @param string $recommendations
+ *   The string of recommendations that need to be shown as per the matrix.
+ * @param string $lang
+ *   The language code.
+ *
+ * @return string
+ *   A string of recommendations for the PDF with hierarchy applied.
+ */
+function _apply_hierachy_conditions_for_overall_recommendations($recommendations, $lang) {
+  $recommendations_unique = array_unique($recommendations);
+  $recommendations_hierarchy = sentinel_systemcheck_certificate_get_recommendation_hierachy($lang);
+  $recommendation = '';
+  $keys_found = [];
+  $highest_value = NULL;
+
+  foreach ($recommendations_unique as $item) {
+    if ($key = array_search(strtolower($item), array_map('strtolower', $recommendations_hierarchy))) {
+      $keys_found[] = $key;
+    }
+  }
+
+  if (!empty($keys_found)) {
+    $highest_value = max($keys_found);
+    $recommendation = $recommendations_hierarchy[$highest_value];
+  } else {
+    $recommendation = \Drupal::translation()->translate('Both the system water and the level of Inhibitor are acceptable. Check inhibitor levels annually to maintain protection', [], ['langcode' => $lang]);
+  }
+
+  return $recommendation;
+}
+
+/**
+ * Get the hierarchy for feedback items.
+ *
+ * @param string $lang
+ *   The language code.
+ *
+ * @return array
+ *   The higher the key value the more important.
+ */
+function sentinel_systemcheck_certificate_get_recommendation_hierachy($lang) {
+  return [
+    7 => \Drupal::translation()->translate('System clean and flush required. Clean using an appropriate Sentinel cleaner, follow instructions on bottle. Flushing can be manual or power assisted. For optimum results the flushing should be undertaken using a power flushing aid such as Sentinel JetFlush. Ensure all cleaner is thoroughly flushed from the system. Refill and treat with Sentinel X100.', [], ['langcode' => $lang]),
+    6 => \Drupal::translation()->translate('System is less than 6 months old. System clean and flush is required. Clean with Sentinel X300 cleaner. Follow instructions on bottle. Cleaning and flushing can be manual or power assisted. For optimum results the flushing should be undertaken using a power flushing aid such as Sentinel JetFlush. Ensure all cleaner is thoroughly flushed from the system. Refill and treat with Sentinel X100.', [], ['langcode' => $lang]),
+    5 => \Drupal::translation()->translate('System clean and flush required. Clean with Sentinel X400 or Sentinel X800, follow instructions on bottle. Flushing can be manual or power assisted. For optimum results the flushing should be undertaken using a power flushing aid such as Sentinel JetFlush. Ensure all cleaner is thoroughly flushed from the system. Refill and treat with Sentinel X100.', [], ['langcode' => $lang]),
+    3 => \Drupal::translation()->translate('The level of inhibitor is too low – Add Sentinel X100 inhibitor.', [], ['langcode' => $lang]),
+    2 => \Drupal::translation()->translate('Inhibitor level is very high and pH low, likely due to poor system mixing. For a true reading, allow inhibitor to fully circulate (download guidance on SystemCheck page at www.sentinelprotects.com) and re-test.', [], ['langcode' => $lang]),
+    1 => \Drupal::translation()->translate('Inhibitor level is very high, likely due to poor system mixing. For protection against corrosion and limescale the system requires a period of normal operation to evenly distribute the inhibitor. For a true reading, allow the system to fully circulate and re-test.', [], ['langcode' => $lang]),
+    0 => '',
+  ];
+}
+
+/**
+ * Get the injector file path.
+ *
+ * @param string $name
+ *   Name of the file.
+ *
+ * @return string
+ *   The file path.
+ */
+function _get_injector_file($name) {
+  $dir = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
+  $dir .= '/includes';
+
+  if (!\Drupal::service('file_system')->prepareDirectory($dir, FileSystemInterface::CREATE_DIRECTORY)) {
+    \Drupal::service('file_system')->mkdir($dir);
+  }
+
+  $file_path = $dir . '/' . $name;
+
+  return $file_path;
+}
+
+/**
+ * Delete old stat entities if we are re-calculating a pack.
+ *
+ * @param int $pid
+ *   Unique pack reference id.
+ */
+function delete_old_stat_entities_if_any($pid) {
+  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats')) {
+    $query = \Drupal::entityQuery('sentinel_stat')
+      ->condition('field_stat_pack_reference_id', $pid);
+    $entity_ids = $query->execute();
+    
+    if (!empty($entity_ids)) {
+      $storage = \Drupal::entityTypeManager()->getStorage('sentinel_stat');
+      $entities = $storage->loadMultiple($entity_ids);
+      $storage->delete($entities);
+    }
+  }
+}
+
+/**
+ * Delete the overall recommendation field value for stat entities that we do not need.
+ *
+ * @param string $recommendation_to_keep
+ *   The recommendation that we will keep and use for the stats.
+ * @param int $pid
+ *   The unique identifier for a pack reference.
+ */
+function delete_stat_recommendations_that_are_not_needed($recommendation_to_keep, $pid) {
+  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats')) {
+    $query = \Drupal::database()->select('field_data_field_stat_recommendation', 'sr');
+    $query->addField('sr', 'entity_id', 'entity_id');
+    $query->leftJoin('field_data_field_stat_pack_reference_id', 'sp', 'sp.entity_id=sr.entity_id and sr.bundle=\'sentinel_stat\'');
+    $query->condition('sr.field_stat_recommendation_value', $recommendation_to_keep, '!=');
+    $query->condition('sp.field_stat_pack_reference_id_target_id', $pid);
+    $recommendation_to_delete = $query->execute()->fetchCol();
+
+    if (!empty($recommendation_to_delete)) {
+      $delete_query = \Drupal::database()->delete('field_data_field_stat_recommendation');
+      $delete_query->condition('entity_id', $recommendation_to_delete, 'IN');
+      $delete_query->execute();
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function sentinel_systemcheck_certificate_theme($existing, $type, $theme, $path) {
+  return [
+    'sentinel_certificate' => [
+      'template' => 'sentinel_certificate',
+      'variables' => [],
+    ],
+  ];
+}
+
+/**
+ * Implements hook_file_download().
+ */
+function sentinel_systemcheck_certificate_file_download($uri) {
+  $current_user = \Drupal::currentUser();
+
+  $uri_exploded = explode('/', $uri);
+
+  // Ensure admins can access these PDF downloads.
+  if ($current_user->id() == 1 || $current_user->hasPermission('sentinel administrator') || $current_user->hasPermission('sentinel portal view any certificate')) {
+    return ['Content-Type' => 'application/pdf'];
+  }
+
+  $legacy_pdf_directory = 'legacy-pdf-certificates';
+  $new_pdf_directory = 'new-pdf-certificates';
+
+  if ((in_array($new_pdf_directory, $uri_exploded) || in_array($legacy_pdf_directory, $uri_exploded))) {
+    $client = sentinel_portal_entities_get_client_by_user($current_user);
+
+    if (!is_object($client)) {
+      return -1;
+    }
+
+    $cids = get_more_clients_based_client_cohorts($client);
+    $cids[] = $client->cid;
+
+    $query = \Drupal::database()->select('file_managed', 'fm');
+    $query->leftJoin('sentinel_sample', 'ss', 'ss.fileid = fm.fid');
+    $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
+    $query->addField('fm', 'uid', 'uid');
+    $query->condition('fm.uri', $uri);
+    $query->condition('sc.cid', $cids, 'IN');
+    $result = $query->execute();
+
+    if ($result->rowCount() == 1) {
+      // We know that we are getting a pdf as pdfs are stored in $legacy_pdf_directory and $new_pdf_directory vars.
+      return ['Content-Type' => 'application/pdf'];
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Get the results of the sample entity based on matrix logic.
+ *
+ * @param string $sentinel_sample_id
+ *   The id of the sample entity (pid).
+ * @param string $sample_type
+ *   The sample type.
+ *
+ * @return array
+ *   An array of objects keyed by names.
+ */
+function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sample') {
+  $entity_info = [];
+
+  $entity_storage = \Drupal::entityTypeManager()->getStorage($sample_type);
+  if ($entity_storage) {
+    $entity_info = $entity_storage->loadMultiple([$sentinel_sample_id]);
+  }
+
+  if (!empty($entity_info)) {
+    $sentinel_sample_entity = reset($entity_info);
+  } else {
+    throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException();
+  }
+
+  if (!empty($sentinel_sample_entity)) {
+    // Ensure we have the x100 result sorted out.
+    if (method_exists($sentinel_sample_entity, 'calculateX100')) {
+      $sentinel_sample_entity->calculateX100();
+    }
+
+    $sentinel_sample_result = new \stdClass();
+    $formatted_results = new \stdClass();
+    
+    sentinel_systemcheck_certificate_populate_results($sentinel_sample_result, $sentinel_sample_entity, $formatted_results);
+
+    $company_address = sentinel_system_get_addresses_from_sample_entity('company', $sentinel_sample_entity);
+    $site_address = sentinel_system_get_addresses_from_sample_entity('site', $sentinel_sample_entity);
+
+    foreach (['date_reported', 'date_booked'] as $sampleDateProperty) {
+      if (!empty($sentinel_sample_entity->{$sampleDateProperty})) {
+        $date = new \DateTime(str_replace('/', '-', $sentinel_sample_entity->{$sampleDateProperty}));
+        if (is_object($date)) {
+          $sentinel_sample_entity->{$sampleDateProperty . '_formatted'} = $date->format('d/m/Y');
+        }
+      }
+    }
+  }
+
+  return [
+    'sentinel_sample_result' => $sentinel_sample_result,
+    'original_sample_entity' => $sentinel_sample_entity,
+    'formatted_results' => $formatted_results,
+    'company_address' => $company_address,
+    'site_address' => $site_address,
+    'lang' => $sentinel_sample_entity->getSampleCountry(),
+  ];
+}
+
+/**
+ * Get the sample entity address string in a nicer format.
+ *
+ * @param string $address_type
+ *   The address type as a string.
+ * @param object $sample_entity
+ *   The sample entity.
+ *
+ * @return string
+ *   The address as a string.
+ */
+function sentinel_system_get_addresses_from_sample_entity($address_type, $sample_entity) {
+  $address = '';
+
+  if ($address_type == 'company') {
+    $address = implode(', ', array_filter([
+      $sample_entity->company_address1,
+      $sample_entity->company_address2,
+      $sample_entity->company_town,
+      $sample_entity->company_county,
+      $sample_entity->company_postcode,
+    ]));
+  } elseif ($address_type == 'site') {
+    $address = implode(', ', array_filter([
+      $sample_entity->property_number,
+      $sample_entity->street,
+      $sample_entity->town_city,
+      $sample_entity->county,
+      $sample_entity->postcode,
+    ]));
+
+    if ($address == $sample_entity->postcode) {
+      // For instances where the address is kept in the system location field we need to alter this.
+      $address = implode(', ', array_filter([
+        $sample_entity->system_location,
+        $sample_entity->postcode,
+      ]));
+    }
+  }
+
+  return $address;
+}
+
+/**
+ * Regenerate logic from condition entities.
+ */
+function _re_generate_logic_from_condition_entities() {
+  // Load the entities in order of their event number.
+  $query = \Drupal::entityQuery('condition_entity')
+    ->sort('field_condition_event_number', 'ASC');
+  $entity_ids = $query->execute();
+
+  if (!empty($entity_ids)) {
+    $entities = \Drupal::entityTypeManager()->getStorage('condition_entity')->loadMultiple($entity_ids);
+    $real_file = _get_injector_file('_sentinel_validation_injector.php');
+    $buffer_file = _get_injector_file('_sentinel_validation_injector_buffer.php');
+    _create_php_script($entities, $buffer_file, $real_file);
+  }
+}
+
+/**
+ * Create PHP script from condition entities.
+ *
+ * @param array $condition_entities
+ *   Array of condition entities.
+ * @param string $buffer_filename
+ *   Buffer filename.
+ * @param string $real_filename
+ *   Real filename.
+ */
+function _create_php_script($condition_entities, $buffer_filename, $real_filename) {
+  // Define variable for loop.
+  $x = 0;
+
+  // Start by opening the php tags.
+  $mega_statement = '<?php' . PHP_EOL;
+
+  // Add comment to top of file.
+  $mega_statement .= '/**' . PHP_EOL;
+  $mega_statement .= ' *' . PHP_EOL;
+  $mega_statement .= ' * @file' . PHP_EOL;
+  $mega_statement .= ' * Sentinel Validation Injector.' . PHP_EOL;
+  $mega_statement .= ' *' . PHP_EOL;
+  $mega_statement .= ' * Do not edit this file! It is generated by the system.' . PHP_EOL;
+  $mega_statement .= ' */' . PHP_EOL;
+
+  // Set feedback item to blank as we are using this in our ternary statement.
+  $feedback_item_type = '';
+
+  foreach ($condition_entities as $condition_entity_object) {
+    // Split the condition up based on the AND clause.
+    $condition_elements = explode('and', $condition_entity_object->get('field_condition_event_string')->value);
+
+    // We are only doing this for one item at the moment.
+    apply_strict_checking_to_element('$system_6_months', $condition_elements);
+
+    // Determine if we are using an if or elseif.
+    $mega_statement .= ($feedback_item_type == $condition_entity_object->get('field_condition_event_element')->value) ? PHP_EOL . 'elseif (' : PHP_EOL . 'if (';
+
+    // Get the pass value.
+    $pass = $condition_entity_object->get('field_condition_event_result')->target_id;
+
+    // Get the overall comment/recommendation.
+    $overall_comment = $condition_entity_object->get('field_individual_recommend')->value;
+
+    // Get the individual comment.
+    $individual_comment = $condition_entity_object->get('field_event_individual_comment')->value;
+
+    // Get the item type.
+    $feedback_item_type = $condition_entity_object->get('field_condition_event_element')->value;
+
+    // Format the item type.
+    $feedback_item_type_formatted = strtolower(str_replace(' ', '_', $feedback_item_type));
+
+    // Spreadsheet number
+    $event_number = $condition_entity_object->get('field_condition_event_number')->value;
+
+    // Get the last key item of the condition elements array.
+    $last = count($condition_elements) - 1;
+
+    // Go through each of the conditions and build the condition statement.
+    foreach ($condition_elements as $row_num => $string) {
+      // Remove white spaces.
+      $mega_statement .= trim($string);
+
+      // If we aren't on the last item then we append && to continue.
+      if ($row_num !== $last) {
+        $mega_statement .= ' && ';
+      } else {
+        // Finished the condition statement.
+        $mega_statement .= ') {' . PHP_EOL;
+      }
+    }
+
+    // Start to set variable values used for the PDF report.
+    $mega_statement .= '  $' . $feedback_item_type_formatted . '_pass = "' . $pass . '";' . PHP_EOL;
+    $mega_statement .= '  $' . $feedback_item_type_formatted . '_feedback = t("' . $individual_comment . '", array(), array("langcode" => $lang));' . PHP_EOL;
+    $mega_statement .= '  $recommendations[] = t("' . $overall_comment . '", array(), array("langcode" => $lang));' . PHP_EOL;
+
+    $mega_statement .= '}' . PHP_EOL;
+  }
+
+  // Open the buffer file and write to it.
+  $buffer_file_handler = fopen($buffer_filename, 'w');
+  fwrite($buffer_file_handler, $mega_statement);
+  $errors = [];
+
+  // Ensure the file has no syntax errors in it.
+  exec('php -l ' . $buffer_filename, $errors);
+
+  if (strpos($errors[0], 'No syntax errors detected') !== FALSE) {
+    // Open the real file and write to it as everything is syntax ok.
+    $real_file_handler = fopen($real_filename, 'w');
+    fwrite($real_file_handler, $mega_statement);
+
+    \Drupal::messenger()->addStatus(\Drupal::translation()->translate('Successfully generated a new version of the matrix logic'));
+  } else {
+    \Drupal::logger('sentinel_systemcheck_certificate')->notice('There was a problem with generating a new version of the matrix logic: @errors', ['@errors' => implode('<br>', $errors)]);
+    \Drupal::messenger()->addError(\Drupal::translation()->translate('An attempt was made to write update the PDF logic but this failed due to a syntax error'));
+  }
+}
+
+/**
+ * Apply strict checking to element.
+ *
+ * @param string $var
+ *   The variable we want to do strict checking on.
+ * @param array &$element
+ *   The array of string we need to check.
+ */
+function apply_strict_checking_to_element($var, &$element) {
+  if (is_array($element)) {
+    foreach ($element as $key => $value) {
+      $segments = explode($var, $value);
+      if (isset($segments[1])) {
+        $replace = str_replace('==', '===', $segments[1]);
+        $element[$key] = $var . ' ' . $replace;
+      }
+    }
+  } else {
+    $element_array = [$element];
+    apply_strict_checking_to_element($var, $element_array);
+  }
+}

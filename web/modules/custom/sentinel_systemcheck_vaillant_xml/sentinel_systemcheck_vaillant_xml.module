@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Vaillant XML module file.
+ */
+
+/**
+ * Module's service functions.
+ */
+require_once __DIR__ . '/sentinel_systemcheck_vaillant_xml.services.inc';
+
+

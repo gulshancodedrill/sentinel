@@ -1,0 +1,10 @@
+available_updates_d7.json:
+  path: '/available_updates_d7.json'
+  defaults:
+    _controller: '\Drupal\available_updates_d7\Controller\AvailableUpdatesController::getUpdates'
+    _title: 'Available Updates JSON'
+  requirements:
+    _access: 'TRUE'
+  methods: [GET, POST]
+
+

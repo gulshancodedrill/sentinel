@@ -1,0 +1,122 @@
+<?php
+
+/**
+ * @file
+ * Access Hierarchy module.
+ */
+
+use Drupal\Core\Database\Query\AlterableInterface;
+
+/**
+ * Implements hook_query_TAG_alter().
+ *
+ * @param \Drupal\Core\Database\Query\AlterableInterface $query
+ */
+function access_hierachy_query_sample_entity_query_access_alter(AlterableInterface $query) {
+  $current_user = \Drupal::currentUser();
+
+  if ($current_user->id() != 1) {
+    $client = sentinel_portal_entities_get_client_by_user();
+
+    if (is_object($client) && !empty($client->ucr) && $current_user->hasPermission('sentinel view own sentinel_sample')) {
+      $cids = get_more_clients_based_client_cohorts($client);
+      $cids[] = $client->cid;
+      $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = sentinel_sample.ucr');
+      $query->condition('sc.cid', $cids, 'IN');
+    }
+  }
+}
+
+/**
+ * Get client id's from a client.
+ *
+ * Given a sentinel_client object we find out the other client ID's that it can
+ * view based on the hierarchy in the sentinel_monitor_hierarchy taxonomy.
+ *
+ * @param object $client
+ *   The sentinel client object.
+ *
+ * @return array
+ *   The array of cid's found.
+ */
+function get_more_clients_based_client_cohorts($client) {
+  $client_cohorts = [];
+
+  $vocab = \Drupal::entityTypeManager()->getStorage('taxonomy_vocabulary')->loadByProperties(['vid' => 'sentinel_monitor_hierarchy']);
+  $vocabulary = reset($vocab);
+
+  if (!$vocabulary) {
+    return $client_cohorts;
+  }
+
+  $cohorts = $client->get('field_user_cohorts')->getValue();
+
+  if (!empty($cohorts)) {
+    foreach ($cohorts as $cohort) {
+      $tid = $cohort['target_id'];
+      $taxonomies = taxonomy_get_children_all($tid, $vocabulary->id());
+
+      if (!empty($taxonomies)) {
+        $client_ids = get_client_ids_based_on_user_taxonomies($taxonomies);
+        foreach ($client_ids as $cid) {
+          $client_cohorts[] = $cid;
+        }
+      }
+    }
+  }
+
+  return $client_cohorts;
+}
+
+/**
+ * Recursive method to get all child taxonomy terms.
+ *
+ * @param string $tid
+ *   The taxonomy term in question.
+ * @param int $vid
+ *   The vocab id.
+ * @param string $key
+ *   The key string value.
+ *
+ * @return array
+ *   The taxonomy children.
+ */
+function taxonomy_get_children_all($tid, $vid = 0, $key = 'target_id') {
+  $taxonomy_data = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadTree($vid, $tid);
+  $result = [];
+  
+  foreach ($taxonomy_data as $term) {
+    $result[$term->tid] = $term->tid;
+    $below = taxonomy_get_children_all($term->tid, $vid, $key);
+    if (!empty($below)) {
+      foreach ($below as $tid2 => $data2) {
+        $result[$tid2] = $tid2;
+      }
+    }
+  }
+  
+  return $result;
+}
+
+/**
+ * Get the user ids from taxonomies.
+ *
+ * @param array $tids
+ *   An array of taxonomies owned by the user.
+ *
+ * @return array
+ *   List of user ids.
+ */
+function get_client_ids_based_on_user_taxonomies($tids) {
+  $query = \Drupal::database()->select('sentinel_client', 'sc');
+  $query->addField('sc', 'cid', 'cid');
+  $query->leftJoin('field_data_field_user_cohorts', 'uc', 'sc.cid = uc.entity_id');
+  $query->condition('uc.entity_type', 'sentinel_client');
+  $query->condition('uc.bundle', 'sentinel_client');
+  $query->condition('uc.deleted', FALSE);
+  $query->condition('uc.field_user_cohorts_tid', $tids, 'IN');
+  $query->groupBy('sc.cid');
+  $result = $query->execute()->fetchCol();
+
+  return $result;
+}

@@ -1,0 +1,6 @@
+sentinel portal administration:
+  title: 'Administer Sentinel Portal'
+  description: 'Allows access to all Sentinel Portal administration pages.'
+  restrict access: true
+
+

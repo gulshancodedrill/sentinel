@@ -1,0 +1,35 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - eck.eck_type.address.company_address
+  module:
+    - address
+id: address.company_address.field_address
+field_name: field_address
+entity_type: address
+bundle: company_address
+label: 'Address'
+description: 'Please provide the name and address of the company managing installation/maintenance on this system.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  available_countries: {  }
+  fields:
+    countryCode:
+      enabled: true
+    locality:
+      enabled: true
+    administrativeArea:
+      enabled: true
+    postalCode:
+      enabled: true
+    addressLine1:
+      enabled: true
+    addressLine2:
+      enabled: true
+    organization:
+      enabled: true
+field_type: address

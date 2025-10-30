@@ -1,0 +1,17 @@
+sentinel_addresses.autocomplete:
+  path: '/sample_address/autocomplete'
+  defaults:
+    _controller: '\Drupal\sentinel_addresses\Controller\AddressController::autocomplete'
+    _title: 'Autocomplete for sample addresses'
+  requirements:
+    _permission: 'sentinel portal sample submit'
+
+sentinel_addresses.edit_note:
+  path: '/address/address/{address_id}/note/{note_delta}'
+  defaults:
+    _controller: '\Drupal\sentinel_addresses\Controller\AddressController::editNote'
+    _title: 'Edit Address Note'
+  requirements:
+    _permission: 'sentinel portal sample submit'
+    address_id: \d+
+    note_delta: \d+

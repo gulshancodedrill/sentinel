@@ -1,0 +1,11 @@
+<?php
+
+/**
+ * @file
+ * Sentinel migrations module file.
+ */
+
+/**
+ * Module's include file for helper functions.
+ */
+require_once __DIR__ . '/sentinel_migrations.helpers.inc';

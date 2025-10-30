@@ -1,0 +1,7 @@
+name: 'Access Hacks'
+type: module
+description: 'A collection of tweaks to fix silly things in Drupal 11.'
+core_version_requirement: ^11
+package: Access
+
+

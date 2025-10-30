@@ -1,0 +1,16 @@
+name: 'Sentinel Monitor'
+type: module
+description: 'Feature for collecting sentinel monitor info'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - datetime
+  - eck
+  - feeds
+  - field_group
+  - taxonomy
+  - text
+  - views
+  - sentinel_portal_module
+
+

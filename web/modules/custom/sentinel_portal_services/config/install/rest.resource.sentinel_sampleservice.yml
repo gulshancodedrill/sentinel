@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - sentinel_portal_services
+    - serialization
+id: sentinel_sampleservice
+plugin_id: sentinel_sampleservice
+granularity: resource
+configuration:
+  methods:
+    - GET
+    - POST
+  formats:
+    - json
+    - xml
+  authentication:
+    - cookie
+    - basic_auth
+
+
+

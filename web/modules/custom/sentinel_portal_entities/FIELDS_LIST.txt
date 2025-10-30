@@ -1,0 +1,88 @@
+Fields to add from D7 schema (excluding pid/vid which are entity keys):
+
+STRING FIELDS (varchar):
+- pack_reference_number (30) - exists
+- project_id (255)
+- installer_name (255) - required
+- installer_email (255)
+- installer_company (255)
+- company_name (255) - required, deprecated
+- company_email (255) - required
+- company_address1 (255) - deprecated
+- company_address2 (255) - deprecated
+- company_town (255) - deprecated
+- company_county (255) - deprecated
+- company_postcode (255) - deprecated
+- company_tel (255)
+- customer_id (255)
+- system_location (255) - exists
+- system_age (255)
+- system_6_months (10)
+- uprn (255)
+- property_number (100) - deprecated
+- street (255) - required, deprecated
+- town_city (255) - required, deprecated
+- county (255) - required, deprecated
+- postcode (255) - required, deprecated
+- landlord (255) - required
+- boiler_manufacturer (255) - required
+- boiler_id (255)
+- boiler_type (255)
+- engineers_code (255)
+- service_call_id (255)
+- fileid (255)
+- filename (255)
+- client_name (255) - deprecated
+- lab_ref (255)
+- pack_type (10)
+- old_pack_reference_number (30)
+- duplicate_of (255)
+- appearance_result (255)
+- mains_cond_result (255)
+- sys_cond_result (255)
+- mains_cl_result (255)
+- sys_cl_result (255)
+- iron_result (255)
+- copper_result (255)
+- aluminium_result (255)
+- mains_calcium_result (255)
+- sys_calcium_result (255)
+- ph_result (255)
+- sentinel_x100_result (255)
+- molybdenum_result (255)
+- boron_result (255)
+- manganese_result (255)
+- nitrate_result (255)
+- mob_ratio (255)
+
+INTEGER FIELDS (tinyint/int):
+- ucr (int unsigned) - exists as string, should be integer
+- client_id (int unsigned)
+- card_complete (tinyint unsigned)
+- on_hold (tinyint unsigned)
+- pass_fail (tinyint unsigned) - exists as boolean, should be integer
+- appearance_pass_fail (tinyint unsigned)
+- cond_pass_fail (tinyint unsigned)
+- cl_pass_fail (tinyint unsigned)
+- iron_pass_fail (tinyint unsigned)
+- copper_pass_fail (tinyint unsigned)
+- aluminium_pass_fail (tinyint unsigned)
+- calcium_pass_fail (tinyint unsigned)
+- ph_pass_fail (tinyint unsigned)
+- sentinel_x100_pass_fail (tinyint unsigned)
+- molybdenum_pass_fail (tinyint unsigned)
+- boron_pass_fail (tinyint unsigned)
+- manganese_pass_fail (tinyint unsigned)
+- legacy (tinyint unsigned)
+- api_created_by (int unsigned)
+
+DATETIME FIELDS:
+- date_installed (datetime) - required
+- date_sent (datetime)
+- date_booked (datetime)
+- date_processed (datetime)
+- date_reported (datetime)
+- created (datetime) - exists
+- updated (datetime) - exists as 'changed'
+
+

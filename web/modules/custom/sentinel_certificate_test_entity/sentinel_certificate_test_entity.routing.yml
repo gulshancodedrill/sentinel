@@ -1,0 +1,10 @@
+sentinel_certificate_test_entity.view_pdf:
+  path: '/test_entity/condition_entity/{test_entity_id}/pdf'
+  defaults:
+    _controller: '\Drupal\sentinel_certificate_test_entity\Controller\TestEntityPdfController::viewPdf'
+    _title: 'Download PDF'
+  requirements:
+    _permission: 'sentinel portal'
+    test_entity_id: \d+
+
+

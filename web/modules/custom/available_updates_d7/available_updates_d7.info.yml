@@ -1,0 +1,7 @@
+name: 'Available Updates D7'
+type: module
+description: 'Returns all available updates as json for a GET request'
+core_version_requirement: ^11
+package: Sentinel
+
+

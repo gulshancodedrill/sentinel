@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * @file
+ * Install file for the Sentinel Addresses module.
+ */
+
+use Drupal\Core\Database\Database;
+
+/**
+ * Implements hook_install().
+ */
+function sentinel_addresses_install() {
+  sentinel_addresses_create_table_other_sentinel_addresses_mapping();
+}
+
+/**
+ * Create the table other_sentinel_addresses_mapping.
+ */
+function sentinel_addresses_create_table_other_sentinel_addresses_mapping() {
+  $schema = Database::getConnection()->schema();
+  
+  if (!$schema->tableExists('other_sentinel_addresses_mapping')) {
+    $spec = [
+      'description' => 'A table which maps other sentinel samples with the new address format',
+      'fields' => [
+        'sample_pid' => [
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+        ],
+        'address_id' => [
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+        ],
+      ],
+      'primary key' => ['sample_pid', 'address_id'],
+    ];
+    
+    $schema->createTable('other_sentinel_addresses_mapping', $spec);
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function sentinel_addresses_uninstall() {
+  $schema = Database::getConnection()->schema();
+  
+  if ($schema->tableExists('other_sentinel_addresses_mapping')) {
+    $schema->dropTable('other_sentinel_addresses_mapping');
+  }
+}
+
+

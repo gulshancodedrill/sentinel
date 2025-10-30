@@ -1,0 +1,30 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.condition_entity.field_condition_event_result
+    - eck.eck_type.condition_entity.condition_entity
+    - taxonomy.vocabulary.condition_event_results
+  module:
+    - taxonomy
+id: condition_entity.condition_entity.field_condition_event_result
+field_name: field_condition_event_result
+entity_type: condition_entity
+bundle: condition_entity
+label: 'Condition Event Result'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:taxonomy_term'
+  handler_settings:
+    target_bundles:
+      condition_event_results: condition_event_results
+    sort:
+      field: _none
+    auto_create: false
+field_type: entity_reference
+
+

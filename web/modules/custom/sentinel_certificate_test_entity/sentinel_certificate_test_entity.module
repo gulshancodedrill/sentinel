@@ -1,0 +1,136 @@
+<?php
+
+/**
+ * @file
+ * This module allows members of sentinel to submit test samples PDF generation.
+ */
+
+use Drupal\Core\Entity\EntityInterface;
+
+/**
+ * Implements hook_entity_presave().
+ */
+function sentinel_certificate_test_entity_entity_presave(EntityInterface $entity) {
+  if ($entity->getEntityTypeId() == 'test_entity') {
+    sentinel_certificate_test_entity_apply_field_values_to_properties($entity);
+    sentinel_certificate_test_entity_apply_default_property_values($entity);
+  }
+}
+
+/**
+ * Method that applies the field values to the properties on the test sample.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The test sample entity.
+ */
+function sentinel_certificate_test_entity_apply_field_values_to_properties(EntityInterface $entity) {
+  $field_info = _sentinel_certificate_test_entity_get_map_test_sample_entity_fields_to_properties();
+
+  foreach ($field_info as $field_name => $property_name) {
+    if ($entity->hasField($field_name) && !$entity->get($field_name)->isEmpty()) {
+      $value = $entity->get($field_name)->value;
+      // For ECK entities, we can set properties if they exist.
+      // Note: In D11, entity properties work differently - this may need adjustment
+      // based on how test_entity is implemented (ECK vs custom entity).
+      if (method_exists($entity, 'set')) {
+        try {
+          $entity->set($property_name, $value);
+        }
+        catch (\Exception $e) {
+          // Property may not exist, continue.
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Allows us to map which fields need to map to which properties on the entity.
+ *
+ * @return array
+ *   An array of mappings.
+ */
+function _sentinel_certificate_test_entity_get_map_test_sample_entity_fields_to_properties() {
+  return [
+    'field_test_pack_reference_number' => 'pack_reference_number',
+    'field_test_appearance_result' => 'appearance_result',
+    'field_test_system_6_months' => 'system_6_months',
+    'field_test_ph_level' => 'ph_result',
+    'field_test_boron_result' => 'boron_result',
+    'field_test_boiler_type' => 'boiler_type',
+    'field_test_molybdenum_result' => 'molybdenum_result',
+    'field_system_conductivity_result' => 'sys_cond_result',
+    'field_main_conductivity_result' => 'mains_cond_result',
+    'field_test_main_calcium_result' => 'mains_calcium_result',
+    'field_test_system_calcium_result' => 'sys_calcium_result',
+    'field_system_chloride_result' => 'sys_cl_result',
+    'field_test_dissolved_iron_result' => 'iron_result',
+    'field_test_copper_result' => 'copper_result',
+    'field_test_dissolved_aluminium' => 'aluminium_result',
+    'field_test_mains_chloride_result' => 'mains_cl_result',
+  ];
+}
+
+/**
+ * Apply the default property values to the test entity.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The test entity.
+ */
+function sentinel_certificate_test_entity_apply_default_property_values(EntityInterface $entity) {
+  $default_property_values = _sentinel_certificate_test_entity_get_property_default_values();
+
+  foreach ($default_property_values as $property_name => $property_value) {
+    if (method_exists($entity, 'set')) {
+      try {
+        // Only set if value doesn't already exist.
+        if (!$entity->hasField($property_name) || $entity->get($property_name)->isEmpty()) {
+          $entity->set($property_name, $property_value);
+        }
+      }
+      catch (\Exception $e) {
+        // Property may not exist or not be settable, continue.
+      }
+    }
+  }
+}
+
+/**
+ * Assign some default property values.
+ *
+ * @return array
+ *   The list of default values.
+ */
+function _sentinel_certificate_test_entity_get_property_default_values() {
+  return [
+    'installer_name' => 'xxxx',
+    'company_name' => 'xxxx',
+    'company_address1' => 'xxxx',
+    'company_address2' => 'xxxx',
+    'company_town' => 'xxxx',
+    'company_county' => 'xxxx',
+    'company_postcode' => 'xxxx',
+    'property_number' => 'xxxx',
+    'street' => 'xxxx',
+    'town_city' => 'xxxx',
+    'county' => 'xxxx',
+    'postcode' => 'xxxx',
+    'date_reported' => date('d/m/Y', time()),
+    'project_id' => 'xxxx',
+    'boiler_id' => 'xxxx',
+    'system_age' => 'xxxx',
+    'site_address' => 'xxxx',
+    'customer_id' => 0,
+  ];
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function sentinel_certificate_test_entity_form_feeds_import_form_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id) {
+  if (isset($form['feeds']['FeedsFileFetcher']['upload'])) {
+    $form['feeds']['FeedsFileFetcher']['upload']['#prefix'] = '<div style="color:red">Decimal values are accepted for the result columns, Please use TRUE or FALSE in the <b>System is 6 months</b> column</div>';
+  }
+}
+
+

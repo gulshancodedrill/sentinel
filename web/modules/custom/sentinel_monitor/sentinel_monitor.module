@@ -1,0 +1,23 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Monitor module file.
+ */
+
+/**
+ * Module's form alteration include file.
+ */
+require_once __DIR__ . '/sentinel_monitor.forms.inc';
+
+/**
+ * Implements hook_entity_type_bundle_info().
+ */
+function sentinel_monitor_entity_type_bundle_info() {
+  $bundles = [];
+  $bundles['sentinel_monitor']['sentinel_monitor'] = [
+    'label' => 'Sentinel Monitor',
+    'description' => 'Sentinel Monitor entity bundle',
+  ];
+  return $bundles;
+}

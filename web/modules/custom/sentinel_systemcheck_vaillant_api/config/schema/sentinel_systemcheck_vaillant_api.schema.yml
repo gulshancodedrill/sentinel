@@ -1,0 +1,12 @@
+sentinel_systemcheck_vaillant_api.settings:
+  type: config_object
+  label: 'Sentinel Vaillant API settings'
+  mapping:
+    api_key:
+      type: string
+      label: 'Vaillant API Key'
+    endpoint:
+      type: string
+      label: 'Vaillant API Endpoint'
+
+

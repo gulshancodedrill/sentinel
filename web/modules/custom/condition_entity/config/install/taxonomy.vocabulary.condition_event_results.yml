@@ -1,0 +1,12 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - taxonomy
+id: condition_event_results
+name: 'Condition event results'
+description: 'Sentinel Certificate pass/fail values'
+hierarchy: 0
+weight: 0
+
+

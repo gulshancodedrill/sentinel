@@ -1,0 +1,13 @@
+name: 'Sentinel SystemCheck Services'
+type: module
+description: 'This module creates the Sentinel SystemCheck REST API services.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - rest
+  - serialization
+  - sentinel_portal_module
+  - sentinel_portal_entities
+
+
+

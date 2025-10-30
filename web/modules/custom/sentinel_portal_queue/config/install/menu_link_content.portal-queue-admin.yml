@@ -1,0 +1,19 @@
+uuid: 12345678-1234-1234-1234-123456789012
+langcode: en
+status: true
+dependencies: {  }
+id: portal-queue-admin
+title: 'Queue Admin'
+description: 'Administer Sentinel queue items'
+menu_name: portal
+link:
+  uri: 'internal:/portal/admin/queue'
+  title: 'Queue Admin'
+  description: 'Administer Sentinel queue items'
+  options:
+    attributes: {  }
+    expanded: false
+enabled: true
+expanded: false
+weight: 0
+parent: 'menu_link_content:portal-admin-area'

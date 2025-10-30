@@ -1,0 +1,12 @@
+name: 'Hold states'
+type: module
+description: 'Hold states feature'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_entities
+  - taxonomy
+  - text
+  - options
+
+

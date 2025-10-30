@@ -1,0 +1,13 @@
+name: 'Sentinel Portal Queue'
+type: module
+description: 'This module creates the Sentinel Queue service for processing samples.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_module
+  - sentinel_portal_entities
+  - sentinel_systemcheck_certificate
+  - file
+  - user
+  - system
+

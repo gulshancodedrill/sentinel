@@ -1,0 +1,10 @@
+name: 'Sentinel Vaillant API'
+type: module
+description: 'Allows portal sample data to be submitted to the Vaillant API.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_module
+  - sentinel_portal_entities
+
+

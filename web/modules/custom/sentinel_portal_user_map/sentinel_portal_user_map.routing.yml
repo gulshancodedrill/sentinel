@@ -1,0 +1,41 @@
+sentinel_portal_user_map.user_list:
+  path: '/portal/user-list'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_user_map\Controller\UserMapController::userList'
+  requirements:
+    _permission: 'sentinel portal'
+    _custom_access: '\Drupal\sentinel_portal_user_map\UserMapAccess::access'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_user_map.add_user:
+  path: '/portal/user-map-add-user'
+  defaults:
+    _form: '\Drupal\sentinel_portal_user_map\Form\AddUserForm'
+  requirements:
+    _permission: 'sentinel portal'
+    _custom_access: '\Drupal\sentinel_portal_user_map\UserMapAccess::access'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_user_map.update_user:
+  path: '/portal/user-map-update-user'
+  defaults:
+    _form: '\Drupal\sentinel_portal_user_map\Form\UpdateUserForm'
+  requirements:
+    _permission: 'sentinel portal'
+    _custom_access: '\Drupal\sentinel_portal_user_map\UserMapAccess::access'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_user_map.autocomplete:
+  path: '/portal/user-list/autocomplete'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_user_map\Controller\UserMapController::autocomplete'
+  requirements:
+    _permission: 'sentinel portal'
+    _custom_access: '\Drupal\sentinel_portal_user_map\UserMapAccess::access'
+  options:
+    _admin_route: FALSE
+
+

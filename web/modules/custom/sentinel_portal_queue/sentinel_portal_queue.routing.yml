@@ -1,0 +1,40 @@
+sentinel_portal_queue.admin:
+  path: '/portal/admin/queue'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_queue\Controller\QueueAdminController::adminPage'
+    _title: 'Sentinel Queue'
+  requirements:
+    _permission: 'sentinel portal administration'
+  options:
+    _admin_route: TRUE
+
+sentinel_portal_queue.view_item:
+  path: '/portal/admin/queue/view/{item_id}'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_queue\Controller\QueueAdminController::viewItem'
+    _title: 'View Queue Item'
+  requirements:
+    _permission: 'sentinel portal administration'
+  options:
+    _admin_route: TRUE
+
+sentinel_portal_queue.release_item:
+  path: '/portal/admin/queue/release/{item_id}'
+  defaults:
+    _form: '\Drupal\sentinel_portal_queue\Form\QueueReleaseForm'
+    _title: 'Release Queue Item'
+  requirements:
+    _permission: 'sentinel portal administration'
+  options:
+    _admin_route: TRUE
+
+sentinel_portal_queue.delete_item:
+  path: '/portal/admin/queue/delete/{item_id}'
+  defaults:
+    _form: '\Drupal\sentinel_portal_queue\Form\QueueDeleteForm'
+    _title: 'Delete Queue Item'
+  requirements:
+    _permission: 'sentinel portal administration'
+  options:
+    _admin_route: TRUE
+

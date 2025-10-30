@@ -1,0 +1,18 @@
+eck add sentinel_monitor sentinel_monitor entities:
+  title: 'Add sentinel_monitor sentinel_monitor entities'
+  description: 'Allows users to add sentinel_monitor sentinel_monitor entities via ECK.'
+  restrict access: false
+eck edit sentinel_monitor sentinel_monitor entities:
+  title: 'Edit sentinel_monitor sentinel_monitor entities'
+  description: 'Allows users to edit sentinel_monitor sentinel_monitor entities via ECK.'
+  restrict access: true
+eck delete sentinel_monitor sentinel_monitor entities:
+  title: 'Delete sentinel_monitor sentinel_monitor entities'
+  description: 'Allows users to delete sentinel_monitor sentinel_monitor entities via ECK.'
+  restrict access: true
+eck view sentinel_monitor sentinel_monitor entities:
+  title: 'View sentinel_monitor sentinel_monitor entities'
+  description: 'Allows users to view sentinel_monitor sentinel_monitor entities via ECK.'
+  restrict access: false
+
+

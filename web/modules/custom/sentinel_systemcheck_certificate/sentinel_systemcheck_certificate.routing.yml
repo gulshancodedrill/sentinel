@@ -1,0 +1,43 @@
+sentinel_systemcheck_certificate.matrix_upload:
+  path: '/admin/matrix-upload'
+  defaults:
+    _form: '\Drupal\sentinel_systemcheck_certificate\Form\MatrixUploadForm'
+  requirements:
+    _permission: 'sentinel portal administration'
+  options:
+    _admin_route: TRUE
+
+sentinel_systemcheck_certificate.view_result:
+  path: '/view-my-results/{sample_id}'
+  defaults:
+    _controller: '\Drupal\sentinel_systemcheck_certificate\Controller\CertificateController::viewResult'
+  requirements:
+    _permission: 'sentinel portal'
+  options:
+    parameters:
+      sample_id:
+        type: integer
+
+sentinel_systemcheck_certificate.view_pdf:
+  path: '/view-my-results-pdf/{sample_id}'
+  defaults:
+    _controller: '\Drupal\sentinel_systemcheck_certificate\Controller\CertificateController::viewPdf'
+  requirements:
+    _permission: 'sentinel portal'
+  options:
+    parameters:
+      sample_id:
+        type: integer
+
+sentinel_systemcheck_certificate.regenerate_pdf:
+  path: '/portal/admin/samples/pdf/{sample_id}/refresh'
+  defaults:
+    _controller: '\Drupal\sentinel_systemcheck_certificate\Controller\CertificateController::regeneratePdf'
+  requirements:
+    _permission: 'sentinel portal regenerate any certificate'
+  options:
+    parameters:
+      sample_id:
+        type: integer
+
+

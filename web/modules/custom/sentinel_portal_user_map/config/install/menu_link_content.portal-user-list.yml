@@ -1,0 +1,22 @@
+uuid: 00000000-0000-0000-0000-000000000001
+langcode: en
+status: true
+dependencies: {  }
+id: portal-user-list
+title: 'User Lists'
+description: 'Manage portal users and their location access'
+menu_name: portal
+link:
+  uri: 'internal:/portal/user-list'
+  title: 'User Lists'
+  options: {  }
+  weight: -45
+external: false
+enabled: true
+expanded: false
+parent: ''
+weight: -45
+route_name: sentinel_portal_user_map.user_list
+route_parameters: {  }
+
+

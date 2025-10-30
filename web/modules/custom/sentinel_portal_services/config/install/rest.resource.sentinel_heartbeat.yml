@@ -1,0 +1,21 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - sentinel_portal_services
+    - serialization
+id: sentinel_heartbeat
+plugin_id: sentinel_heartbeat
+granularity: resource
+configuration:
+  methods:
+    - GET
+  formats:
+    - json
+    - xml
+  authentication:
+    - cookie
+    - basic_auth
+
+
+

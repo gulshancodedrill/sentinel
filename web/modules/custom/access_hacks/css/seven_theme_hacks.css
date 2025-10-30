@@ -1,0 +1,19 @@
+/* Seven theme hacks CSS overrides */
+/* This file contains CSS overrides for the Seven admin theme */
+
+/* Example overrides - customize as needed */
+body.admin-page {
+  /* Add any Seven theme customizations here */
+}
+
+/* Hide or modify specific admin elements */
+.admin-toolbar {
+  /* Toolbar customizations */
+}
+
+/* Form styling improvements */
+.form-item {
+  /* Form element improvements */
+}
+
+

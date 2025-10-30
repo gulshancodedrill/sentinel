@@ -1,0 +1,12 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - eck.eck_entity_type.condition_entity
+  module:
+    - condition_entity
+name: condition_entity
+type: condition_entity
+description: 'Condition Entity'
+
+

@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies: {  }
+id: menu_link_content:portal-bulk-upload
+title: 'Sample Bulk Upload'
+description: 'Upload multiple samples via CSV file'
+menu_name: portal
+link:
+  uri: 'internal:/portal/bulk-upload'
+  title: 'Sample Bulk Upload'
+  options: {  }
+external: false
+rediscover: false
+weight: 1
+expanded: false
+enabled: true
+parent: ''
+
+
+

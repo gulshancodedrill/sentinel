@@ -1,0 +1,11 @@
+sentinel_monitor.add_form:
+  path: '/portal/sample/monitor'
+  defaults:
+    _controller: '\Drupal\sentinel_monitor\Controller\MonitorController::addForm'
+    _title: 'Sentinel monitor'
+  requirements:
+    _permission: 'eck add sentinel_monitor sentinel_monitor entities'
+  options:
+    _admin_route: FALSE
+
+

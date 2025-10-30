@@ -1,0 +1,6 @@
+sentinel portal send api report:
+  title: 'Send API report'
+  description: 'Allows users to send sample data to the Vaillant API.'
+  restrict access: true
+
+

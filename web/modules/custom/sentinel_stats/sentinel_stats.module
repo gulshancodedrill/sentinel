@@ -1,0 +1,44 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Stats module file.
+ */
+
+/**
+ * Implements hook_entity_type_bundle_info().
+ */
+function sentinel_stats_entity_type_bundle_info() {
+  $bundles = [];
+  $bundles['sentinel_stat']['sentinel_stat'] = [
+    'label' => 'Sentinel stat',
+    'description' => 'Sentinel stat entity bundle',
+  ];
+  return $bundles;
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Collect all the samples that need to have stat entities created.
+ */
+function sentinel_stats_cron() {
+  $database = \Drupal::database();
+  
+  $query = $database->select('sentinel_sample', 'ss');
+  $query->addField('ss', 'id', 'pid');
+  $query->leftJoin('sentinel_stat__field_stat_pack_reference_id', 'pi', 'pi.field_stat_pack_reference_id_target_id = ss.id');
+  $query->condition('ss.date_reported', '2015-12-30', '>=');
+  $query->isNull('pi.field_stat_pack_reference_id_target_id');
+  $query->orderBy('ss.id');
+  $result = $query->execute()->fetchCol();
+
+  if (!empty($result)) {
+    $queue = \Drupal::queue('sentinel_stats', TRUE);
+    foreach ($result as $pid) {
+      $queue->createItem($pid);
+    }
+    
+    \Drupal::logger('sentinel_stats')->info('Added @count items to stats generation queue.', ['@count' => count($result)]);
+  }
+}

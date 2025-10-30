@@ -1,0 +1,58 @@
+id: sentinel_samples_migration
+label: 'Sentinel Samples Migration'
+migration_group: samples
+source:
+  plugin: sentinel_samples_source
+  # Configuration for legacy database connection
+  # This assumes 'sentinel_legacy' database is configured in settings.php
+destination:
+  plugin: sentinel_sample
+  # Bundle: sentinel_sample (default bundle)
+process:
+  # Basic sample fields mapping from source to destination
+  pack_reference_number: pack_reference_number
+  project_id: project_id
+  installer_name: installer_name
+  installer_email: installer_email
+  company_name: company_name
+  company_email: company_email
+  company_address1: company_address1
+  company_address2: company_address2
+  company_town: company_town
+  company_county: company_county
+  company_postcode: company_postcode
+  company_tel: company_tel
+  system_location: system_location
+  system_6_months: system_6_months
+  system_postcode: system_postcode
+  uprn: uprn
+  property_number: property_number
+  street: street
+  town_city: town_city
+  county: county
+  postcode: postcode
+  landlord: landlord
+  boiler_manufacturer: boiler_manufacturer
+  boiler_id: boiler_id
+  boiler_type: boiler_type
+  engineers_code: engineers_code
+  service_call_id: service_call_id
+  date_installed: date_installed
+  date_booked: date_booked
+  date_reported: date_reported
+  filename: filename
+  client_name: client_name
+  customer_id: customer_id
+  pack_type: pack_type
+  card_complete: card_complete
+  on_hold: on_hold
+  pass_fail: pass_fail
+  installer_company: installer_company
+  system_age: system_age
+  created: created
+  # Test data processing is handled in the destination plugin
+  # dates_analysed is processed to extract date_processed
+migration_dependencies:
+  required: {}
+options:
+  track_changes: true

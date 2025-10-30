@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Code for the Condition entity feature.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function condition_entity_views_api($module = NULL, $api = NULL) {
+  return ['api' => '3.0'];
+}
+
+

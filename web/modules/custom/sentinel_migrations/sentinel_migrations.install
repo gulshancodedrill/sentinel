@@ -1,0 +1,287 @@
+<?php
+
+/**
+ * @file
+ * Install file for the Sentinel Migrations module.
+ */
+
+use Drupal\Core\Database\Database;
+use Drupal\taxonomy\Entity\Term;
+use Drupal\taxonomy\Entity\Vocabulary;
+
+/**
+ * Implements hook_install().
+ */
+function sentinel_migrations_install() {
+  sentinel_migrations_create_table_addresses();
+  sentinel_migrations_create_table_company_addresses();
+  sentinel_migrations_create_table_company_unique_addresses();
+  sentinel_migrations_create_table_addresses_unique_addresses();
+  sentinel_migrations_create_address_note_taxonomy_terms();
+}
+
+/**
+ * Implements hook_enable().
+ */
+function sentinel_migrations_enable() {
+  sentinel_migrations_create_table_addresses();
+  sentinel_migrations_create_table_company_addresses();
+  sentinel_migrations_create_table_company_unique_addresses();
+  sentinel_migrations_create_table_addresses_unique_addresses();
+  sentinel_migrations_create_address_note_taxonomy_terms();
+}
+
+/**
+ * Create address note taxonomy terms.
+ */
+function sentinel_migrations_create_address_note_taxonomy_terms() {
+  $vocab = Vocabulary::load('address_note_type');
+  
+  if (!$vocab) {
+    return;
+  }
+
+  $term_storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+  
+  // Create 'Filter Fitted' term if it doesn't exist.
+  $existing = $term_storage->loadByProperties(['name' => 'Filter Fitted', 'vid' => 'address_note_type']);
+  if (empty($existing)) {
+    $term = $term_storage->create([
+      'name' => 'Filter Fitted',
+      'vid' => 'address_note_type',
+    ]);
+    $term->save();
+  }
+
+  // Create 'Scale Protection Fitted' term if it doesn't exist.
+  $existing2 = $term_storage->loadByProperties(['name' => 'Scale Protection Fitted', 'vid' => 'address_note_type']);
+  if (empty($existing2)) {
+    $term2 = $term_storage->create([
+      'name' => 'Scale Protection Fitted',
+      'vid' => 'address_note_type',
+    ]);
+    $term2->save();
+  }
+}
+
+/**
+ * Create the company_unique_addresses table.
+ */
+function sentinel_migrations_create_table_company_unique_addresses() {
+  $schema = Database::getConnection()->schema();
+  
+  if (!$schema->tableExists('company_unique_addresses')) {
+    $spec = [
+      'description' => 'The unique addresses table (for company_addresses).',
+      'fields' => [
+        'unique_address_id' => [
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'unique_address' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+      ],
+      'unique keys' => [
+        'unique_address' => ['unique_address'],
+      ],
+      'primary key' => ['unique_address_id'],
+    ];
+    
+    $schema->createTable('company_unique_addresses', $spec);
+  }
+}
+
+/**
+ * Create the addresses_unique_addresses table.
+ */
+function sentinel_migrations_create_table_addresses_unique_addresses() {
+  $schema = Database::getConnection()->schema();
+  
+  if (!$schema->tableExists('addresses_unique_addresses')) {
+    $spec = [
+      'description' => 'The unique addresses table (for addresses).',
+      'fields' => [
+        'unique_address_id' => [
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'unique_address' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+      ],
+      'unique keys' => [
+        'unique_address' => ['unique_address'],
+      ],
+      'primary key' => ['unique_address_id'],
+    ];
+    
+    $schema->createTable('addresses_unique_addresses', $spec);
+  }
+}
+
+/**
+ * Create the addresses table.
+ */
+function sentinel_migrations_create_table_addresses() {
+  $schema = Database::getConnection()->schema();
+  
+  if (!$schema->tableExists('addresses')) {
+    $spec = [
+      'description' => 'The unique addresses table (for addresses).',
+      'fields' => [
+        'id' => [
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'pack_reference_number' => [
+          'type' => 'varchar',
+          'length' => 50,
+          'not null' => TRUE,
+        ],
+        'property_number' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'Street' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'ADDRESS_3' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'ADDRESS_4' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'TOWN_CITY' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'COUNTY' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'POSTCODE' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'lab_ref' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+      ],
+      'unique keys' => [
+        'id' => ['id'],
+      ],
+      'primary key' => ['id'],
+      'indexes' => [
+        'pack_reference_number' => ['pack_reference_number'],
+      ],
+    ];
+    
+    $schema->createTable('addresses', $spec);
+  }
+}
+
+/**
+ * Create the company_addresses table.
+ */
+function sentinel_migrations_create_table_company_addresses() {
+  $schema = Database::getConnection()->schema();
+  
+  if (!$schema->tableExists('company_addresses')) {
+    $spec = [
+      'description' => 'The unique addresses table (for addresses).',
+      'fields' => [
+        'id' => [
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'pack_reference_number' => [
+          'type' => 'varchar',
+          'length' => 50,
+          'not null' => TRUE,
+        ],
+        'COMPANY_NAME' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'COMPANY_ADDRESS1' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'COMPANY_ADDRESS2' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'COMPANY_TOWN' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'COMPANY_COUNTY' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'COMPANY_POSTCODE' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+        'lab_ref' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => '',
+        ],
+      ],
+      'unique keys' => [
+        'id' => ['id'],
+      ],
+      'primary key' => ['id'],
+      'indexes' => [
+        'pack_reference_number' => ['pack_reference_number'],
+      ],
+    ];
+    
+    $schema->createTable('company_addresses', $spec);
+  }
+}

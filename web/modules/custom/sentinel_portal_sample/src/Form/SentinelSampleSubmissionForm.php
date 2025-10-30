@@ -4,11 +4,39 @@ namespace Drupal\sentinel_portal_sample\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Sample submission form.
  */
 class SentinelSampleSubmissionForm extends FormBase {
+
+  /**
+   * The entity type manager.
+   *
+   *354 @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected $entityTypeManager;
+
+  /**
+   * Constructs a new SentinelSampleSubmissionForm.
+   *
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
+   */
+  public function __construct(EntityTypeManagerInterface $entity_type_manager) {
+    $this->entityTypeManager = $entity_type_manager;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('entity_type.manager')
+    );
+  }
 
   /**
    * {@inheritdoc}
@@ -874,20 +902,155 @@ class SentinelSampleSubmissionForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+    // Get client by current user (matches D7 behavior, custom table)
+    $user = \Drupal::currentUser();
+    $client = \Drupal::database()
+      ->select('sentinel_client', 'sc')
+      ->fields('sc')
+      ->condition('uid', $user->id())
+      ->execute()
+      ->fetchAssoc();
+    // if (!$client) {
+    //   $this->messenger()->addError($this->t('Unable to create sample: no client found for current user.'));
+    //   return;
+    // }
     $values = $form_state->getValues();
-    
-    // Log the form submission for now
-    \Drupal::logger('sentinel_portal_sample')->info('Sample submission form submitted with values: @values', [
-      '@values' => print_r($values, TRUE)
-    ]);
-    
-    $this->messenger()->addMessage($this->t('Sample submitted successfully. Pack reference: @pack_ref', [
-      '@pack_ref' => $values['pack_reference_number']
-    ]));
-    
-    // TODO: Save to database/entity when entities are ready
-    // For now, just redirect to a success page or back to portal
-    $form_state->setRedirect('sentinel_portal.portal');
+
+    // --- FLATTEN fieldset values (D11 mimic D7) ---
+    foreach ([
+        'company_details', 'system_details', 'job_details', 'result_details'
+      ] as $fieldset) {
+      if (isset($values[$fieldset]) && is_array($values[$fieldset])) {
+        foreach ($values[$fieldset] as $key => $val) {
+          // Only take non #type keys
+          if ($key !== '#type' && $key !== '#title' && $key !== '#weight') {
+            $values[$key] = $val;
+          }
+        }
+      }
+    }
+    // --- MANUAL MAPPING for nested address and special fields ---
+    // company_address fields
+    if (isset($values['company_address']) && is_array($values['company_address'])) {
+      if (isset($values['company_address']['address_1'])) {
+        $values['company_address1'] = $values['company_address']['address_1'];
+      }
+      if (isset($values['company_address']['address_2'])) {
+        $values['company_address2'] = $values['company_address']['address_2'];
+      }
+      if (isset($values['company_address']['town_city'])) {
+        $values['company_town'] = $values['company_address']['town_city'];
+      }
+      if (isset($values['company_address']['county'])) {
+        $values['company_county'] = $values['company_address']['county'];
+      }
+      if (isset($values['company_address']['postcode'])) {
+        $values['company_postcode'] = $values['company_address']['postcode'];
+      }
+    }
+    // company_tel was 'company_telephone'
+    if (isset($values['company_telephone'])) {
+      $values['company_tel'] = $values['company_telephone'];
+    }
+    // system_details fields
+    if (isset($values['system_location'])) {
+      $values['system_location'] = $values['system_location']; // already at top-level
+    }
+    if (isset($values['system_6_months'])) {
+      $values['system_6_months'] = $values['system_6_months']; // already at top-level
+    }
+    // address_fields inside system_details > address > address_fields
+    if (
+      isset($values['address']) &&
+      isset($values['address']['address_fields']) && 
+      is_array($values['address']['address_fields'])
+    ) {
+      $addr = $values['address']['address_fields'];
+      if (isset($addr['street'])) {
+        $values['street'] = $addr['street'];
+      }
+      if (isset($addr['county'])) {
+        $values['county'] = $addr['county'];
+      }
+    }
+
+    // Create sample entity (matches D7 sentinel_portal_entities_create_sample)
+    try {
+      $storage = $this->entityTypeManager->getStorage('sentinel_sample');
+      // Get UCR from client record
+      $ucr_value = isset($client['ucr']) ? $client['ucr'] : NULL;
+      $sample = $storage->create([]);
+      // Set UCR first
+      if ($ucr_value && $sample->hasField('ucr')) {
+        $sample->set('ucr', $ucr_value);
+      }
+      // Set all form values to the entity fields
+      $sample_fields = [];
+      $field_definitions = $sample->getFieldDefinitions();
+      foreach ($field_definitions as $field_name => $field_definition) {
+        if (isset($values[$field_name]) && $values[$field_name] !== '' && $values[$field_name] !== NULL) {
+          $sample_fields[$field_name] = $values[$field_name];
+        }
+      }
+      // Handle flattened values from nested fieldsets
+      $this->mapFormValuesToEntity($sample, $values, $form);
+      // Handle address fields if sentinel_addresses module exists (matches D7)
+      if (\Drupal::moduleHandler()->moduleExists('sentinel_addresses')) {
+        if (isset($values['field_company_address'])) {
+          $sample->set('field_company_address', $values['field_company_address']);
+        }
+        if (isset($values['field_sentinel_sample_address'])) {
+          $sample->set('field_sentinel_sample_address', $values['field_sentinel_sample_address']);
+        }
+      }
+      $sample->save();
+
+      $this->messenger()->addMessage($this->t('Your sample has been added.'));
+      if ($sample->id()) {
+        $form_state->setRedirect('entity.sentinel_sample.canonical', [
+          'sentinel_sample' => $sample->id(),
+        ]);
+      } else {
+        $form_state->setRedirect('sentinel_portal.portal');
+      }
+    } catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_sample')->error('Error creating sample: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+      $this->messenger()->addError($this->t('An error occurred while saving the sample. Please try again or contact support.'));
+    }
+  }
+
+  /**
+   * Maps form values to entity fields, handling nested structures.
+   *
+   * @param \Drupal\Core\Entity\ContentEntityInterface $entity
+   *   The entity to set values on.
+   * @param array $values
+   *   Flattened form values. (fieldsets have already been flattened)
+   * @param array $form
+   *   The form array.
+   */
+  protected function mapFormValuesToEntity($entity, array $values, array $form) {
+    // Map direct field values
+    foreach ($values as $key => $value) {
+      // Skip system fields and non-field values
+      if (in_array($key, ['form_build_id', 'form_token', 'form_id', 'op', 'submit', 'pack_reference_number_confirm', 'description', 'help_text'])) {
+        continue;
+      }
+      // Skip empty values (matches D7 array_filter behavior)
+      if ($value === '' || $value === NULL) {
+        continue;
+      }
+      // Only process non-array (or simple field, not a structure)
+      if (is_array($value) && isset($value['#type'])) {
+        continue;
+      }
+      // Regular field values
+      if ($entity->hasField($key)) {
+        $entity->set($key, $value);
+      }
+    }
   }
 
 }

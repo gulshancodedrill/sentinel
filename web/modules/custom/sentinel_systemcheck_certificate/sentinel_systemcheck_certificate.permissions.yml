@@ -1,0 +1,6 @@
+sentinel portal regenerate any certificate:
+  title: 'Regenerate any certificate'
+  description: 'Allows users to regenerate PDF certificates for any sample.'
+  restrict access: true
+
+

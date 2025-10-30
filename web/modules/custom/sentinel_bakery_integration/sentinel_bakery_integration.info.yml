@@ -1,0 +1,7 @@
+name: 'Sentinel Bakery Integration'
+type: module
+description: 'Adds a hook to ensure that role sync and other fields is possible.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - user

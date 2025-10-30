@@ -1,0 +1,48 @@
+<?php
+
+/**
+ * @file
+ * Access Hacks module.
+ */
+
+use Drupal\Core\Routing\RouteSubscriberBase;
+use Symfony\Component\Routing\RouteCollection;
+
+/**
+ * Implements hook_page_attachments().
+ */
+function access_hacks_page_attachments(array &$attachments) {
+  // Remove pesky shortlink meta tag.
+  if (isset($attachments['#attached']['html_head'])) {
+    foreach ($attachments['#attached']['html_head'] as $key => $element) {
+      if (strpos($key, 'shortlink') !== FALSE) {
+        unset($attachments['#attached']['html_head'][$key]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function access_hacks_preprocess_html(&$variables) {
+  $theme = \Drupal::theme()->getActiveTheme()->getName();
+  
+  // Inject some CSS overrides for the core Seven theme.
+  if ($theme == 'seven') {
+    $attachments['#attached']['library'][] = 'access_hacks/seven_theme_hacks';
+  }
+}
+
+/**
+ * Implements hook_editor_js_settings_alter().
+ */
+function access_hacks_editor_js_settings_alter(array &$settings) {
+  // Check if CKEditor is being used
+  if (isset($settings['editor']['settings']['plugins'])) {
+    // Set our own custom config file.
+    $settings['editor']['settings']['customConfig'] = \Drupal::request()->getBasePath() . '/' . \Drupal::service('extension.list.module')->getPath('access_hacks') . '/js/ckeditor_custom_config.js';
+  }
+}
+
+

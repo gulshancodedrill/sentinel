@@ -1,0 +1,11 @@
+name: 'Systemcheck Custom rule events'
+type: module
+description: 'Custom rule events for Sentinel Systemcheck - converted to D11 Event system'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_module
+  - sentinel_portal_entities
+  - system
+
+

@@ -1,0 +1,9 @@
+sentinel_portal_test.generate_content:
+  path: '/portal/test-generate-content'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_test\Controller\TestController::generateContent'
+    _title: 'Pack Information'
+  requirements:
+    _permission: 'sentinel portal administration'
+
+

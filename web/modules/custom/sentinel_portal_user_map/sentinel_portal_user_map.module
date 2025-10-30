@@ -1,0 +1,172 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Portal User Map module.
+ */
+
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Session\AccountInterface;
+
+/**
+ * Check whether or not the user has cohorts.
+ *
+ * @param \Drupal\Core\Session\AccountInterface $account
+ *   The user account.
+ *
+ * @return bool
+ *   TRUE if the user has cohorts, FALSE otherwise.
+ */
+function sentinel_portal_user_map_client_has_cohorts(AccountInterface $account) {
+  $client = sentinel_portal_entities_get_client_by_user($account->id());
+  
+  if (!$client) {
+    return FALSE;
+  }
+
+  $query = \Drupal::database()->select('field_data_field_user_cohorts', 'c');
+  $query->fields('c', ['field_user_cohorts_tid']);
+  $query->condition('c.entity_id', $client->cid, '=');
+  $count = $query->countQuery()->execute()->fetchField();
+
+  return (bool) $count;
+}
+
+/**
+ * Building an array of locations from selected taxonomy.
+ *
+ * @return array
+ *   Taxonomy Array.
+ */
+function sentinel_portal_user_map_values() {
+  // Get the client for the current user.
+  $client = sentinel_portal_entities_get_client_by_user();
+
+  if (!$client) {
+    return [];
+  }
+
+  // Get all cohorts for the client.
+  $query = \Drupal::database()->select('field_data_field_user_cohorts', 'c');
+  $query->fields('c', [
+    'entity_id',
+    'field_user_cohorts_tid',
+  ]);
+  $query->condition('c.entity_id', $client->cid, '=');
+  $result = $query->execute()->fetchAll();
+
+  // The result of the query will be a collection of taxonomy term ID's. Store
+  // each one in an array for later processing.
+  $tids = [];
+  foreach ($result as $row) {
+    $tids[] = $row->field_user_cohorts_tid;
+  }
+
+  // Initialise a location storage array.
+  $locations = [];
+
+  if (!empty($tids)) {
+    // Load all of the terms we have collected.
+    $terms = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadMultiple($tids);
+
+    foreach ($terms as $term) {
+      // Get the entire tree for this term.
+      $subterms = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadTree(6, $term->id());
+
+      foreach ($subterms as $subterm) {
+        // Print out the options and repeat the '-' character for every level.
+        $subterm->name = str_repeat('-', $subterm->depth) . ' ' . $subterm->name;
+        $locations[] = $subterm;
+      }
+    }
+  }
+
+  return $locations;
+}
+
+/**
+ * Building an array of locations to populate the form select field.
+ *
+ * @return array
+ *   $locations_select Array.
+ */
+function sentinel_portal_user_map_selectfield() {
+  $locations = sentinel_portal_user_map_values();
+
+  $locations_select = [];
+  foreach ($locations as $location) {
+    $locations_select[$location->tid] = $location->name;
+  }
+
+  return $locations_select;
+}
+
+/**
+ * Function to clean up username.
+ *
+ * @param string $name
+ *   The username to be cleaned up.
+ * @param int $uid
+ *   Optional UID to append.
+ *
+ * @return string
+ *   Cleaned up username.
+ */
+function sentinel_portal_user_map_cleanup_username($name, $uid = NULL) {
+  // Strip illegal characters.
+  $name = preg_replace('/[^\x{80}-\x{F7} a-zA-Z0-9@_.\'-]/', '', $name);
+
+  // Strip leading and trailing spaces.
+  $name = trim($name);
+
+  // Convert any other series of spaces to a single underscore.
+  $name = preg_replace('/\s+/', '_', $name);
+
+  // If there's nothing left use a default.
+  $name = ('' === $name) ? \Drupal::translation()->translate('user') : $name;
+
+  if (!empty($uid)) {
+    // Put uid on the end of the name.
+    $name = $name . '_' . $uid;
+  }
+
+  // Truncate to a reasonable size.
+  $max_length = 60; // USERNAME_MAX_LENGTH in D11
+  $name = (mb_strlen($name) > ($max_length - 10)) ? mb_substr($name, 0, $max_length - 11) : $name;
+  
+  return $name;
+}
+
+/**
+ * Given a starting point returns a legal, unique Drupal username.
+ *
+ * @param string $name
+ *   A name from which to base the final user name.
+ * @param int $uid
+ *   Optional UID to ignore when searching for unique user.
+ *
+ * @return string
+ *   A unique user name based on $name.
+ */
+function sentinel_portal_user_map_unique_username($name, $uid = NULL) {
+  // Iterate until we find a unique name.
+  $i = 0;
+  do {
+    $new_name = empty($i) ? $name : $name . '_' . $i;
+    
+    $query = \Drupal::database()->select('users_field_data', 'u');
+    $query->fields('u', ['uid']);
+    $query->condition('u.name', $new_name);
+    
+    if ($uid) {
+      $query->condition('u.uid', $uid, '<>');
+    }
+    
+    $found = $query->range(0, 1)->execute()->fetchAssoc();
+    $i++;
+  } while (!empty($found));
+
+  return $new_name;
+}
+
+

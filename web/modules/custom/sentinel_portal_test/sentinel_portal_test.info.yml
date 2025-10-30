@@ -1,0 +1,11 @@
+name: 'Sentinel Portal Test'
+type: module
+description: 'Allows tests to be run on the portal code.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_entities
+  - sentinel_portal_module
+  - drupal:simpletest
+
+

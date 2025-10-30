@@ -1,0 +1,12 @@
+name: 'Sentinel Portal Bulk Upload'
+type: module
+description: 'Allows samples to be uploaded as a CSV file.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_entities
+  - sentinel_portal_module
+  - file
+  - user
+  - system
+

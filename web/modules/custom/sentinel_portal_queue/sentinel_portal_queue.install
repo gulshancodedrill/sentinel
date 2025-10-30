@@ -1,0 +1,70 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the sentinel_portal_queue module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function sentinel_portal_queue_schema() {
+  $schema['sentinel_portal_queue'] = [
+    'description' => 'Stores items in queues.',
+    'fields' => [
+      'item_id' => [
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique item ID.',
+      ],
+      'name' => [
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The queue name.',
+      ],
+      'pid' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'description' => 'The pack id to act upon.',
+      ],
+      'action' => [
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The action being performed.',
+      ],
+      'expire' => [
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Timestamp when the claim lease expires on the item.',
+      ],
+      'created' => [
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Timestamp when the item was created.',
+      ],
+      'failed' => [
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => 'The number of times the queue item has failed.',
+      ],
+    ],
+    'primary key' => ['item_id'],
+    'indexes' => [
+      'name_created' => ['name', 'created'],
+      'expire' => ['expire'],
+    ],
+  ];
+
+  return $schema;
+}
+
+
+

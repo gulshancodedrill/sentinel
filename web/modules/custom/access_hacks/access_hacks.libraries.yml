@@ -1,0 +1,7 @@
+libraries:
+  seven_theme_hacks:
+    css:
+      theme:
+        css/seven_theme_hacks.css: {}
+
+

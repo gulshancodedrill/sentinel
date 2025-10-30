@@ -1,0 +1,530 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Portal Queue module.
+ */
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function sentinel_portal_queue_cron_queue_info() {
+  $queues['sentinel_queue'] = [
+    'worker callback' => 'sentinel_portal_queue_run_action',
+    'time' => 60,
+    'skip on cron' => FALSE,
+  ];
+  return $queues;
+}
+
+/**
+ * Queue processing callback from hook_cron_queue_info().
+ *
+ * @param object $queue_item_data
+ *   The queue item data.
+ */
+function sentinel_portal_queue_run_action($queue_item_data) {
+  $queue = \Drupal::queue('sentinel_queue');
+
+  switch ($queue_item_data->action) {
+    case 'sendreport':
+      // Send the report to the end user.
+      _sentinel_portal_queue_process_sendresults($queue, $queue_item_data);
+      break;
+
+    case 'invalid_pack':
+      // Invalid pack found.
+      _sentinel_portal_queue_process_invalid_pack($queue, $queue_item_data);
+      break;
+
+    case 'generate_results':
+      // Force generate the results. Follows onto sendreport.
+      _sentinel_portal_queue_generate_results($queue, $queue_item_data);
+      break;
+
+    case 'invoke_send_results_hook':
+      _sentinel_portal_queue_invoke_send_results_hook($queue, $queue_item_data);
+      break;
+  }
+}
+
+/**
+ * Quick function used to create a queue item.
+ *
+ * @param object $sample
+ *   The sample object.
+ * @param string $action
+ *   The current action being performed.
+ * @param bool|int $expire
+ *   An optional expiry time.
+ */
+function sentinel_portal_queue_create_item($sample, $action, $expire = FALSE) {
+  $queue = \Drupal::queue('sentinel_queue');
+  $item = [
+    'pid' => $sample->pid ?? $sample->id(),
+    'action' => $action,
+  ];
+
+  if ($expire !== FALSE) {
+    $item['expire'] = $expire;
+  }
+
+  $queue->createItem($item);
+}
+
+/**
+ * Implements hook_mail().
+ */
+function sentinel_portal_queue_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'sentinel_portal_service_sample':
+      if (isset($params['subject'])) {
+        $message['subject'] = $params['subject'];
+      }
+      else {
+        $message['subject'] = t('Pack Reference Number: @pack_reference_number', ['@pack_reference_number' => $params['pack_reference_number']]);
+      }
+
+      $message['body'][] = '';
+      $message['body'][] = t('@message', ['@message' => $params['message']]);
+      $message['body'][] = '';
+      $message['body'][] = t('@pack_details', ['@pack_details' => $params['pack_details']]);
+      $message['body'][] = '';
+      $message['body'][] = t('Thanks,');
+      $message['body'][] = t('Sentinel');
+      break;
+  }
+}
+
+/**
+ * Format pack reference numbers function for sentinel_portal_submit_form.
+ *
+ * @param string $packref
+ *   The pack reference number.
+ *
+ * @return string|bool
+ *   False if problem with pack reference.
+ */
+function sentinel_portal_service_format_packref($packref) {
+  $pattern = '/^([0-9]{3})[:\s-]?([0-9]{3,10}[a-zA-Z]?)$/';
+  $matches = [];
+  $result = preg_match_all($pattern, trim($packref), $matches);
+
+  if (isset($matches[1][0]) || isset($matches[2][0])) {
+    // Glue the two packref parts back together
+    return $matches[1][0] . ':' . $matches[2][0];
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Retrieve sample by PID.
+ *
+ * @param int $pid
+ *   The sample PID.
+ *
+ * @return object|bool
+ *   The sample entity or FALSE.
+ */
+function _sentinel_portal_service_retrieve_by_pid($pid) {
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $storage = $entity_type_manager->getStorage('sentinel_sample');
+  
+  $query = $storage->getQuery()
+    ->condition('pid', $pid, '=')
+    ->range(0, 1)
+    ->accessCheck(FALSE);
+
+  $result = $query->execute();
+
+  if (!empty($result)) {
+    $sample_ids = array_values($result);
+    $sample = $storage->load(reset($sample_ids));
+    return $sample;
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Function to validate date formats.
+ *
+ * @param array $data
+ *   The data array containing date fields.
+ *
+ * @return bool|string
+ *   True if everything worked. The date field if there was a problem.
+ */
+function sentinel_portal_service_validate_dates(&$data) {
+  $date_fields = [
+    'sample_date',
+    'date_sent',
+  ];
+
+  foreach ($date_fields as $date_field) {
+    if (isset($data[$date_field])) {
+      // Attempt to extract the date.
+      $obj_date = \DateTime::createFromFormat('Y-m-d\TH:i', $data[$date_field]);
+      if ($obj_date === FALSE) {
+        // Failed the first parse attempt, so we try the non-hyphenated version.
+        $obj_date = \DateTime::createFromFormat('Ymd\TH:i', $data[$date_field]);
+        if ($obj_date === FALSE) {
+          // Date is clearly invalid.
+          return $date_field;
+        }
+        else {
+          // If the date parsed correctly then we save it back to the $data array.
+          $data[$date_field] = $obj_date->format('Y-m-d\TH:i');
+        }
+      }
+    }
+  }
+
+  return TRUE;
+}
+
+/**
+ * Send the sample report to the user.
+ *
+ * @param object $queue
+ *   The queue object.
+ * @param object $item
+ *   The queue item object.
+ *
+ * @return bool
+ *   True if everything worked, otherwise false.
+ */
+function _sentinel_portal_queue_process_sendresults($queue, $item) {
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $storage = $entity_type_manager->getStorage('sentinel_sample');
+  $sample_entity = $storage->load($item->pid);
+
+  if (is_object($sample_entity)) {
+    // Sent report email!
+    $result = _sentinel_portal_queue_process_email($sample_entity, 'report');
+
+    if ($result === FALSE) {
+      // Something failed in the send email function.
+      \Drupal::logger('sentinel_portal_queue')->info('Failed to send entity mail! @id', ['@id' => $item->pid]);
+    }
+    else {
+      // Everything went well in the send email function.
+      \Drupal::logger('sentinel_portal_queue')->info('Sample entity mail sent! @id', ['@id' => $item->pid]);
+
+      // See if anything else wants to send the sample results out.
+      \Drupal::moduleHandler()->invokeAll('sentinel_sendresults', [$sample_entity]);
+
+      // As we have sent the email we can delete the item from the queue.
+      $queue->deleteItem($item);
+    }
+  }
+  else {
+    \Drupal::logger('sentinel_portal_queue')->error('Sample entity could not be loaded @id', ['@id' => $item->pid]);
+  }
+}
+
+/**
+ * Invokes the send results hook and allows the queue system to process many items.
+ *
+ * @param object $queue
+ *   The queue.
+ * @param object $item
+ *   The item in the queue.
+ */
+function _sentinel_portal_queue_invoke_send_results_hook($queue, $item) {
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $storage = $entity_type_manager->getStorage('sentinel_sample');
+  $sample_entity = $storage->load($item->pid);
+
+  if (is_object($sample_entity)) {
+    // See if anything else wants to send the sample results out.
+    \Drupal::moduleHandler()->invokeAll('sentinel_sendresults', [$sample_entity]);
+
+    // As we have sent the email we can delete the item from the queue.
+    $queue->deleteItem($item);
+  }
+  else {
+    \Drupal::logger('sentinel_portal_queue')->error('Sample entity could not be loaded @id', ['@id' => $item->pid]);
+  }
+}
+
+/**
+ * Process an invalid pack.
+ *
+ * @param object $queue
+ *   The queue object.
+ * @param object $item
+ *   The queue item object.
+ *
+ * @return bool
+ *   True if everything worked, otherwise false.
+ */
+function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
+  $config = \Drupal::config('sentinel_portal_module.settings');
+  $error_email = $config->get('new_pack_email') ?? 'admin@example.com';
+
+  // Load sample.
+  $sentinel_sample = _sentinel_portal_service_retrieve_by_pid($item->pid);
+  
+  if (!$sentinel_sample) {
+    \Drupal::logger('sentinel_portal_queue')->error('Sample not found for PID @pid', ['@pid' => $item->pid]);
+    $queue->deleteItem($item);
+    return FALSE;
+  }
+
+  $pack_type = method_exists($sentinel_sample, 'getSampleType') ? 
+    str_replace('_', ' ', $sentinel_sample->getSampleType()) : 
+    'Unknown';
+
+  // Get validation errors for this sample.
+  $errors = method_exists($sentinel_sample, 'validateSample') ? 
+    $sentinel_sample->validateSample() : 
+    [];
+
+  if (count($errors) == 0) {
+    // The validation errors were fixed since this queue item was created.
+    // Delete the items from the queue and return.
+    $queue->deleteItem($item);
+    return TRUE;
+  }
+
+  // Send email detailing errors.
+  $message = '';
+  $pack_reference = method_exists($sentinel_sample, 'get') ? 
+    $sentinel_sample->get('pack_reference_number')->value : 
+    'Unknown';
+
+  $message .= 'Invalid ' . $pack_type . ' pack information found for pack ' . $pack_reference . ', please review error below.' . PHP_EOL;
+  $message .= PHP_EOL;
+
+  // Create pack details.
+  $pack_details = '';
+  foreach ($errors as $field => $error) {
+    $pack_details .= $field . ' ' . $error . PHP_EOL;
+  }
+
+  $message .= PHP_EOL;
+
+  $params = [
+    'subject' => t('@pack_type Sample @pack_reference_number', [
+      '@pack_type' => $pack_type, 
+      '@pack_reference_number' => $pack_reference
+    ]),
+    'message' => $message,
+    'pack_details' => $pack_details,
+    'pack_reference_number' => $pack_reference,
+  ];
+
+  $mail_manager = \Drupal::service('plugin.manager.mail');
+  $result = $mail_manager->mail('sentinel_portal_queue', 'sentinel_portal_service_sample', $error_email, 'en', $params);
+
+  // Delete the item here.
+  $queue->deleteItem($item);
+
+  return $result['result'] == TRUE;
+}
+
+/**
+ * Queue processor that generates results for a sample.
+ *
+ * @param object $queue
+ *   The queue object.
+ * @param object $item
+ *   The queue item object.
+ *
+ * @return bool
+ *   True if everything worked, otherwise false.
+ */
+function _sentinel_portal_queue_generate_results($queue, $item) {
+  // Load the sample.
+  $sentinel_sample = _sentinel_portal_service_retrieve_by_pid($item->pid);
+
+  if (!$sentinel_sample) {
+    \Drupal::logger('sentinel_portal_queue')->error('Sample not found for PID @pid', ['@pid' => $item->pid]);
+    $queue->deleteItem($item);
+    return FALSE;
+  }
+
+  $is_pass = method_exists($sentinel_sample, 'isPass') ? $sentinel_sample->isPass() : FALSE;
+  $is_fail = method_exists($sentinel_sample, 'isFail') ? $sentinel_sample->isFail() : FALSE;
+
+  if ($is_pass == FALSE && $is_fail == FALSE) {
+    // Sample has already been reported on. Delete it from the queue and return.
+    $queue->deleteItem($item);
+    return TRUE;
+  }
+
+  // Generate the results for the sample.
+  if (function_exists('sentinel_systemcheck_certificate_populate_results')) {
+    sentinel_systemcheck_certificate_populate_results(new \stdClass(), $sentinel_sample, new \stdClass());
+  }
+  
+  // Saving the entity is important.
+  $sentinel_sample->save();
+
+  // Now send the client the report.
+  sentinel_portal_queue_create_item($sentinel_sample, 'sendreport');
+
+  // Delete the item from the queue.
+  $queue->deleteItem($item);
+  return TRUE;
+}
+
+/**
+ * Method that allows us to send emails with the certificate attached.
+ *
+ * @param object $sample_entity
+ *   The sample entity object.
+ * @param string $type
+ *   The type of email to send.
+ *
+ * @return bool
+ *   True if everything worked out.
+ */
+function _sentinel_portal_queue_process_email($sample_entity, $type) {
+  if ($type == 'report') {
+    // Generate the PDF document.
+    $pdf_certificate_location = method_exists($sample_entity, 'GetPDF') ? 
+      $sample_entity->GetPDF() : 
+      FALSE;
+
+    if ($pdf_certificate_location !== FALSE) {
+      $installer_email = method_exists($sample_entity, 'get') ? 
+        $sample_entity->get('installer_email')->value : 
+        '';
+      $company_email = method_exists($sample_entity, 'get') ? 
+        $sample_entity->get('company_email')->value : 
+        '';
+
+      if (!empty($installer_email) || !empty($company_email)) {
+        $country = method_exists($sample_entity, 'getSampleCountry') ? 
+          $sample_entity->getSampleCountry() : 
+          'gb';
+
+        $pack_reference = method_exists($sample_entity, 'get') ? 
+          $sample_entity->get('pack_reference_number')->value : 
+          'Unknown';
+        
+        $is_pass = method_exists($sample_entity, 'isPass') ? 
+          $sample_entity->isPass() : 
+          FALSE;
+
+        $system_address = method_exists($sample_entity, 'getSystemAddress') ? 
+          $sample_entity->getSystemAddress() : 
+          'Unknown';
+
+        // Subject of emails
+        $subject = t('Sentinel System Check Report: @pack_reference_number - @pass_fail - @system_address', [
+          '@pass_fail' => $is_pass ? "PASS" : "FAIL",
+          '@pack_reference_number' => strip_tags($pack_reference),
+          '@system_address' => strip_tags($system_address)
+        ]);
+
+        $message_html = '';
+
+        // Basic English message for now - can be expanded later
+        $message_html .= "<p>Dear Customer,</p>" . PHP_EOL;
+        $message_html .= "<p>Thank you for choosing the Sentinel SystemCheck pack.</p>" . PHP_EOL;
+        $message_html .= "<p>The attached report provides a report direct from the Sentinel Laboratory on the condition of the central heating water and the level of Sentinel X100 Inhibitor present in the sample you submitted. It also provides a brief analysis of the mains water.</p>" . PHP_EOL;
+        $message_html .= "<p>Based on the findings, Sentinel have provided recommendations to ensure the system water allows the central heating systems to operate at optimum efficiency with a minimum of scale and corrosion deposits.</p>" . PHP_EOL;
+        $message_html .= "<p>Further information on Sentinel products can be obtained through our website www.sentinelprotects.com.</p>" . PHP_EOL;
+        $message_html .= "<p>Regards,</p>" . PHP_EOL;
+        $message_html .= "<p>Sentinel Laboratory</p>" . PHP_EOL;
+
+        // Strip tags out of the HTML version to create a plain text version.
+        $message_plain = strip_tags($message_html);
+
+        // Correct any malformed email addresses.
+        $email_address = trim(str_replace(';', ',', $installer_email));
+
+        if ($email_address == '') {
+          // Use company email as an alternative.
+          $email_address = trim(str_replace(';', ',', $company_email));
+        }
+
+        if ($email_address == '') {
+          // No email addresses found, so reject this.
+          return FALSE;
+        }
+
+        // Send email using Drupal's mail system
+        $mail_manager = \Drupal::service('plugin.manager.mail');
+        $params = [
+          'subject' => $subject,
+          'message_html' => $message_html,
+          'message_plain' => $message_plain,
+          'attachments' => [$pdf_certificate_location],
+        ];
+
+        $result = $mail_manager->mail('sentinel_portal_queue', 'sentinel_portal_service_sample', $email_address, 'en', $params);
+        
+        return $result['result'] == TRUE;
+      }
+      else {
+        \Drupal::logger('sentinel_portal_queue')->error('Failed to send email for sample @id - no email addresses', ['@id' => $sample_entity->id()]);
+        return FALSE;
+      }
+    }
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Implements hook_views_data().
+ */
+function sentinel_portal_queue_views_data() {
+  $data = [];
+
+  $data['sentinel_portal_queue'] = [
+    'table' => [
+      'group' => t('Sentinel queue'),
+      'base' => [
+        'field' => 'item_id', // This is the identifier field for the view.
+        'title' => t('Sentinel queue id'),
+        'help' => t('Sentinel queue id'),
+        'weight' => -10,
+      ],
+      'join' => [
+        'sentinel_sample' => [
+          'left_field' => 'pid',
+          'field' => 'pid',
+        ],
+      ],
+    ],
+    'pid' => [
+      'title' => t('Sentinel pack id in the queue'),
+      'help' => t('Sentinel pack id in the queue'),
+      'field' => [
+        'id' => 'numeric',
+        'click sortable' => TRUE,
+      ],
+      'sort' => [
+        'id' => 'standard',
+      ],
+      'filter' => [
+        'id' => 'numeric',
+      ],
+    ],
+    'action' => [
+      'title' => t('The reason for the pack being in the queue'),
+      'help' => t('The reason for the pack being in the queue'),
+      'field' => [
+        'id' => 'standard',
+        'click sortable' => TRUE,
+      ],
+      'sort' => [
+        'id' => 'standard',
+      ],
+      'filter' => [
+        'id' => 'string',
+      ],
+    ],
+  ];
+
+  return $data;
+}
+

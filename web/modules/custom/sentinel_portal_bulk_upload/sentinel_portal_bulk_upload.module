@@ -1,0 +1,151 @@
+<?php
+
+/**
+ * @file
+ * The bulk upload module.
+ */
+
+/**
+ * Run some validation functions here. If the line is invalid then it will get saved.
+ *
+ * All errors should have the following response:
+ * <code>
+ * $errors['field_name'] = [
+ *   'title' => t(''),
+ *   'message' => t('')
+ * ];
+ * </code>
+ *
+ * @param array $line
+ *   An array that represents the line.
+ * @param array $errors
+ *   The array of errors to add to.
+ *
+ * @return bool
+ *   False if the line failed validation.
+ */
+function sentinel_portal_bulk_upload_validate_line(&$line, &$errors) {
+  $valid = TRUE;
+
+  if (!isset($line['pack_reference_number']) || valid_pack_reference_number($line['pack_reference_number']) === FALSE) {
+    $errors['pack_reference_number'] = [
+      'title' => t('Pack Reference Number'),
+      'message' => t('Please enter a valid pack reference number. It needs to be in either one of the following formats: NNN:NNNA, NNN:NNNNA, NNN:NNNNNA, NNN:NNNNNNA or NNN:NNNNNNNA. A is an optional alpha character. N is a numeric character')
+    ];
+  }
+
+  if (!isset($line['company_email']) || !filter_var($line['company_email'], FILTER_VALIDATE_EMAIL)) {
+    $errors['company_email'] = [
+      'title' => t('Company Email'),
+      'message' => t('Please enter the e-mail of the company managing installation/maintenance for the system.')
+    ];
+  }
+
+  if (!isset($line['installer_name']) || trim($line['installer_name']) == '') {
+    $errors['installer_name'] = [
+      'title' => t('Installer Name'),
+      'message' => t('Please provide the name of the engineer responsible for the work on this system being tested.')
+    ];
+  }
+
+  if (!isset($line['company_name']) || trim($line['company_name']) == '') {
+    $errors['company_name'] = [
+      'title' => t('Company Name'),
+      'message' => t('Please provide the name of the company managing installation/maintenance on this system.')
+    ];
+  }
+
+  if (!isset($line['company_tel']) || trim($line['company_tel']) == '') {
+    $errors['company_tel'] = [
+      'title' => t('Company Tel'),
+      'message' => t('Please provide the telephone number for the company managing installation/maintenance on the system. This will be used to make contact if any issues arise with the sample.')
+    ];
+  }
+
+  if (!isset($line['property_number']) || trim($line['property_number']) == '') {
+    $errors['property_number'] = [
+      'title' => t('Property Number'),
+      'message' => t('Please provide the property number for where the system is located.')
+    ];
+  }
+
+  if (!isset($line['postcode']) || trim($line['postcode']) == '') {
+    $errors['postcode'] = [
+      'title' => t('Postcode'),
+      'message' => t('Please provide the postcode for the property where the system is located.')
+    ];
+  }
+
+  if (!isset($line['system_age']) || trim($line['system_age']) == '') {
+    $errors['system_age'] = [
+      'title' => t('System Age'),
+      'message' => t('Please indicate how old the system is.')
+    ];
+  }
+
+  if (!isset($line['boiler_manufacturer']) || trim($line['boiler_manufacturer']) == '') {
+    $errors['boiler_manufacturer'] = [
+      'title' => t('Boiler Manufacturer'),
+      'message' => t('Please provide the manufacturer of the boiler at this property.')
+    ];
+  }
+
+  if (isset($line['date_sent'])) {
+    if (function_exists('sentinel_portal_validate_date')) {
+      $date_sent = sentinel_portal_validate_date($line['date_sent']);
+    }
+    else {
+      $date_sent = FALSE;
+    }
+
+    if ($date_sent == FALSE) {
+      $errors['date_sent'] = [
+        'title' => t('Date Sent'),
+        'message' => t('Please enter the date sent as YYYY-MM-DD.')
+      ];
+      $line['date_sent'] = NULL;
+    }
+    else {
+      $line['date_sent'] = $date_sent;
+    }
+  }
+  else {
+    $errors['date_sent'] = [
+      'title' => t('Date Sent'),
+      'message' => t('Please enter the date sent as YYYY-MM-DD.')
+    ];
+    $line['date_sent'] = NULL;
+  }
+
+  if (isset($line['date_installed'])) {
+    if (function_exists('sentinel_portal_validate_date')) {
+      $date_installed = sentinel_portal_validate_date($line['date_installed']);
+    }
+    else {
+      $date_installed = FALSE;
+    }
+
+    if ($date_installed == FALSE) {
+      $errors['date_installed'] = [
+        'title' => t('Date Installed'),
+        'message' => t('Please enter the date installed as YYYY-MM-DD.')
+      ];
+      $line['date_installed'] = NULL;
+    }
+    else {
+      $line['date_installed'] = $date_installed;
+    }
+  }
+  else {
+    $errors['date_installed'] = [
+      'title' => t('Date Installed'),
+      'message' => t('Please enter the date installed as YYYY-MM-DD.')
+    ];
+    $line['date_installed'] = NULL;
+  }
+
+  return $valid;
+}
+
+
+

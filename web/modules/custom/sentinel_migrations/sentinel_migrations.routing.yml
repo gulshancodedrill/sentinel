@@ -1,0 +1,9 @@
+sentinel_migrations.queue_initiate:
+  path: '/portal/admin/migrate'
+  defaults:
+    _form: '\Drupal\sentinel_migrations\Form\QueueInitiateForm'
+    _title: 'Sentinel Migration Queue'
+  requirements:
+    _permission: 'sentinel portal administration'
+
+

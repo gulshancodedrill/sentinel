@@ -1,0 +1,10 @@
+dui_view.module_list:
+  path: '/dui-view/module-list/{key}'
+  defaults:
+    _controller: '\Drupal\dui_view\Controller\DuiViewController::listModules'
+    _title: 'Module list'
+  requirements:
+    _custom_access: '\Drupal\dui_view\Controller\DuiViewController::checkKey'
+  methods: [GET]
+
+

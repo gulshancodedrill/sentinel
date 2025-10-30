@@ -1,0 +1,11 @@
+dui_view.config:
+  path: '/admin/config/system/dui-view'
+  defaults:
+    _form: '\Drupal\dui_view\Form\DuiViewConfigForm'
+    _title: 'DUI View Config'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    _admin_route: TRUE
+
+

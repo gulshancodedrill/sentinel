@@ -1,0 +1,12 @@
+name: 'Sentinel Reports'
+type: module
+description: 'Gives us the ability to generate reports'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_stats
+  - sentinel_portal_module
+libraries:
+  - sentinel_reports/daterangepicker
+  - sentinel_reports/d3-hierarchical-pie
+  - sentinel_reports/custom-js

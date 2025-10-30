@@ -1,0 +1,10 @@
+name: 'Access Hierarchy'
+type: module
+description: 'Allows access to control entities based on a Hierarchy'
+core_version_requirement: ^11
+package: Access
+dependencies:
+  - sentinel_portal_entities
+  - taxonomy
+
+

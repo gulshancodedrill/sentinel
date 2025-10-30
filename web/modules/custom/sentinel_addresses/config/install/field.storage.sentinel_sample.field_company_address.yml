@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - core
+id: address.field_company_address
+field_name: field_company_address
+entity_type: sentinel_sample
+type: entity_reference
+settings:
+  target_type: address
+module: core
+locked: false
+cardinality: 1
+translatable: false
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

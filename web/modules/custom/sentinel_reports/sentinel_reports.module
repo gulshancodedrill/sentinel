@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Reports module file.
+ */
+
+/**
+ * Module's service include file for helper functions.
+ */
+require_once __DIR__ . '/sentinel_reports.services.inc';
+
+/**
+ * Implements hook_theme().
+ */
+function sentinel_reports_theme($existing, $type, $theme, $path) {
+  return [
+    'failure_analysis_with_data' => [
+      'variables' => [
+        'data' => NULL,
+      ],
+      'template' => 'failure-analysis-with-data',
+    ],
+    'failure_analysis_without_data' => [
+      'template' => 'failure-analysis-without-data',
+    ],
+  ];
+}

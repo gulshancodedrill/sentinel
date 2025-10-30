@@ -1,0 +1,68 @@
+<div id="failures-search-form__graphs-and-data">
+  <div class="failures-search-form__group">
+    <div id="failures-search-form__total-tests">
+      <h3 class="failures-search-form__section-title">Total tests <br />for this period</h3>
+
+      <div class="failures-search-form__total-tests__stats">
+        <div class="failures-search-form__total-tests__stat">
+          <span id="failures-search-form__total-tests__tests" class="failures-search-form__total-tests__figure"></span> Tests
+        </div>
+
+        <div class="failures-search-form__total-tests__stat">
+          <span id="failures-search-form__total-tests__passed" class="failures-search-form__total-tests__figure"></span> Passed
+        </div>
+
+        <div class="failures-search-form__total-tests__stat">
+          <span id="failures-search-form__total-tests__failed" class="failures-search-form__total-tests__figure"></span> Failed
+        </div>
+      </div>
+    </div>
+
+    <div id="failures-search-form__success-rate">
+      <h3 class="failures-search-form__section-title">Pass rate for this period</h3>
+
+      <span id="failures-search-form__success-rate__figure"></span>
+    </div>
+  </div>
+
+  <div id="failures-search-form__donut-chart">
+    <h3 class="failures-search-form__section-title">Results for this period</h3>
+    <div class="chart-navigator clearfix" id="chart-navigator-1">
+      <div id="pie-navigator">
+        <a href="#" id="btnRoot" title="Go back to root" rel="tooltip"><i class="icon-double-angle-left"></i></a>
+        <a href="#" id="btnLevelUp" title="Go up one level" rel="tooltip"><i class="icon-angle-left"></i></a>
+      </div>
+      <ul class="breadcrumb"></ul>
+    </div>
+    <div class="row-fluid">
+      <div id="hierarchical-pie-demo" class="hierarchical-pie"></div>
+      <div id="pie-chart-legend-1">
+        <table class="table table-condensed table-legend">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Category</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <script id="rowTemplate" type="text/template">
+      <td class="color-cell">
+        <span class="cat-color" style="background: {{color}};"></span>
+      </td>
+      <td>
+        {{#isDirect}}
+        <span title="Directly in this category" rel="tooltip"><i class="icon-info"></i></span> {{/isDirect}} {{category}} {{{export_link}}}
+      </td>
+      <td class="value">{{value}}</td>
+    </script>
+
+    <small><i>Results shown are for packs in your account. If you feel that packs are missing from your account, please contact us: info.uk@sentinelprotects.com.</i></small>
+  </div>
+  <div id="failures-search-form__graphs-and-data_exportlink"></div>
+</div>
+
+

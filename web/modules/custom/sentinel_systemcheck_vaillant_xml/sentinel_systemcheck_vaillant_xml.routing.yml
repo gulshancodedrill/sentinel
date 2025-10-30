@@ -1,0 +1,11 @@
+sentinel_systemcheck_vaillant_xml.email:
+  path: '/portal/admin/samples/vaillant/{sample_id}/email'
+  defaults:
+    _controller: '\Drupal\sentinel_systemcheck_vaillant_xml\Controller\VaillantXmlController::sendEmail'
+    _title: 'Sample Email'
+  requirements:
+    _permission: 'sentinel portal send email report'
+  options:
+    _admin_route: FALSE
+
+

@@ -1,0 +1,13 @@
+name: 'Sentinel Addresses'
+type: module
+description: 'Sentinel Addresses feature'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - eck
+  - address
+  - sentinel_portal_entities
+  - taxonomy
+  - text
+  - options
+  - datetime

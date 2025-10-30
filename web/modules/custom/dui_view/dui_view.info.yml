@@ -1,0 +1,7 @@
+name: 'DUI View'
+type: module
+description: 'Module to generate a list of data about modules installed on the site. Accessed by dui_controller module.'
+core_version_requirement: ^11
+package: Sentinel
+
+

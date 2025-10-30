@@ -1,0 +1,12 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - eck.eck_entity_type.address
+  module:
+    - sentinel_addresses
+name: company_address
+type: company_address
+description: 'Company address'
+
+

@@ -1,0 +1,12 @@
+name: 'Sentinel Vaillant XML'
+type: module
+description: 'Hooks into stuff to create a Vaillant XML thingy.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - sentinel_portal_module
+  - sentinel_portal_entities
+  - sentinel_systemcheck_certificate
+  - sentinel_systemcheck_custom_rule_events
+
+

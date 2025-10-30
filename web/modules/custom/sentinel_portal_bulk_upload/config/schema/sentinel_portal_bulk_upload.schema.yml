@@ -1,0 +1,10 @@
+sentinel_portal_bulk_upload.settings:
+  type: config_object
+  label: 'Sentinel Portal Bulk Upload Settings'
+  mapping:
+    delete_file:
+      type: boolean
+      label: 'Delete uploaded files after processing'
+
+
+

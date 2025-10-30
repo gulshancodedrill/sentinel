@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Portal Services module.
+ */
+
+/**
+ * Validates the API key.
+ *
+ * @param string $key
+ *   The API key.
+ *
+ * @return bool
+ *   TRUE if valid, FALSE otherwise.
+ */
+function sentinel_portal_service_key_check($key) {
+  static $sentinel_client_data = [];
+
+  if (isset($sentinel_client_data[$key])) {
+    return TRUE;
+  }
+
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $storage = $entity_type_manager->getStorage('sentinel_client');
+  
+  $query = $storage->getQuery()
+    ->condition('api_key', $key)
+    ->accessCheck(FALSE);
+
+  $result = $query->execute();
+
+  if (!empty($result)) {
+    $client_ids = array_values($result);
+    $clients = $storage->loadMultiple($client_ids);
+    $sentinel_client_data[$key] = reset($clients);
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_rest_resource_alter().
+ */
+function sentinel_portal_services_rest_resource_alter(&$definitions) {
+  // Ensure our REST resources are properly registered.
+  foreach ($definitions as $id => $definition) {
+    if (strpos($id, 'sentinel_') === 0) {
+      // Disable caching for Sentinel services.
+      $definitions[$id]['cache'] = ['max_age' => 0];
+    }
+  }
+}
+
+
+

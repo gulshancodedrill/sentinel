@@ -1,0 +1,146 @@
+<?php
+
+/**
+ * @file
+ * Custom module that defines custom events for Sentinel SystemCheck.
+ * 
+ * In D11, this replaces the Rules module functionality with Drupal's Event system.
+ */
+
+use Drupal\Core\Entity\EntityInterface;
+use Symfony\Contracts\EventDispatcher\Event;
+
+/**
+ * Event fired after a sample result is calculated.
+ */
+class SampleResultCalculatedEvent extends Event {
+
+  const EVENT_NAME = 'sentinel_systemcheck.sample_result_calculated';
+
+  /**
+   * The email address.
+   *
+   * @var string
+   */
+  protected $emailAddress;
+
+  /**
+   * The certificate attachment URI.
+   *
+   * @var string
+   */
+  protected $certificateAttachment;
+
+  /**
+   * The message subject.
+   *
+   * @var string
+   */
+  protected $messageSubject;
+
+  /**
+   * The HTML message body.
+   *
+   * @var string
+   */
+  protected $messageHtml;
+
+  /**
+   * The plain text message body.
+   *
+   * @var string
+   */
+  protected $messagePlain;
+
+  /**
+   * Constructs a SampleResultCalculatedEvent.
+   *
+   * @param string $email_address
+   *   The email address.
+   * @param string $certificate_attachment
+   *   The certificate attachment URI.
+   * @param string $message_subject
+   *   The message subject.
+   * @param string $message_html
+   *   The HTML message body.
+   * @param string $message_plain
+   *   The plain text message body.
+   */
+  public function __construct($email_address, $certificate_attachment, $message_subject, $message_html, $message_plain) {
+    $this->emailAddress = $email_address;
+    $this->certificateAttachment = $certificate_attachment;
+    $this->messageSubject = $message_subject;
+    $this->messageHtml = $message_html;
+    $this->messagePlain = $message_plain;
+  }
+
+  /**
+   * Gets the email address.
+   *
+   * @return string
+   *   The email address.
+   */
+  public function getEmailAddress() {
+    return $this->emailAddress;
+  }
+
+  /**
+   * Gets the certificate attachment URI.
+   *
+   * @return string
+   *   The certificate attachment URI.
+   */
+  public function getCertificateAttachment() {
+    return $this->certificateAttachment;
+  }
+
+  /**
+   * Gets the message subject.
+   *
+   * @return string
+   *   The message subject.
+   */
+  public function getMessageSubject() {
+    return $this->messageSubject;
+  }
+
+  /**
+   * Gets the HTML message body.
+   *
+   * @return string
+   *   The HTML message body.
+   */
+  public function getMessageHtml() {
+    return $this->messageHtml;
+  }
+
+  /**
+   * Gets the plain text message body.
+   *
+   * @return string
+   *   The plain text message body.
+   */
+  public function getMessagePlain() {
+    return $this->messagePlain;
+  }
+
+}
+
+/**
+ * Helper function to dispatch the sample result calculated event.
+ *
+ * @param string $email_address
+ *   The email address.
+ * @param string $certificate_attachment
+ *   The certificate attachment URI.
+ * @param string $message_subject
+ *   The message subject.
+ * @param string $message_html
+ *   The HTML message body.
+ * @param string $message_plain
+ *   The plain text message body.
+ */
+function sentinel_systemcheck_custom_rule_events_invoke_sample_result_calculated($email_address, $certificate_attachment, $message_subject, $message_html, $message_plain) {
+  $event = new SampleResultCalculatedEvent($email_address, $certificate_attachment, $message_subject, $message_html, $message_plain);
+  \Drupal::service('event_dispatcher')->dispatch($event, SampleResultCalculatedEvent::EVENT_NAME);
+}

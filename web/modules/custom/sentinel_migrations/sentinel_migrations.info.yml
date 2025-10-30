@@ -1,0 +1,8 @@
+name: 'Sentinel Portal Migrations'
+type: module
+description: 'A module that allows us to migrate sentinel sample data.'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - migrate
+  - sentinel_portal_module

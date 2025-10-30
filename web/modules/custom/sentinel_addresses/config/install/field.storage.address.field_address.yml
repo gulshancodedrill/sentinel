@@ -1,0 +1,35 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - address
+id: address.field_address
+field_name: field_address
+entity_type: address
+type: address
+settings:
+  available_countries: {  }
+  fields:
+    countryCode:
+      enabled: true
+    locality:
+      enabled: true
+    administrativeArea:
+      enabled: true
+    postalCode:
+      enabled: true
+    addressLine1:
+      enabled: true
+    addressLine2:
+      enabled: true
+    organization:
+      enabled: true
+module: address
+locked: false
+cardinality: 1
+translatable: false
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false
+
+
