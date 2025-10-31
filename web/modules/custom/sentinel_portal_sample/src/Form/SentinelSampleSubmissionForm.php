@@ -5,6 +5,8 @@ namespace Drupal\sentinel_portal_sample\Form;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Datetime\DrupalDateTime;
+use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -108,14 +110,14 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#weight' => 4,
     ];
 
-    $form['company_details']['company_address']['address_selection'] = [
+    $form['company_details']['company_address']['company_address_selection'] = [
       '#type' => 'select',
       '#title' => $this->t('Select company address'),
       '#options' => ['' => $this->t('Please select')],
       '#weight' => 1,
     ];
 
-    $form['company_details']['company_address']['country'] = [
+    $form['company_details']['company_address']['company_country'] = [
       '#type' => 'select',
       '#title' => $this->t('Country'),
       '#options' => [
@@ -379,31 +381,31 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#weight' => 3,
     ];
 
-    $form['company_details']['company_address']['address_1'] = [
+    $form['company_details']['company_address']['company_address_1'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Address 1'),
       '#weight' => 4,
     ];
 
-    $form['company_details']['company_address']['property_name'] = [
+    $form['company_details']['company_address']['company_property_name'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Property name'),
       '#weight' => 5,
     ];
 
-    $form['company_details']['company_address']['property_number'] = [
+    $form['company_details']['company_address']['company_property_number'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Property number'),
       '#weight' => 6,
     ];
 
-    $form['company_details']['company_address']['town_city'] = [
+    $form['company_details']['company_address']['company_town_city'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Town/City'),
       '#weight' => 7,
     ];
 
-    $form['company_details']['company_address']['postcode'] = [
+    $form['company_details']['company_address']['company_postcode'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Postcode'),
       '#weight' => 8,
@@ -468,10 +470,13 @@ class SentinelSampleSubmissionForm extends FormBase {
     ];
 
     $form['job_details']['date_sent'] = [
-      '#type' => 'textfield',
+      '#type' => 'datetime',
       '#title' => $this->t('Date Sent'),
-      '#placeholder' => $this->t('e.g. 28.11.2020'),
       '#description' => $this->t('Date the boiler sample was sent to Sentinel.'),
+      '#date_date_element' => 'date',
+      '#date_time_element' => 'none',
+      '#date_timezone' => date_default_timezone_get(),
+      '#date_date_format' => 'd/m/Y',
       '#weight' => 8,
     ];
 
@@ -490,10 +495,13 @@ class SentinelSampleSubmissionForm extends FormBase {
     ];
 
     $form['job_details']['date_installed'] = [
-      '#type' => 'textfield',
+      '#type' => 'datetime',
       '#title' => $this->t('Date Installed'),
-      '#placeholder' => $this->t('e.g. 28.11.2020'),
       '#description' => $this->t('Date the boiler was installed.'),
+      '#date_date_element' => 'date',
+      '#date_time_element' => 'none',
+      '#date_timezone' => date_default_timezone_get(),
+      '#date_date_format' => 'd/m/Y',
       '#required' => TRUE,
       '#weight' => 11,
     ];
@@ -870,32 +878,248 @@ class SentinelSampleSubmissionForm extends FormBase {
 
     // Attach CSS and JS libraries
     $form['#attached']['library'][] = 'sentinel_portal_sample/sample-form';
+    $form['#attached']['library'][] = 'core/drupal.date';
 
     return $form;
   }
 
   /**
    * {@inheritdoc}
+   * 
+   * Validation matches D7 sentinel_portal_sample_submission_form_validate()
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $pack_ref = $form_state->getValue('pack_reference_number');
-    $pack_ref_confirm = $form_state->getValue('pack_reference_number_confirm');
+    // Get the pack reference number
+    $pack_reference_number = trim($form_state->getValue('pack_reference_number'));
+    
+    // Check for a valid pack reference number format
+    if (!empty($pack_reference_number) && !$this->validPackReferenceNumber($pack_reference_number)) {
+      $form_state->setErrorByName('pack_reference_number', 
+        $this->t('Please enter a valid pack reference number. It needs to be in either one of the following formats: NNN:NNNA, NNN:NNNNA, NNN:NNNNNA, NNN:NNNNNNA or NNN:NNNNNNNA. A is an optional alpha character. N is a numeric character')
+      );
+    }
     
     // Validate pack reference number confirmation
-    if (!empty($pack_ref_confirm) && $pack_ref !== $pack_ref_confirm) {
-      $form_state->setErrorByName('pack_reference_number_confirm', $this->t('Pack reference numbers do not match.'));
+    $pack_reference_number_confirm = trim($form_state->getValue('pack_reference_number_confirm'));
+    if (!empty($pack_reference_number_confirm) && $pack_reference_number !== $pack_reference_number_confirm) {
+      $form_state->setErrorByName('pack_reference_number', 
+        $this->t('That pack reference numbers you entered do not match.')
+      );
+      $form_state->setErrorByName('pack_reference_number_confirm');
     }
     
-    // Validate email format
-    $company_email = $form_state->getValue(['company_details', 'company_email']);
-    if (!empty($company_email) && !filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
-      $form_state->setErrorByName(['company_details', 'company_email'], $this->t('Please enter a valid email address.'));
+    // Check if pack reference number already exists
+    if (!empty($pack_reference_number)) {
+      $storage = $this->entityTypeManager->getStorage('sentinel_sample');
+      $existing = $storage->getQuery()
+        ->condition('pack_reference_number', $pack_reference_number)
+        ->range(0, 1)
+        ->accessCheck(FALSE)
+        ->execute();
+      
+      if (!empty($existing)) {
+        $form_state->setErrorByName('pack_reference_number', 
+          $this->t('That pack reference number already exists.')
+        );
+      }
     }
     
-    $installer_email = $form_state->getValue(['job_details', 'installer_email']);
-    if (!empty($installer_email) && !filter_var($installer_email, FILTER_VALIDATE_EMAIL)) {
-      $form_state->setErrorByName(['job_details', 'installer_email'], $this->t('Please enter a valid email address.'));
+    // Validate sample using entity validation (matches D7 $sample->validateSample())
+    // Prepare form values similar to D7 structure for validation
+    $validation_data = [];
+    $form_values = $form_state->getValues();
+
+    $date_fields = ['date_sent', 'date_installed'];
+    $normalized_dates = [];
+    foreach ($date_fields as $date_field) {
+      $normalized_dates[$date_field] = $this->normalizeDateFormValue($form_state->getValue($date_field));
     }
+
+    // Flatten fieldset values to match D7 structure
+    foreach (['company_details', 'system_details', 'job_details'] as $fieldset) {
+      if (isset($form_values[$fieldset]) && is_array($form_values[$fieldset])) {
+        foreach ($form_values[$fieldset] as $key => $val) {
+          if ($key !== '#type' && $key !== '#title' && $key !== '#weight') {
+            if (in_array($key, $date_fields, TRUE)) {
+              $validation_data[$key] = $normalized_dates[$key];
+            }
+            else {
+              $validation_data[$key] = is_string($val) ? trim($val) : $val;
+            }
+          }
+        }
+      }
+    }
+
+    // Map top-level fields that are already flattened
+    $top_level_fields = ['pack_reference_number', 'company', 'company_address_1', 'company_property_name',
+                         'company_town_city', 'company_postcode', 'company_telephone', 'company_email',
+                         'sentinel_customer_id', 'address_1', 'property_name', 'property_number',
+                         'town_city', 'postcode', 'county', 'landlord', 'installer_name', 'installer_email',
+                         'installer_company', 'boiler_manufacturer', 'system_age', 'boiler_type',
+                         'project_id', 'date_sent', 'uprn', 'boiler_id', 'date_installed'];
+    foreach ($top_level_fields as $field) {
+      if (in_array($field, $date_fields, TRUE)) {
+        $validation_data[$field] = $normalized_dates[$field];
+        continue;
+      }
+
+      if (array_key_exists($field, $form_values)) {
+        $value = $form_values[$field];
+
+        if ($value instanceof DrupalDateTime) {
+          $value = $this->normalizeDateFormValue($value);
+        }
+
+        if (is_array($value)) {
+          continue;
+        }
+
+        $validation_data[$field] = is_string($value) ? trim($value) : $value;
+      }
+    }
+    
+    // Map company address fields to validation format
+    if (isset($form_values['company_address']) && is_array($form_values['company_address'])) {
+      if (isset($form_values['company_address']['company_address_1'])) {
+        $validation_data['company_address1'] = trim($form_values['company_address']['company_address_1']);
+      }
+      if (isset($form_values['company_address']['company_property_name'])) {
+        $validation_data['company_address2'] = trim($form_values['company_address']['company_property_name']);
+      }
+      if (isset($form_values['company_address']['company_town_city'])) {
+        $validation_data['company_town'] = trim($form_values['company_address']['company_town_city']);
+      }
+      if (isset($form_values['company_address']['company_postcode'])) {
+        $validation_data['company_postcode'] = trim($form_values['company_address']['company_postcode']);
+      }
+    }
+    
+    // Map company fields
+    if (isset($validation_data['company'])) {
+      $validation_data['company_name'] = $validation_data['company'];
+    }
+    if (isset($validation_data['company_telephone'])) {
+      $validation_data['company_tel'] = $validation_data['company_telephone'];
+    }
+    if (isset($validation_data['sentinel_customer_id'])) {
+      $validation_data['customer_id'] = $validation_data['sentinel_customer_id'];
+    }
+    
+    // Map system address fields from nested structure
+    if (isset($form_values['system_details']['address']['address_fields']) && is_array($form_values['system_details']['address']['address_fields'])) {
+      $address_fields = $form_values['system_details']['address']['address_fields'];
+
+      if (isset($address_fields['property_number'])) {
+        $validation_data['property_number'] = trim($address_fields['property_number']);
+      }
+      if (isset($address_fields['address_1'])) {
+        $validation_data['address_1'] = trim($address_fields['address_1']);
+        $validation_data['street'] = trim($address_fields['address_1']);
+      }
+      if (isset($address_fields['property_name'])) {
+        $validation_data['property_name'] = trim($address_fields['property_name']);
+      }
+      if (isset($address_fields['town_city'])) {
+        $validation_data['town_city'] = trim($address_fields['town_city']);
+      }
+      if (isset($address_fields['county'])) {
+        $validation_data['county'] = trim($address_fields['county']);
+      }
+      if (isset($address_fields['postcode'])) {
+        $validation_data['postcode'] = trim($address_fields['postcode']);
+      }
+
+      // If sentinel_addresses module is enabled, mimic nested address structure expected by legacy validation.
+      $module_handler = \Drupal::moduleHandler();
+      if ($module_handler->moduleExists('sentinel_addresses')) {
+        $legacy_address =& $validation_data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0];
+        if (isset($validation_data['property_number'])) {
+          $legacy_address['sub_premise'] = $validation_data['property_number'];
+        }
+        if (isset($validation_data['street'])) {
+          $legacy_address['thoroughfare'] = $validation_data['street'];
+        }
+        if (isset($validation_data['town_city'])) {
+          $legacy_address['locality'] = $validation_data['town_city'];
+        }
+        if (isset($validation_data['county'])) {
+          $legacy_address['administrative_area'] = $validation_data['county'];
+        }
+        if (isset($validation_data['postcode'])) {
+          $legacy_address['postal_code'] = $validation_data['postcode'];
+        }
+      }
+    }
+    
+    // Add form_id for sentinel_addresses module detection (matches D7)
+    $validation_data['form_id'] = 'sentinel_portal_sample_submission_form';
+    
+    // Call validation service directly (matches D7 SentinelSampleEntityValidation::validateSample)
+    try {
+      $invalid_fields = SentinelSampleValidation::validateSample($validation_data);
+      
+      // Remove company_name from validation errors (matches D7 behavior)
+      if (isset($invalid_fields['company_name'])) {
+        unset($invalid_fields['company_name']);
+      }
+      
+      // Set form errors for invalid fields (matches D7 form_set_error logic)
+      foreach ($invalid_fields as $field_name => $error_text) {
+        $form_error_target_field = $field_name;
+        
+        // Handle deprecated address fields mapping (matches D7 logic)
+        $module_handler = \Drupal::moduleHandler();
+        if ($module_handler->moduleExists('sentinel_addresses')) {
+          // Map deprecated field names to form field paths (matches D7)
+          $normal_address_mapping = [
+            'sub_premise' => 'property_number',
+            'thoroughfare' => 'street',
+            'dependent_locality' => 'ADDRESS_3',
+            'sub_administrative_area' => 'ADDRESS_4',
+            'locality' => 'town_city',
+            'administrative_area' => 'county',
+            'postal_code' => 'postcode',
+          ];
+          
+          // Check if this field should map to an address field
+          $mapping = array_flip(array_map('strtolower', $normal_address_mapping));
+          if (isset($mapping[strtolower($field_name)])) {
+            // Map to form field path if sentinel_addresses is active
+            // For now, we'll use the field name directly since form structure may differ
+          }
+        }
+        
+        // Set the error on the appropriate form field
+        $form_state->setErrorByName($form_error_target_field, $error_text);
+      }
+    } catch (\Exception $e) {
+      // Log validation error but don't break form submission
+      \Drupal::logger('sentinel_portal_sample')->warning('Error during form validation: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  /**
+   * Validates a pack reference number format (matches D7 valid_pack_reference_number).
+   *
+   * @param string $packref
+   *   The pack reference number to validate.
+   *
+   * @return bool
+   *   TRUE if valid, FALSE otherwise.
+   */
+  protected function validPackReferenceNumber($packref) {
+    $pattern = '/^([0-9]{3})[:\s-]?([0-9]{3,10}[a-zA-Z]?)$/';
+    $matches = [];
+    preg_match_all($pattern, trim($packref), $matches);
+    
+    if ((isset($matches[1][0]) || isset($matches[2][0])) && strpos($packref, ':') == 3) {
+      return TRUE;
+    }
+    
+    return FALSE;
   }
 
   /**
@@ -915,7 +1139,11 @@ class SentinelSampleSubmissionForm extends FormBase {
     //   return;
     // }
     $values = $form_state->getValues();
-
+    $date_fields = ['date_sent', 'date_installed'];
+    $normalized_dates = [];
+    foreach ($date_fields as $date_field) {
+      $normalized_dates[$date_field] = $this->normalizeDateFormValue($form_state->getValue($date_field));
+    }
     // --- FLATTEN fieldset values (D11 mimic D7) ---
     foreach ([
         'company_details', 'system_details', 'job_details', 'result_details'
@@ -929,25 +1157,33 @@ class SentinelSampleSubmissionForm extends FormBase {
         }
       }
     }
-    // --- MANUAL MAPPING for nested address and special fields ---
-    // company_address fields
-    if (isset($values['company_address']) && is_array($values['company_address'])) {
-      if (isset($values['company_address']['address_1'])) {
-        $values['company_address1'] = $values['company_address']['address_1'];
+    // Override flattened date values with normalized strings
+    foreach ($normalized_dates as $field => $normalized_value) {
+      if ($normalized_value !== '') {
+        $values[$field] = $normalized_value;
+        if (isset($values['job_details'][$field])) {
+          $values['job_details'][$field] = $normalized_value;
+        }
       }
-      if (isset($values['company_address']['address_2'])) {
-        $values['company_address2'] = $values['company_address']['address_2'];
-      }
-      if (isset($values['company_address']['town_city'])) {
-        $values['company_town'] = $values['company_address']['town_city'];
-      }
-      if (isset($values['company_address']['county'])) {
-        $values['company_county'] = $values['company_address']['county'];
-      }
-      if (isset($values['company_address']['postcode'])) {
-        $values['company_postcode'] = $values['company_address']['postcode'];
+      else {
+        unset($values[$field]);
+        if (isset($values['job_details'][$field])) {
+          $values['job_details'][$field] = '';
+        }
       }
     }
+
+    // Fallback mappings so validation always sees street/town/county/postcode.
+    if (empty($validation_data['street']) && !empty($validation_data['address_1'])) {
+      $validation_data['street'] = $validation_data['address_1'];
+    }
+    if (empty($validation_data['town_city']) && !empty($validation_data['town'])) {
+      $validation_data['town_city'] = $validation_data['town'];
+    }
+
+    // Note: Fields are already flattened to top level by the loop above
+    // Company address fields use 'company_' prefix (company_address_1, company_property_name, etc.)
+    // System address fields are at top level (address_1, property_name, town_city, etc.)
     // company_tel was 'company_telephone'
     if (isset($values['company_telephone'])) {
       $values['company_tel'] = $values['company_telephone'];
@@ -969,9 +1205,36 @@ class SentinelSampleSubmissionForm extends FormBase {
       if (isset($addr['street'])) {
         $values['street'] = $addr['street'];
       }
+      if (!isset($values['street']) && isset($addr['address_1'])) {
+        // Fallback to address_1 for street.
+        $values['street'] = $addr['address_1'];
+      }
       if (isset($addr['county'])) {
         $values['county'] = $addr['county'];
       }
+      if (isset($addr['town_city'])) {
+        $values['town_city'] = $addr['town_city'];
+      }
+      if (isset($addr['postcode'])) {
+        $values['postcode'] = $addr['postcode'];
+      }
+      if (empty($values['system_location'])) {
+        // Build a readable system_location similar to D7 deprecated computed field.
+        $parts = [];
+        foreach (['property_name', 'property_number', 'address_1', 'town_city', 'postcode'] as $p) {
+          if (!empty($addr[$p])) {
+            $parts[] = $addr[$p];
+          }
+        }
+        if (!empty($parts)) {
+          $values['system_location'] = implode(', ', $parts);
+        }
+      }
+    }
+
+    // Fallback street mapping for saves as well.
+    if (empty($values['street']) && !empty($values['address_1'])) {
+      $values['street'] = $values['address_1'];
     }
 
     // Create sample entity (matches D7 sentinel_portal_entities_create_sample)
@@ -984,6 +1247,94 @@ class SentinelSampleSubmissionForm extends FormBase {
       if ($ucr_value && $sample->hasField('ucr')) {
         $sample->set('ucr', $ucr_value);
       }
+      // Explicit legacy field name mapping from D7 -> values in this D11 form
+      // Only map when present; do not overwrite with empty values.
+      $legacyMappings = [
+        // Company details
+        'company_name' => ['company_details', 'company_address', 'company'],
+        'company_address1' => ['company_details', 'company_address', 'company_address_1'],
+        'company_address2' => ['company_details', 'company_address', 'company_address_2'],
+        'company_town' => ['company_details', 'company_address', 'company_town_city'],
+        'company_county' => ['company_details', 'company_address', 'county'],
+        'company_postcode' => ['company_details', 'company_address', 'company_postcode'],
+
+        // System address/location
+        'system_location' => ['system_details', 'address', 'address_fields', 'address_1'],
+        'property_number' => ['system_details', 'address', 'address_fields', 'property_number'],
+        'street' => ['system_details', 'address', 'address_fields', 'address_1'],
+        'town_city' => ['system_details', 'address', 'address_fields', 'town_city'],
+        'county' => ['system_details', 'address', 'address_fields', 'county'],
+        'postcode' => ['system_details', 'address', 'address_fields', 'postcode'],
+        'landlord' => ['system_details', 'landlord_wrapper', 'landlord'],
+
+        // Contact details
+        'company_tel' => ['company_details', 'company_telephone'],
+
+        // Dates (only if provided in this form)
+        'date_sent' => ['job_details', 'date_sent'],
+        'date_installed' => ['job_details', 'date_installed'],
+
+        // Misc identifiers
+        'boiler_id' => ['job_details', 'boiler_id'],
+        'project_id' => ['job_details', 'project_id'],
+        'uprn' => ['job_details', 'uprn'],
+      ];
+
+      foreach ($legacyMappings as $fieldName => $path) {
+        $val = $this->getArrayPathValue($values, $path);
+        if ($val !== NULL && $val !== '') {
+          if ($sample->hasField($fieldName)) {
+            $sample->set($fieldName, $val);
+          }
+        }
+      }
+
+      // Flat (top-level) mappings - values are already flattened from fieldsets above
+      $legacyFlat = [
+        'company_name' => 'company',
+        'company_address1' => 'company_property_name',
+        'company_address2' => 'company_address_1',  // Use company_property_name for address2
+        'company_town' => 'company_town_city',
+        'company_county' => 'company_county',  // May not exist in form, but mapped if present
+        'company_postcode' => 'company_postcode',
+        'company_tel' => 'company_telephone',
+        'property_number' => 'property_number',  // System address property_number
+        'street' => 'address_1',  // System address street
+        'town_city' => 'town_city',  // System address town_city
+        'county' => 'county',  // System address county (may not exist)
+        'postcode' => 'postcode',  // System address postcode
+        'landlord' => 'landlord',
+        'date_sent' => 'date_sent',
+        'date_installed' => 'date_installed',
+        'boiler_id' => 'boiler_id',
+        'project_id' => 'project_id',
+        'uprn' => 'uprn',
+      ];
+
+      foreach ($legacyFlat as $fieldName => $sourceKey) {
+        if (isset($values[$sourceKey]) && $values[$sourceKey] !== '' && $values[$sourceKey] !== NULL) {
+          if ($sample->hasField($fieldName)) {
+            $sample->set($fieldName, $values[$sourceKey]);
+          }
+        }
+      }
+
+      // Compose system_location if not set but we have address pieces.
+      if ($sample->hasField('system_location')) {
+        $current = $sample->get('system_location')->value ?? NULL;
+        if (empty($current)) {
+          $parts = [];
+          foreach (['property_name', 'property_number', 'address_1', 'town_city', 'postcode'] as $p) {
+            if (!empty($values[$p])) {
+              $parts[] = $values[$p];
+            }
+          }
+          if (!empty($parts)) {
+            $sample->set('system_location', implode(', ', $parts));
+          }
+        }
+      }
+
       // Set all form values to the entity fields
       $sample_fields = [];
       $field_definitions = $sample->getFieldDefinitions();
@@ -1022,6 +1373,40 @@ class SentinelSampleSubmissionForm extends FormBase {
   }
 
   /**
+   * Normalize a date value from the form to D7-compatible string.
+   *
+   * @param mixed $value
+   *   The form value which may be a DrupalDateTime, array or string.
+   *
+   * @return string
+   *   Normalized date string in 'Y-m-d\TH:i:00' format or empty string.
+   */
+  protected function normalizeDateFormValue($value) {
+    $date_string = '';
+
+    if ($value instanceof DrupalDateTime) {
+      $date_string = $value->format('Y-m-d');
+    }
+    elseif (is_array($value) && isset($value['date'])) {
+      $date_string = trim($value['date']);
+    }
+    elseif (is_string($value)) {
+      $date_string = trim($value);
+    }
+
+    if ($date_string === '') {
+      return '';
+    }
+
+    $validated = SentinelSampleValidation::validateDate($date_string);
+    if ($validated !== FALSE) {
+      return $validated;
+    }
+
+    return $date_string;
+  }
+
+  /**
    * Maps form values to entity fields, handling nested structures.
    *
    * @param \Drupal\Core\Entity\ContentEntityInterface $entity
@@ -1051,6 +1436,28 @@ class SentinelSampleSubmissionForm extends FormBase {
         $entity->set($key, $value);
       }
     }
+  }
+
+  /**
+   * Safely get a nested value from an array by path.
+   *
+   * @param array $source
+   *   The source array.
+   * @param array $path
+   *   List of keys to traverse.
+   *
+   * @return mixed|null
+   *   The value if found, otherwise NULL.
+   */
+  private function getArrayPathValue(array $source, array $path) {
+    $cursor = $source;
+    foreach ($path as $segment) {
+      if (!is_array($cursor) || !array_key_exists($segment, $cursor)) {
+        return NULL;
+      }
+      $cursor = $cursor[$segment];
+    }
+    return $cursor;
   }
 
 }
