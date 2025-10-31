@@ -1487,4 +1487,41 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
 
         return $fields;
     }
+
+    /**
+     * Validate a sample based on the type of sample that it is.
+     *
+     * Matches D7 SentinelSampleEntity::validateSample().
+     *
+     * @return array
+     *   An array of error messages for the fields that failed validation.
+     *   Keyed by field name, value is error message.
+     */
+    public function validateSample() {
+        $data = [];
+        
+        // Convert entity to array format for validation
+        $field_definitions = $this->getFieldDefinitions();
+        foreach ($field_definitions as $field_name => $field_definition) {
+            if ($this->hasField($field_name) && !$this->get($field_name)->isEmpty()) {
+                $value = $this->get($field_name)->value;
+                if ($value !== NULL && $value !== '') {
+                    $data[$field_name] = $value;
+                }
+            }
+        }
+        
+        // Get values from entity properties
+        $properties = ['pack_reference_number', 'customer_id', 'project_id', 'boiler_id', 
+                       'company_name', 'company_tel', 'installer_email', 'property_number', 
+                       'street', 'town_city', 'county', 'postcode', 'date_installed'];
+        foreach ($properties as $prop) {
+            if (property_exists($this, $prop) && isset($this->{$prop}) && $this->{$prop} !== '' && $this->{$prop} !== NULL) {
+                $data[$prop] = $this->{$prop};
+            }
+        }
+        
+        // Use validation service (matches D7 SentinelSampleEntityValidation::validateSample)
+        return \Drupal\sentinel_portal_entities\Service\SentinelSampleValidation::validateSample($data);
+    }
 }

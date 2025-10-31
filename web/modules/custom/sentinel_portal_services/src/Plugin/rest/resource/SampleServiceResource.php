@@ -4,6 +4,8 @@ namespace Drupal\sentinel_portal_services\Plugin\rest\resource;
 
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\rest\ResourceResponse;
+use Drupal\sentinel_portal_entities\Exception\SentinelSampleValidationException;
+use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -162,6 +164,22 @@ class SampleServiceResource extends ResourceBase {
       sentinel_portal_entities_get_sample_fields() : 
       [];
 
+    if (empty($sample_fields)) {
+      $sample_fields = [];
+      $temp_sample = $entity_type_manager->getStorage('sentinel_sample')->create([]);
+      foreach ($temp_sample->getFieldDefinitions() as $field_name => $definition) {
+        $sample_fields[$field_name] = [
+          'type' => $definition->getType(),
+          'size' => $definition->getSetting('size') ?? NULL,
+          'portal_config' => [
+            'access' => [
+              'data' => 'user',
+            ],
+          ],
+        ];
+      }
+    }
+
     $sample = [];
     $errors = [];
     $global_access = $client_data->get('global_access')->value ?? FALSE;
@@ -193,14 +211,13 @@ class SampleServiceResource extends ResourceBase {
             continue;
           }
 
-          if (function_exists('sentinel_portal_validate_date')) {
-            $formatted_date = sentinel_portal_validate_date($data_item);
-            if ($formatted_date == FALSE) {
-              $errors[$field_name] = 'invalid date time value found';
-              continue;
-            }
-            $sample[$field_name] = $formatted_date;
+          $formatted_date = SentinelSampleValidation::validateDate($data_item);
+          if ($formatted_date === FALSE) {
+            $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid date.');
+            continue;
           }
+          $sample[$field_name] = $formatted_date;
+          continue;
         }
 
         // Validate pass/fail fields
@@ -217,7 +234,7 @@ class SampleServiceResource extends ResourceBase {
               $data_item = NULL;
             }
             else {
-              $errors[$field_name] = 'invalid pass_fail value found';
+              $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid pass/fail value.');
               continue;
             }
           }
@@ -234,10 +251,39 @@ class SampleServiceResource extends ResourceBase {
       }
     }
 
-    // Fix UCR (remove luhn number)
-    $sample['ucr'] = floor($sample['ucr'] / 10);
+    try {
+      $api_validation_errors = SentinelSampleValidation::validateSampleInApi($sample, $client_data);
+      $errors = $errors + $api_validation_errors;
+    }
+    catch (SentinelSampleValidationException $e) {
+      $error_payload = [];
+      foreach ($e->getErrors() as $field => $message) {
+        $error_payload[] = [
+          'error_column' => $field,
+          'error_description' => $message,
+        ];
+      }
 
-    // Check if sample exists
+      $response_data = [
+        'status' => Response::HTTP_NOT_ACCEPTABLE,
+        'message' => $e->getMessage(),
+        'error' => $error_payload,
+      ];
+
+      $response = new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
+      $response->addCacheableDependency(['#cache' => ['max-age' => 0]]);
+
+      return $response;
+    }
+
+    // Fix UCR (remove luhn number)
+    if (isset($sample['ucr'])) {
+      $sample['ucr'] = floor($sample['ucr'] / 10);
+    }
+
+    /** @var \Drupal\Core\Entity\EntityStorageInterface $sample_storage */
+    $sample_storage = $entity_type_manager->getStorage('sentinel_sample');
+
     $database = \Drupal::database();
     $query = $database->select('sentinel_sample', 'p')
       ->fields('p', ['pid'])
@@ -249,29 +295,76 @@ class SampleServiceResource extends ResourceBase {
       $query->condition('p.api_created_by', $real_ucr, '=');
     }
 
-    $query->orderBy('pid', 'DESC');
-    $result = $query->execute();
-    $row = $result->fetchAssoc();
+    $existing_id = $query->orderBy('pid', 'DESC')->execute()->fetchField();
 
+    $sample_entity = NULL;
+    $sample_entity_original = NULL;
     $sample_update = FALSE;
     $message = '';
 
-    if (isset($row['pid'])) {
-      // Update existing sample
-      if (function_exists('sentinel_portal_entities_update_sample')) {
-        $sample_entity_storage = $entity_type_manager->getStorage('sentinel_sample');
-        $sample_entity = $sample_entity_storage->load($row['pid']);
-        
-        $sample_entity = sentinel_portal_entities_update_sample($sample_entity, $sample);
-        $sample_update = TRUE;
-        $message = 'Sample updated';
+    if ($existing_id) {
+      $sample_entity = $sample_storage->load($existing_id);
+
+      if (!$sample_entity) {
+        throw new NotFoundHttpException('Sample not found.');
       }
+
+      if ($global_access == FALSE && method_exists($sample_entity, 'isReported') && $sample_entity->isReported()) {
+        throw new BadRequestHttpException('Sample has already been reported and cannot be updated. Please contact Sentinel.');
+      }
+
+      $sample_entity_original = clone $sample_entity;
+
+      // Duplicate handling.
+      $duplicate_test = $sample_storage->create([]);
+      SentinelSampleEntityHelper::applySampleData($duplicate_test, $sample);
+      if (method_exists($sample_entity, 'id')) {
+        $duplicate_test->set('duplicate_of', $sample_entity->id());
+      }
+
+      if (SentinelSampleEntityHelper::isDuplicate($duplicate_test)) {
+        $duplicate_test->set('duplicate_of', $sample_entity->id());
+        $duplicate_existing = SentinelSampleEntityHelper::findDuplicate($duplicate_test);
+
+        if ($duplicate_existing) {
+          $sample_entity = $duplicate_existing;
+          unset($sample['pack_reference_number']);
+        }
+        else {
+          SentinelSampleEntityHelper::renameDuplicate($duplicate_test);
+          $sample['pack_reference_number'] = $duplicate_test->get('pack_reference_number')->value;
+          $sample['duplicate_of'] = $sample_entity->id();
+        }
+      }
+
+      SentinelSampleEntityHelper::applySampleData($sample_entity, $sample);
+      $sample_entity->save();
+
+      $sample_update = TRUE;
+      $message = 'Sample updated';
     }
     else {
-      // Create new sample
-      if (function_exists('sentinel_portal_entities_create_sample')) {
-        $sample_entity = sentinel_portal_entities_create_sample($sample);
-        $message = 'Sample created';
+      if (!empty($sample['pack_reference_number']) && SentinelSampleEntityHelper::loadSampleByPackReference($sample['pack_reference_number'])) {
+        throw new BadRequestHttpException('Access denied.');
+      }
+
+      $sample_entity = $sample_storage->create([]);
+      SentinelSampleEntityHelper::applySampleData($sample_entity, $sample);
+      $sample_entity->save();
+
+      $sample_update = FALSE;
+      $message = 'Sample created';
+    }
+
+    $date_reported_original = $sample_entity_original ? ($sample_entity_original->get('date_reported')->value ?? NULL) : NULL;
+    $is_reported = method_exists($sample_entity, 'isReported') ? $sample_entity->isReported() : FALSE;
+
+    if ($is_reported) {
+      self::recalculateSampleResults($sample_entity);
+
+      $date_reported_current = $sample_entity->get('date_reported')->value ?? NULL;
+      if ($date_reported_current && $date_reported_current !== $date_reported_original && function_exists('sentinel_portal_queue_create_item')) {
+        sentinel_portal_queue_create_item($sample_entity, 'sendreport');
       }
     }
 
@@ -333,6 +426,37 @@ class SampleServiceResource extends ResourceBase {
     }
 
     return FALSE;
+  }
+
+  /**
+   * Recalculate derived results for a sample (matches D7 behaviour).
+   */
+  protected static function recalculateSampleResults($sample_entity) {
+    if (!is_object($sample_entity)) {
+      return;
+    }
+
+    // Ensure the x100 value is always up to date.
+    if (method_exists($sample_entity, 'calculateX100')) {
+      $sample_entity->calculateX100();
+    }
+
+    if (function_exists('sentinel_systemcheck_certificate_populate_results')) {
+      $results = new \stdClass();
+      $formatted_results = new \stdClass();
+      sentinel_systemcheck_certificate_populate_results($results, $sample_entity, $formatted_results);
+      // Persist calculated fields.
+      if (method_exists($sample_entity, 'save')) {
+        $sample_entity->save();
+      }
+    }
+
+    if (function_exists('sentinel_systemcheck_certificate_calculate_sentinel_sample_result')) {
+      sentinel_systemcheck_certificate_calculate_sentinel_sample_result($sample_entity);
+      if (method_exists($sample_entity, 'save')) {
+        $sample_entity->save();
+      }
+    }
   }
 
 }

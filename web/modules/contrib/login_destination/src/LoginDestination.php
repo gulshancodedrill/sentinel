@@ -31,10 +31,6 @@ class LoginDestination implements TrustedCallbackInterface {
 
     /** @var \Drupal\Core\Url $url */
     $url = $build['#url'];
-    // Handle case where #url might be a string instead of Url object.
-    if (!($url instanceof \Drupal\Core\Url)) {
-      return $build;
-    }
     if ($url->isRouted() && in_array($url->getRouteName(), $routes)) {
       $cache->addCacheContexts(['url.path']);
     }
