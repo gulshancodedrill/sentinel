@@ -1,0 +1,21 @@
+notice-styling:
+  version: VERSION
+  css:
+    theme:
+      css/notice.css: {}
+
+sample_list:
+  version: VERSION
+  js:
+    js/sample_list.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.tableselect
+    - core/once
+
+
+sample-list-styling:
+  version: VERSION
+  css:
+    theme:
+      css/sample-list.css: {}

@@ -14,13 +14,24 @@ sentinel_portal.admin:
   requirements:
     _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalAdminAccess'
   options:
-    _admin_route: TRUE
+    _admin_route: FALSE
 
 sentinel_portal.config:
   path: '/portal/admin/config'
   defaults:
     _form: '\Drupal\sentinel_portal_module\Form\SentinelPortalConfigForm'
+    _title: 'Portal Config'
   requirements:
     _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalConfigAccess'
   options:
-    _admin_route: TRUE
+    _admin_route: FALSE
+
+sentinel_portal.test_pdf_logic:
+  path: '/portal/portal-test-pdf-logic'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_module\Controller\TestPdfLogicController::page'
+    _title: 'Test PDF logic'
+  requirements:
+    _permission: 'access content'
+  options:
+    _admin_route: FALSE

@@ -1,0 +1,33 @@
+sentinel_portal.client_ucr_test:
+  path: '/portal/admin/clients/ucrtest'
+  defaults:
+    _form: '\Drupal\sentinel_portal_entities\Form\SentinelClientUcrForm'
+    _title: 'Portal Client UCR'
+  requirements:
+    _permission: 'sentinel portal administration'
+  options:
+    _admin_route: TRUE
+
+entity.sentinel_notice.canonical:
+  path: '/portal/admin/notice/{sentinel_notice}'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelNoticeViewController::view'
+    _title: 'Notices'
+  requirements:
+    _permission: 'access content'
+  options:
+    _admin_route: FALSE
+    parameters:
+      sentinel_notice:
+        type: entity:sentinel_notice
+
+sentinel_portal.admin_sample:
+  path: '/portal/admin/sample'
+  defaults:
+    _controller: '\Drupal\Core\Entity\Controller\EntityListController::listing'
+    entity_type: 'sentinel_sample'
+    _title: 'Sentinel Samples'
+  requirements:
+    _permission: 'administer sentinel_sample'
+  options:
+    _admin_route: FALSE

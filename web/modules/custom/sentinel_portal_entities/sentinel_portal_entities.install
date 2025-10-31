@@ -79,6 +79,212 @@ function sentinel_portal_entities_update_8002() {
 }
 
 /**
+ * Add vid column to sentinel_sample table if it doesn't exist.
+ */
+function sentinel_portal_entities_update_8004() {
+  $table = 'sentinel_sample';
+  $schema = \Drupal::database()->schema();
+  
+  if (!$schema->fieldExists($table, 'vid')) {
+    try {
+      $schema->addField($table, 'vid', [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The revision ID.',
+      ]);
+      
+      // Set vid = pid for existing records (since they're their own revision)
+      $connection = \Drupal::database();
+      $connection->update($table)
+        ->expression('vid', 'pid')
+        ->execute();
+      
+      return t('Added vid column to %table and populated with existing pid values.', ['%table' => $table]);
+    }
+    catch (\Exception $e) {
+      return t('Error adding vid column to %table: @msg', ['%table' => $table, '@msg' => $e->getMessage()]);
+    }
+  }
+  
+  return t('vid column already exists in %table.', ['%table' => $table]);
+}
+
+/**
+ * Add nitrate_result column to sentinel_sample table if it doesn't exist.
+ */
+function sentinel_portal_entities_update_8005() {
+  $table = 'sentinel_sample';
+  $schema = \Drupal::database()->schema();
+  
+  if (!$schema->fieldExists($table, 'nitrate_result')) {
+    try {
+      $schema->addField($table, 'nitrate_result', [
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => 'The result of the Nitrate test.',
+      ]);
+      
+      return t('Added nitrate_result column to %table.', ['%table' => $table]);
+    }
+    catch (\Exception $e) {
+      return t('Error adding nitrate_result column to %table: @msg', ['%table' => $table, '@msg' => $e->getMessage()]);
+    }
+  }
+  
+  return t('nitrate_result column already exists in %table.', ['%table' => $table]);
+}
+
+/**
+ * Convert created, changed, and updated columns from INT to DATETIME in sentinel_sample table.
+ */
+function sentinel_portal_entities_update_8006() {
+  $table = 'sentinel_sample';
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  $fields_to_convert = ['created', 'changed', 'updated'];
+  $results = [];
+  
+  foreach ($fields_to_convert as $field_name) {
+    if ($schema->fieldExists($table, $field_name)) {
+      try {
+        // Check current type
+        $current_type = $connection->query("SHOW COLUMNS FROM {$table} LIKE '{$field_name}'")->fetchObject();
+        
+        if ($current_type && strpos($current_type->Type, 'int') !== FALSE) {
+          // Add temporary column
+          $temp_column = $field_name . '_temp';
+          if (!$schema->fieldExists($table, $temp_column)) {
+            $schema->addField($table, $temp_column, [
+              'type' => 'datetime',
+              'mysql_type' => 'datetime',
+              'not null' => FALSE,
+              'description' => "Temporary column for {$field_name} conversion.",
+            ]);
+            
+            // Convert timestamp to datetime
+            $connection->query("UPDATE {$table} SET {$temp_column} = FROM_UNIXTIME({$field_name}) WHERE {$field_name} IS NOT NULL AND {$field_name} > 0");
+            
+            // Drop old column
+            $schema->dropField($table, $field_name);
+            
+            // Rename temp column
+            $connection->query("ALTER TABLE {$table} CHANGE {$temp_column} {$field_name} DATETIME NULL");
+            
+            $results[] = "Converted {$field_name} from INT to DATETIME";
+          }
+        }
+        else {
+          $results[] = "{$field_name} is already DATETIME or doesn't exist";
+        }
+      }
+      catch (\Exception $e) {
+        $results[] = "Error converting {$field_name}: " . $e->getMessage();
+      }
+    }
+    else {
+      // Column doesn't exist, create it as datetime
+      try {
+        $schema->addField($table, $field_name, [
+          'type' => 'datetime',
+          'mysql_type' => 'datetime',
+          'not null' => FALSE,
+          'description' => "The {$field_name} datetime.",
+        ]);
+        $results[] = "Created {$field_name} as DATETIME";
+      }
+      catch (\Exception $e) {
+        $results[] = "Error creating {$field_name}: " . $e->getMessage();
+      }
+    }
+  }
+  
+  return t('Conversion results: @results', ['@results' => implode('; ', $results)]);
+}
+
+/**
+ * Add uuid column to sentinel_sample table if it doesn't exist.
+ */
+function sentinel_portal_entities_update_8007() {
+  $table = 'sentinel_sample';
+  $schema = \Drupal::database()->schema();
+  
+  if (!$schema->fieldExists($table, 'uuid')) {
+    try {
+      $schema->addField($table, 'uuid', [
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+        'description' => 'The Universally Unique IDentifier.',
+      ]);
+      
+      // Generate UUIDs for existing records
+      $connection = \Drupal::database();
+      $query = $connection->select($table, 'ss');
+      $query->addField('ss', 'pid');
+      $result = $query->execute()->fetchAll();
+      
+      foreach ($result as $row) {
+        $uuid = \Drupal::service('uuid')->generate();
+        $connection->update($table)
+          ->fields(['uuid' => $uuid])
+          ->condition('pid', $row->pid)
+          ->execute();
+      }
+      
+      return t('Added uuid column to %table and populated with UUIDs for existing records.', ['%table' => $table]);
+    }
+    catch (\Exception $e) {
+      return t('Error adding uuid column to %table: @msg', ['%table' => $table, '@msg' => $e->getMessage()]);
+    }
+  }
+  
+  return t('uuid column already exists in %table.', ['%table' => $table]);
+}
+
+/**
+ * Add uuid column to sentinel_client table if it doesn't exist.
+ */
+function sentinel_portal_entities_update_8003() {
+  $table = 'sentinel_client';
+  $schema = \Drupal::database()->schema();
+  
+  if (!$schema->fieldExists($table, 'uuid')) {
+    try {
+      $schema->addField($table, 'uuid', [
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+        'description' => 'The Universally Unique IDentifier.',
+      ]);
+      
+      // Generate UUIDs for existing records
+      $connection = \Drupal::database();
+      $query = $connection->select($table, 'sc');
+      $query->addField('sc', 'cid');
+      $results = $query->execute()->fetchAll();
+      
+      foreach ($results as $row) {
+        $uuid = \Drupal::service('uuid')->generate();
+        $connection->update($table)
+          ->fields(['uuid' => $uuid])
+          ->condition('cid', $row->cid)
+          ->execute();
+      }
+      
+      return t('Added uuid column to %table and generated UUIDs for existing records.', ['%table' => $table]);
+    }
+    catch (\Exception $e) {
+      return t('Could not add uuid column to %table: @msg', ['%table' => $table, '@msg' => $e->getMessage()]);
+    }
+  }
+  return t('Uuid column already exists in %table.', ['%table' => $table]);
+}
+
+/**
  * Implements hook_schema().
  */
 function sentinel_portal_entities_schema() {
@@ -91,6 +297,12 @@ function sentinel_portal_entities_schema() {
         'description' => 'Primary Key: The client entity id',
         'type' => 'serial',
         'not null' => TRUE,
+      ],
+      'uuid' => [
+        'description' => 'The Universally Unique IDentifier.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
       ],
       'uid' => [
         'description' => 'The Drupal user ID.',
@@ -145,15 +357,13 @@ function sentinel_portal_entities_schema() {
         'not null' => FALSE,
       ],
       'created' => [
-        'type' => 'datetime',
+        'type' => 'int',
         'description' => 'When this record was created.',
-        'mysql_type' => 'datetime',
         'not null' => FALSE,
       ],
       'updated' => [
-        'type' => 'datetime',
+        'type' => 'int',
         'description' => 'When this record was last updated.',
-        'mysql_type' => 'datetime',
         'not null' => FALSE,
       ],
     ],
@@ -183,7 +393,7 @@ function sentinel_portal_entities_schema() {
       'title' => [ 'description' => 'The title.', 'type' => 'varchar', 'length' => 255, 'not null' => TRUE ],
       'notice' => [ 'description' => 'The notice message.', 'type' => 'text', 'not null' => TRUE ],
       'notice_read' => [ 'description' => 'If this notice has been read.', 'type' => 'int', 'size' => 'tiny', 'unsigned' => TRUE, 'default' => 0, 'not null' => TRUE ],
-      'created' => [ 'type' => 'datetime', 'description' => 'When this record was created.', 'mysql_type' => 'datetime', 'not null' => FALSE ],
+      'created' => [ 'type' => 'int', 'description' => 'When this record was created.', 'not null' => FALSE ],
     ],
     'primary key' => ['nid'],
     'indexes' => [

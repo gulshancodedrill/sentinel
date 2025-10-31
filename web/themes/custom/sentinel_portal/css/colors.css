@@ -1,7 +1,7 @@
 /* ---------- Color Module Styles ----------- */
 
 body {
-  color: #3b3b3b;
+  color: #333;
   background: #292929;
 }
 
@@ -26,7 +26,11 @@ body {
 }
 
 #navbar-main {
-  background-color: #1d84c3;
+    width: 100%;
+    max-width: 75rem;
+    margin-right: auto;
+    margin-left: auto;
+    padding: 0;
 }
 
 a,
@@ -81,7 +85,7 @@ a:active,
 }
 
 .site-footer {
-  background: #292929;
+  background: #fff;
 }
 
 .region-header,

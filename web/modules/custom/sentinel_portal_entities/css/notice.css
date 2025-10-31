@@ -1,0 +1,12 @@
+.notice-read {
+  opacity: 0.6;
+}
+
+.notice-unread {
+  font-weight: bold;
+}
+
+.notice-unread td {
+  font-weight: bold;
+}
+

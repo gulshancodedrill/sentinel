@@ -1,0 +1,29 @@
+.sentinel-sample-result {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.sentinel-sample-result--passed {
+  background-color: #38a169;
+}
+
+.sentinel-sample-result--failed {
+  background-color: #e53e3e;
+}
+
+.sentinel-sample-result--pending {
+  background-color: #dd6b20;
+}
+
+.sentinel-sample-result--unknown {
+  background-color: #718096;
+}
+
+.sentinel-sample-list td {
+  vertical-align: middle;
+}

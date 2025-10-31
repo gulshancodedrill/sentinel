@@ -15,6 +15,7 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
  *   id = "sentinel_sample",
  *   label = @Translation("Sentinel Sample"),
  *   handlers = {
+ *     "storage" = "Drupal\sentinel_portal_entities\SentinelSampleStorage",
  *     "view_builder" = "Drupal\Core\Entity\EntityViewBuilder",
  *     "list_builder" = "Drupal\sentinel_portal_entities\SentinelSampleListBuilder",
  *     "views_data" = "Drupal\sentinel_portal_entities\SentinelSampleViewsData",
@@ -25,7 +26,7 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
  *       "delete" = "Drupal\Core\Entity\ContentEntityDeleteForm",
  *     },
  *     "route_provider" = {
- *       "html" = "Drupal\Core\Entity\Routing\AdminHtmlRouteProvider",
+ *       "html" = "Drupal\sentinel_portal_entities\SentinelSampleHtmlRouteProvider",
  *     },
  *     "access" = "Drupal\Core\Entity\EntityAccessControlHandler",
  *   },
@@ -33,9 +34,13 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
  *   admin_permission = "administer sentinel_sample",
  *   entity_keys = {
  *     "id" = "pid",
+ *     "revision" = "vid",
  *     "label" = "pack_reference_number",
  *     "uuid" = "uuid",
  *   },
+ *   revision_table = "sentinel_sample_revision",
+ *   revision_data_table = "sentinel_sample_field_data",
+ *   translatable = FALSE,
  *   links = {
  *     "canonical" = "/portal/admin/samples/manage/{sentinel_sample}/view",
  *     "add-form" = "/portal/admin/samples/add",
@@ -46,17 +51,15 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
  *   field_ui_base_route = "entity.sentinel_sample.collection",
  * )
  */
-class SentinelSample extends ContentEntityBase implements ContentEntityInterface
-{
+class SentinelSample extends ContentEntityBase implements ContentEntityInterface {
 
-    /**
-     * {@inheritdoc}
-     */
-    public static function baseFieldDefinitions(EntityTypeInterface $entity_type)
-    {
-        $fields = parent::baseFieldDefinitions($entity_type);
+  /**
+   * {@inheritdoc}
+   */
+  public static function baseFieldDefinitions(EntityTypeInterface $entity_type) {
+    $fields = parent::baseFieldDefinitions($entity_type);
 
-        $fields['pid'] = BaseFieldDefinition::create('integer')
+    $fields['pid'] = BaseFieldDefinition::create('integer')
             ->setLabel(t('Pack ID'))
             ->setDescription(t('Primary Key: The pack entity ID.'))
             ->setReadOnly(TRUE)
@@ -1477,13 +1480,21 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
                 'title' => t('API Created By'),
             ]);
 
-        $fields['created'] = BaseFieldDefinition::create('created')
+        $fields['created'] = BaseFieldDefinition::create('datetime')
             ->setLabel(t('Created'))
-            ->setDescription(t('The time that the entity was created.'));
+            ->setDescription(t('The time that the entity was created.'))
+            ->setSetting('datetime_type', 'datetime')
+            ->setRequired(FALSE)
+            ->setDisplayConfigurable('form', TRUE)
+            ->setDisplayConfigurable('view', TRUE);
 
-        $fields['changed'] = BaseFieldDefinition::create('changed')
+        $fields['changed'] = BaseFieldDefinition::create('datetime')
             ->setLabel(t('Changed'))
-            ->setDescription(t('The time that the entity was last edited.'));
+            ->setDescription(t('The time that the entity was last edited.'))
+            ->setSetting('datetime_type', 'datetime')
+            ->setRequired(FALSE)
+            ->setDisplayConfigurable('form', TRUE)
+            ->setDisplayConfigurable('view', TRUE);
 
         return $fields;
     }

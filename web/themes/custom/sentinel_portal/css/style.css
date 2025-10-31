@@ -2,206 +2,386 @@
  * @file
  * Subtheme specific CSS.
  */
-
- /* Custom CSS for Sentinel Portal Module */
-
-.page-content {
-    padding: 2em;
-  }
-  
-  @media (min-width: 1200px) {
-    .page-content {
-      padding-right: 0;
-    }
-  }
-  
-  .page-aside {
-    background-color: #f0f0f0;
-    border-right: 1px solid #d0d0d0;
-    border-left: 1px solid #d0d0d0;
-  }
-  
-  .page-content__user-forms {
-    margin: 0 auto;
-    max-width: 35rem;
-    text-align: center;
-  }
-  
-  .page-content__user-forms form {
-    clear: both;
-  }
-  
-  .page-content__user-forms label,
-  .page-content__user-forms input,
-  .page-content__user-forms .description {
-    text-align: left;
-  }
-  
-  .page-content__user-forms .form-actions {
-    margin-top: 2em;
-  }
-  
-  @media (min-width: 768px) {
-    .page-content__user-forms .form-actions {
-      float: right;
-    }
-  }
-  
-  .page-content__user-forms .form-misc-actions {
-    margin-top: 2em;
-    text-align: left;
-  }
-  
-  @media (min-width: 768px) {
-    .page-content__user-forms .form-misc-actions {
-      float: left;
-    }
-  }
-  
-  table {
-    border: 1px solid #d0d0d0;
-    border-collapse: collapse;
-    min-width: 100%;
-    text-align: left;
-  }
-  
-  table thead th,
-  table thead td {
-    background-color: #d0d0d0;
-  }
-  
-  table tbody tr:nth-child(even) th,
-  table tbody tr:nth-child(even) td {
-    background-color: #f0f0f0;
-  }
-  
-  table th,
-  table td {
-    padding: 1em;
-  }
-  
-  .tiles {
-    display: block;
-    margin-bottom: 0;
-    margin-left: 0;
-  }
-  
-  @media (min-width: 768px) {
-    .tiles {
-      display: flex;
-      flex-direction: row;
-      justify-content: flex-start;
-      align-items: stretch;
-      flex-wrap: wrap;
-      margin-bottom: -1rem;
-      margin-left: -1rem;
-    }
-  
-    .tiles .tiles__tile {
-      flex: 1 1 50%;
-      margin: 0;
-      padding-bottom: 1rem;
-      padding-left: 1rem;
-    }
-  }
-  
-  @media (min-width: 992px) {
-    .tiles .tiles__tile {
-      flex-basis: 25%;
-    }
-  }
-  
-  .tile {
-    display: block;
-    background-color: #d0d0d0;
-    font-weight: 400;
-    overflow: hidden;
-  }
-  
-  .tile--success {
-    display: block;
-    background-color: #d4edda;
-    color: white;
-  }
-  
-  .tile--success .tile__heading {
-    background-color: #c3e6cb;
-  }
-  
-  .tile--fail {
-    display: block;
-    background-color: #f8d7da;
-    color: white;
-  }
-  
-  .tile--fail .tile__heading {
-    background-color: #f5c6cb;
-  }
-  
-  .tile--pending {
-    display: block;
-    background-color: #fff3cd;
-    color: white;
-  }
-  
-  .tile--pending .tile__heading {
-    background-color: #ffeaa7;
-  }
-  
-  .tile__heading,
-  .tile__content {
-    margin: 0 !important;
-    padding: 1em;
-  }
-  
-  .tile__heading {
-    box-shadow: 0 0 0.5em black;
-  }
-  
-  .tile__stat {
-    font-size: 2em;
-    font-weight: 700;
-  }
-  
-  .lozenge--passed {
-    display: inline-block;
-    padding: 0.4em 0.6em;
-    min-width: 7em;
-    border-radius: 100em;
-    color: white;
-    font-weight: 700;
-    text-align: center;
-    background-color: #28a745;
-  }
-  
-  .lozenge--failed {
-    display: inline-block;
-    padding: 0.4em 0.6em;
-    min-width: 7em;
-    border-radius: 100em;
-    color: white;
-    font-weight: 700;
-    text-align: center;
-    background-color: #dc3545;
-  }
-  
-  .lozenge--pending {
-    display: inline-block;
-    padding: 0.4em 0.6em;
-    min-width: 7em;
-    border-radius: 100em;
-    color: white;
-    font-weight: 700;
-    text-align: center;
-    background-color: #ffc107;
-  }
-  
-  .responsive-overflow {
-    display: block;
-    overflow-x: auto;
-    width: 100%;
-  }
-  
-  #edit-field-user-cohorts-und {
-    height: 400px;
-  }
+ @import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap');
+ /*@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css');*/
+  /* Custom CSS for Sentinel Portal Module */
+ html {
+     font-size: 100%;
+     font-family: "Open Sans", "Helvetica Neue", Helvetica, sans-serif;
+     -webkit-text-size-adjust: 100%;
+     -ms-text-size-adjust: 100%;
+     -moz-osx-font-smoothing: grayscale;
+     -webkit-font-smoothing: antialiased;
+     text-rendering: optimizeLegibility;
+     line-height: 1.4;
+ }
+ body {
+   font-size: 81.25%;
+   line-height: 1.45;
+ }
+ h1 {
+     font-size: 2em;
+ }
+ 
+ h1, h2, h3, h4, h5, h6 {
+     font-family: "Open Sans", "Helvetica Neue", Helvetica, sans-serif;
+     font-weight: 300;
+     color: #111111;
+     line-height: 1.4;
+ }
+ #header.header {
+     border-bottom: 1px solid #D8D8D8;
+     font-size: 1.3em;
+     background-color: #F2F2F2;
+ }
+ #header.header a.navbar-brand {
+     font-size: 1em;
+     margin: 0 auto;
+     padding: 0.8em 1em;
+     color: #333333;
+     text-align: center;
+     text-decoration: none;
+ }
+ #header.header ul.nav.navbar-nav li.nav-item {
+     border: 1px solid #D8D8D8;
+     border-top-width: 0;
+     border-bottom-width: 0;
+     -webkit-flex: 1;
+     -ms-flex: 1;
+     flex: 1;
+     text-align: center;
+     width: 63px;
+     height: 64px;
+     line-height: 64px;
+     min-width: 63px;
+ }
+ #header.header ul.nav.navbar-nav li.nav-item:not(:last-child) {
+     border-right: 0;    
+ }
+ #header.header ul.nav.navbar-nav li.nav-item a.nav-link {
+     position: relative;
+     font-family: "Font Awesome 6 Free";
+     font-weight: 900;
+     -moz-osx-font-smoothing: grayscale;
+     -webkit-font-smoothing: antialiased;
+     display: var(--fa-display, inline-block);
+     font-style: normal;
+     font-variant: normal;
+     text-rendering: auto;
+     font-size: 0;
+     color: #333333;
+     padding: 1.05em;
+     text-decoration: none;
+     width: 62px;
+     height: 64px;
+ }
+ #header.header ul.nav.navbar-nav li.nav-item a.nav-link::before {
+     color: #333;
+     display: inline-block;
+     font-size: 1.3rem;
+ }
+ #header.header ul.nav.navbar-nav li.nav-item a.nav-link--portal-notices::before {
+     content: "\f0f3";    
+ }
+ #header.header ul.nav.navbar-nav li.nav-item a.nav-link--user::before {
+     content: "\f007";
+ }
+ #header.header ul.nav.navbar-nav li.nav-item a.nav-link[class*="nav-link--user-logout"]::before {
+     content: "\f08b";
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link::before {
+     font-family: "Font Awesome 6 Free";
+     font-weight: 900;
+     -moz-osx-font-smoothing: grayscale;
+     -webkit-font-smoothing: antialiased;
+     display: var(--fa-display, inline-block);
+     font-style: normal;
+     font-variant: normal;
+     line-height: 1;
+     text-rendering: auto;
+     margin-right: 0.5rem;
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.your-portal::before {
+  content: "\f015";
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.submitted-packs::before {
+  content: "\f492";
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.submit-a-pack::before,
+ div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.bulk-upload::before {
+  content: "\f0ee";
+ }
+ #header.header a.navbar-brand img {
+     margin-right: 0.5rem;
+ }
+ #main-wrapper .container {
+     width: 100%;
+     max-width: 75rem;
+     margin-right: auto;
+     margin-left: auto;
+ }
+   div#sidebar_first.sidebar {
+     position: relative;
+     overflow-x: hidden;
+     overflow-y: auto;
+     -webkit-flex: 1 1 auto;
+     -ms-flex: 1 1 auto;
+     flex: 1 1 auto;
+     max-width: 18rem;
+     background-color: #F8F8F8;
+     border-right: 1px solid #D8D8D8;
+     border-left: 1px solid #D8D8D8;
+     padding: 0;
+     font-size: 1.2em;
+ }
+ div#sidebar_first.sidebar nav {
+     padding: 0;
+     margin: 0;
+     border: 0;
+     background: none;
+ }
+ div#sidebar_first.sidebar nav ul.nav {
+     margin: 0;
+     display: block;
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item {
+     border: 1px solid #D8D8D8;
+     border-right-width: 0;
+     border-left-width: 0;
+     position: relative;
+     border-top: 0;
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link {
+     color: #333333;
+     display: block;
+     padding: 1.05em;
+     text-decoration: none;
+     font-weight: 400;
+     font-size: 1em;
+ }
+ .layout-main-wrapper main#content {
+     position: relative;
+     overflow-x: hidden;
+     overflow-y: auto;
+     -webkit-flex: 1 1 60%;
+     -ms-flex: 1 1 60%;
+     flex: 1 1 60%;
+     padding: 2em;
+     padding-right: 0;
+ }
+ div#block-sentinel-portal-sentinelportaltestanalytics {
+     margin-top: 1.5em;
+ } 
+ div#sidebar_first.sidebar nav ul.nav li.nav-item ul.menu {
+     padding: 0;
+     list-style: none;
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item ul.menu a.nav-link {
+     padding-left: 2em;
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded {
+     background-color: #F2F2F2;
+ }
+ div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded >a.nav-link {
+     background-color: #D8D8D8;
+ }
+ .portal-welcome {
+     padding-left: 1rem;
+     margin-top: 1.5em;
+ }
+ .page-content__user-forms {
+     margin: 0 auto;
+     max-width: 35rem;
+     text-align: center;
+   }
+   
+   .page-content__user-forms form {
+     clear: both;
+   }
+   
+   .page-content__user-forms label,
+   .page-content__user-forms input,
+   .page-content__user-forms .description {
+     text-align: left;
+   }
+   
+   .page-content__user-forms .form-actions {
+     margin-top: 2em;
+   }
+   @media (min-width: 30em) {
+     body {
+         font-size: 93.75%;
+         line-height: 1.5;
+     }
+ }
+   @media (min-width: 768px) {
+     .page-content__user-forms .form-actions {
+       float: right;
+     }
+   }
+   
+   .page-content__user-forms .form-misc-actions {
+     margin-top: 2em;
+     text-align: left;
+   }
+   
+   @media (min-width: 768px) {
+     .page-content__user-forms .form-misc-actions {
+       float: left;
+     }
+   }
+   
+   table {
+     border: 1px solid #d0d0d0;
+     border-collapse: collapse;
+     min-width: 100%;
+     text-align: left;
+   }
+   
+   table thead th,
+   table thead td {
+     background-color: #d0d0d0;
+   }
+   
+   table tbody tr:nth-child(even) th,
+   table tbody tr:nth-child(even) td {
+     background-color: #f0f0f0;
+   }
+   
+   table th,
+   table td {
+     padding: 1em;
+   }
+   
+   .tiles {
+     display: block;
+     margin-bottom: 0;
+     margin-left: 0;
+   }
+   
+   @media (min-width: 768px) {
+     .tiles {
+       display: flex;
+       flex-direction: row;
+       justify-content: flex-start;
+       align-items: stretch;
+       flex-wrap: wrap;
+       margin-bottom: -1rem;
+       margin-left: -1rem;
+     }
+   
+     .tiles .tiles__tile {
+       flex: 1 1 50%;
+       margin: 0;
+       padding-bottom: 1rem;
+       padding-left: 1rem;
+     }
+   }
+   
+   @media (min-width: 992px) {
+     .tiles .tiles__tile {
+       flex-basis: 25%;
+     }
+   }
+   
+   .tile {
+     display: block;
+     background-color: #D8D8D8;
+     font-weight: 400;
+     overflow: hidden;
+   }
+   
+   .tile--success {
+     display: block;
+     background-color: #71C167;
+     color: white;
+     font-weight: 400;
+     overflow: hidden;
+   }
+   
+   .tile--success .tile__heading {
+     background-color: #3FB648;
+   }
+   
+   .tile--fail {
+     display: block;
+     background-color: #F15A3F;
+     color: white;
+     font-weight: 400;
+     overflow: hidden;
+   }
+   
+   .tile--fail .tile__heading {
+     background-color: #ED2322;
+   }
+   
+   .tile--pending {
+     display: block;
+     background-color: #2282C5;
+     color: white;
+     font-weight: 400;
+     overflow: hidden;
+   }
+   
+   .tile--pending .tile__heading {
+     background-color: #006EB9;
+   }
+   
+   .tile__heading,
+   .tile__content {
+     margin: 0 !important;
+     padding: 1em;
+   }
+   
+   .tile__heading {
+     box-shadow: 0 0 0.5em black;
+   }
+   
+   .tile__stat {
+     font-size: 2em;
+     font-weight: 700;
+   }
+   
+   .lozenge--passed {
+     display: inline-block;
+     padding: 0.4em 0.6em;
+     min-width: 7em;
+     border-radius: 100em;
+     color: white;
+     font-weight: 700;
+     text-align: center;
+     background-color: #28a745;
+   }
+   
+   .lozenge--failed {
+     display: inline-block;
+     padding: 0.4em 0.6em;
+     min-width: 7em;
+     border-radius: 100em;
+     color: white;
+     font-weight: 700;
+     text-align: center;
+     background-color: #dc3545;
+   }
+   
+   .lozenge--pending {
+     display: inline-block;
+     padding: 0.4em 0.6em;
+     min-width: 7em;
+     border-radius: 100em;
+     color: white;
+     font-weight: 700;
+     text-align: center;
+     background-color: #ffc107;
+   }
+   
+   .responsive-overflow {
+     display: block;
+     overflow-x: auto;
+     width: 100%;
+   }
+   
+   #edit-field-user-cohorts-und {
+     height: 400px;
+   }
+ 
