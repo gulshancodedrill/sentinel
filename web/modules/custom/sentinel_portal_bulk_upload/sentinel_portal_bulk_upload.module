@@ -1,5 +1,7 @@
 <?php
 
+use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
+
 /**
  * @file
  * The bulk upload module.
@@ -91,14 +93,9 @@ function sentinel_portal_bulk_upload_validate_line(&$line, &$errors) {
   }
 
   if (isset($line['date_sent'])) {
-    if (function_exists('sentinel_portal_validate_date')) {
-      $date_sent = sentinel_portal_validate_date($line['date_sent']);
-    }
-    else {
-      $date_sent = FALSE;
-    }
+    $date_sent = SentinelSampleValidation::validateDate($line['date_sent']);
 
-    if ($date_sent == FALSE) {
+    if ($date_sent === FALSE) {
       $errors['date_sent'] = [
         'title' => t('Date Sent'),
         'message' => t('Please enter the date sent as YYYY-MM-DD.')
@@ -118,14 +115,9 @@ function sentinel_portal_bulk_upload_validate_line(&$line, &$errors) {
   }
 
   if (isset($line['date_installed'])) {
-    if (function_exists('sentinel_portal_validate_date')) {
-      $date_installed = sentinel_portal_validate_date($line['date_installed']);
-    }
-    else {
-      $date_installed = FALSE;
-    }
+    $date_installed = SentinelSampleValidation::validateDate($line['date_installed']);
 
-    if ($date_installed == FALSE) {
+    if ($date_installed === FALSE) {
       $errors['date_installed'] = [
         'title' => t('Date Installed'),
         'message' => t('Please enter the date installed as YYYY-MM-DD.')
