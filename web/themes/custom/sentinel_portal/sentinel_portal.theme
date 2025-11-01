@@ -32,3 +32,36 @@ function sentinel_portal_form_system_theme_settings_alter(&$form, FormStateInter
     'bg-transparent' => t('Transparent'),
   ];
 }
+
+/**
+ * Implements hook_form_FORM_ID_alter() for the user login form.
+ */
+function sentinel_portal_form_user_login_form_alter(array &$form, FormStateInterface $form_state) {
+  $form['name']['#title'] = t('Username or e-mail address');
+  $form['name']['#description'] = t('Please enter your username or email address.');
+  $form['name']['#description_display'] = 'after';
+
+  if (isset($form['pass'])) {
+    $form['pass']['#description'] = t('Please enter your password.');
+    $form['pass']['#description_display'] = 'after';
+  }
+  // Allow login by e-mail by translating the identifier before core validates.
+  array_unshift($form['#validate'], 'sentinel_portal_login_identifier_validate');
+}
+
+/**
+ * Pre-validates the login identifier to support e-mail addresses.
+ */
+function sentinel_portal_login_identifier_validate(array &$form, FormStateInterface $form_state) {
+  $identifier = trim((string) $form_state->getValue('name'));
+  if ($identifier === '') {
+    return;
+  }
+
+  if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+    $accounts = \Drupal::entityTypeManager()->getStorage('user')->loadByProperties(['mail' => $identifier]);
+    if ($account = reset($accounts)) {
+      $form_state->setValue('name', $account->getAccountName());
+    }
+  }
+}

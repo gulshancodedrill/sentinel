@@ -2,11 +2,13 @@
 
 namespace Drupal\sentinel_portal_sample\Form;
 
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Datetime\DrupalDateTime;
+use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
+use Drupal\user\Entity\User;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -20,6 +22,20 @@ class SentinelSampleSubmissionForm extends FormBase {
    *354 @var \Drupal\Core\Entity\EntityTypeManagerInterface
    */
   protected $entityTypeManager;
+
+  /**
+   * Cached sentinel client for the current user.
+   *
+   * @var \Drupal\sentinel_portal_entities\Entity\SentinelClient|null
+   */
+  protected $currentClient;
+
+  /**
+   * Tracks whether the client lookup has been performed.
+   *
+   * @var bool
+   */
+  protected $clientLoaded = FALSE;
 
   /**
    * Constructs a new SentinelSampleSubmissionForm.
@@ -889,6 +905,11 @@ class SentinelSampleSubmissionForm extends FormBase {
    * Validation matches D7 sentinel_portal_sample_submission_form_validate()
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
+    $client = $this->getCurrentClient();
+    if (!$client instanceof SentinelClient || !$client->getUcr()) {
+      $form_state->setErrorByName('', $this->t('Your client number was not found, please contact the site administrator.'));
+    }
+
     // Get the pack reference number
     $pack_reference_number = trim($form_state->getValue('pack_reference_number'));
     
@@ -1057,6 +1078,10 @@ class SentinelSampleSubmissionForm extends FormBase {
     
     // Call validation service directly (matches D7 SentinelSampleEntityValidation::validateSample)
     try {
+      if ($client instanceof SentinelClient && $client->getUcr()) {
+        $validation_data['ucr'] = $client->getUcr();
+      }
+
       $invalid_fields = SentinelSampleValidation::validateSample($validation_data);
       
       // Remove company_name from validation errors (matches D7 behavior)
@@ -1126,18 +1151,11 @@ class SentinelSampleSubmissionForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    // Get client by current user (matches D7 behavior, custom table)
-    $user = \Drupal::currentUser();
-    $client = \Drupal::database()
-      ->select('sentinel_client', 'sc')
-      ->fields('sc')
-      ->condition('uid', $user->id())
-      ->execute()
-      ->fetchAssoc();
-    // if (!$client) {
-    //   $this->messenger()->addError($this->t('Unable to create sample: no client found for current user.'));
-    //   return;
-    // }
+    $client = $this->getCurrentClient();
+    if (!$client instanceof SentinelClient || !$client->getUcr()) {
+      $this->messenger()->addError($this->t('Unable to create sample: your client number was not found. Please contact the site administrator.'));
+      return;
+    }
     $values = $form_state->getValues();
     $date_fields = ['date_sent', 'date_installed'];
     $normalized_dates = [];
@@ -1241,7 +1259,7 @@ class SentinelSampleSubmissionForm extends FormBase {
     try {
       $storage = $this->entityTypeManager->getStorage('sentinel_sample');
       // Get UCR from client record
-      $ucr_value = isset($client['ucr']) ? $client['ucr'] : NULL;
+      $ucr_value = $client->getUcr();
       $sample = $storage->create([]);
       // Set UCR first
       if ($ucr_value && $sample->hasField('ucr')) {
@@ -1370,6 +1388,52 @@ class SentinelSampleSubmissionForm extends FormBase {
       ]);
       $this->messenger()->addError($this->t('An error occurred while saving the sample. Please try again or contact support.'));
     }
+  }
+
+  /**
+   * Loads the sentinel client entity for the current user.
+   *
+   * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|null
+   *   The client entity or NULL if none is associated with the user.
+   */
+  protected function getCurrentClient() {
+    if (!$this->clientLoaded) {
+      $this->clientLoaded = TRUE;
+      $this->currentClient = NULL;
+
+      $current_user = \Drupal::currentUser();
+      if ($current_user->isAuthenticated()) {
+        $storage = $this->entityTypeManager->getStorage('sentinel_client');
+
+        // First, attempt to load by user ID.
+        $ids = $storage->getQuery()
+          ->condition('uid', $current_user->id())
+          ->range(0, 1)
+          ->accessCheck(FALSE)
+          ->execute();
+
+        if (!empty($ids)) {
+          $this->currentClient = $storage->load(reset($ids));
+        }
+
+        // Fallback to matching by email address if no client matched on UID.
+        if (!$this->currentClient) {
+          $account = User::load($current_user->id());
+          if ($account && $account->getEmail()) {
+            $ids = $storage->getQuery()
+              ->condition('email', $account->getEmail())
+              ->range(0, 1)
+              ->accessCheck(FALSE)
+              ->execute();
+            if (!empty($ids)) {
+              $this->currentClient = $storage->load(reset($ids));
+            }
+          }
+        }
+      }
+    }
+
+    return $this->currentClient;
   }
 
   /**

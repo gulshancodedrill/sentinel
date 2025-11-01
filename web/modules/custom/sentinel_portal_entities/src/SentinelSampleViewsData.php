@@ -15,7 +15,10 @@ class SentinelSampleViewsData extends EntityViewsData {
   public function getViewsData() {
     $data = parent::getViewsData();
 
-    // Additional information for Views integration, if needed.
+    // Provide the custom Pass/Fail/Pending filter for the pass_fail field.
+    if (isset($data['sentinel_sample']['pass_fail']['filter'])) {
+      $data['sentinel_sample']['pass_fail']['filter']['id'] = 'sentinel_sample_result';
+    }
 
     return $data;
   }

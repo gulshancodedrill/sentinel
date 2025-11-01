@@ -1,0 +1,48 @@
+<?php
+
+use Drupal\views\Plugin\views\query\QueryPluginBase;
+use Drupal\views\Plugin\views\query\Sql;
+use Drupal\views\ViewExecutable;
+
+/**
+ * @file
+ * Hooks and callbacks for the Sentinel Portal Entities module.
+ */
+
+/**
+ * Implements hook_views_query_alter().
+ */
+function sentinel_portal_entities_views_query_alter(ViewExecutable $view, QueryPluginBase $query) {
+  if ($view->id() !== 'sentinel_sample' || !$query instanceof Sql) {
+    return;
+  }
+
+  // Ensure the Sentinel client table is joined for filtering.
+  $join_definition = [
+    'type' => 'LEFT',
+    'table' => 'sentinel_client',
+    'field' => 'ucr',
+    'left_table' => 'sentinel_sample',
+    'left_field' => 'ucr',
+  ];
+
+  /** @var \Drupal\views\Plugin\views\join\JoinPluginBase $join */
+  $join = \Drupal::service('plugin.manager.views.join')->createInstance('standard', $join_definition);
+  $client_alias = $query->ensureTable('sentinel_client', NULL, $join);
+
+  if (!$client_alias) {
+    return;
+  }
+
+  $current_user = \Drupal::currentUser();
+
+  // Restrict results to the logged-in user's client unless they have admin access.
+  if ($current_user->isAuthenticated()) {
+    $uid = (int) $current_user->id();
+    if ($uid > 0) {
+      $query->addWhere(0, "$client_alias.uid", $uid, '=');
+    }
+  }
+}
+
+

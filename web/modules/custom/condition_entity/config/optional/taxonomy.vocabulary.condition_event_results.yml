@@ -1,12 +1,9 @@
 langcode: en
 status: true
-dependencies:
-  module:
-    - taxonomy
-id: condition_event_results
+dependencies: {  }
 name: 'Condition event results'
+vid: condition_event_results
 description: 'Sentinel Certificate pass/fail values'
-hierarchy: 0
 weight: 0
-
+new_revision: false
 

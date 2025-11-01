@@ -1,0 +1,5 @@
+view pdf logic listing:
+  title: 'View PDF logic listing'
+  description: 'Access the PDF logic listing at /portal/pdf-logic.'
+  restrict access: true
+
