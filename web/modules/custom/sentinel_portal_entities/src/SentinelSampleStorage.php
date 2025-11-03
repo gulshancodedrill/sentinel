@@ -13,3 +13,4 @@ class SentinelSampleStorage extends SqlContentEntityStorage {
 
 }
 
+

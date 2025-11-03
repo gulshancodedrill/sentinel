@@ -6,7 +6,7 @@ sentinel_portal_queue.admin:
   requirements:
     _permission: 'sentinel portal administration'
   options:
-    _admin_route: TRUE
+    _admin_route: FALSE
 
 sentinel_portal_queue.view_item:
   path: '/portal/admin/queue/view/{item_id}'
@@ -16,7 +16,7 @@ sentinel_portal_queue.view_item:
   requirements:
     _permission: 'sentinel portal administration'
   options:
-    _admin_route: TRUE
+    _admin_route: FALSE
 
 sentinel_portal_queue.release_item:
   path: '/portal/admin/queue/release/{item_id}'
@@ -26,7 +26,7 @@ sentinel_portal_queue.release_item:
   requirements:
     _permission: 'sentinel portal administration'
   options:
-    _admin_route: TRUE
+    _admin_route: FALSE
 
 sentinel_portal_queue.delete_item:
   path: '/portal/admin/queue/delete/{item_id}'
@@ -36,5 +36,5 @@ sentinel_portal_queue.delete_item:
   requirements:
     _permission: 'sentinel portal administration'
   options:
-    _admin_route: TRUE
+    _admin_route: FALSE
 

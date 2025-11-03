@@ -5,11 +5,13 @@ namespace Drupal\sentinel_portal_bulk_upload\Form;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
-use Drupal\file\Entity\File;
 use Drupal\Core\Messenger\MessengerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\Core\Link;
+use Drupal\Core\Render\Markup;
+use Drupal\Core\File\FileSystemInterface;
 
 /**
  * Form for bulk uploading samples via CSV.
@@ -76,15 +78,19 @@ class BulkUploadForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $module_path = $this->moduleHandler->getModule('sentinel_portal_bulk_upload')->getPath();
-    
-    $template_url = '/' . $module_path . '/includes/template.csv';
-    $template_link = '<a href="' . $template_url . '" download>' . $this->t('Template') . '</a>';
-    
-    $guide_url = '/' . $module_path . '/includes/bulk_uploader_guide.pdf';
-    $guide_link = '<a href="' . $guide_url . '" download>' . $this->t('Download guide') . '</a>';
+
+    $template_link = Link::fromTextAndUrl(
+      $this->t('Template'),
+      Url::fromUri('base:/' . $module_path . '/includes/template.csv', ['attributes' => ['download' => TRUE]])
+    )->toString();
+
+    $guide_link = Link::fromTextAndUrl(
+      $this->t('Download guide'),
+      Url::fromUri('base:/' . $module_path . '/includes/bulk_uploader_guide.pdf', ['attributes' => ['download' => TRUE]])
+    )->toString();
 
     $form['wrapper_start'] = [
-      '#markup' => '<div class="landing-well clearfix"><h2><i class="fa fa-upload"></i> &nbsp; ' . $this->t('Submit multiple packs at once') . '</h2><p>' . $this->t('Using our !template_link, upload the information for multiple SystemCheck packs at once. Guidance on correct use of the template can be found below.', ['!template_link' => $template_link]) . '</p>',
+      '#markup' => '<div class="landing-well clearfix"><h2><i class="fa fa-upload"></i> &nbsp; ' . $this->t('Submit multiple packs at once') . '</h2><p>' . $this->t('Using our @template_link, upload the information for multiple SystemCheck packs at once. Guidance on correct use of the template can be found below.', ['@template_link' => Markup::create($template_link)]) . '</p>',
     ];
 
     $form['csv_file'] = [
@@ -112,16 +118,19 @@ class BulkUploadForm extends FormBase {
 
     $help_header = '<h3>' . $this->t('Advice on the use of this template') . '</h3><br>';
     
-    // Try to get the notices route if it exists
+    // Try to get the notices route if it exists.
     try {
-      $notices_url = Url::fromRoute('sentinel_portal_notice.list')->toString();
-      $notices_link = '<a href="' . $notices_url . '">' . $this->t('Notices') . '</a>';
+      $notices_link = Link::fromTextAndUrl(
+        $this->t('Notices'),
+        Url::fromRoute('entity.sentinel_notice.collection')
+      )->toString();
     }
     catch (\Exception $e) {
       $notices_link = $this->t('Notices');
     }
     
-    $help_text = '<p>' . $this->t('Any issues found during the import process will be available to view in the') . ' ' . $notices_link . ' ' . $this->t('area.') . '</p>';
+    $notices_markup = $notices_link instanceof Markup ? $notices_link : Markup::create($notices_link);
+    $help_text = '<p>' . $this->t('Any issues found during the import process will be available to view in the @notices area.', ['@notices' => $notices_markup]) . '</p>';
 
     $form['help_text'] = [
       '#markup' => $help_header . $guide_link . '<br>' . $template_link . $help_text,
@@ -134,10 +143,12 @@ class BulkUploadForm extends FormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $validators = ['file_validate_extensions' => ['csv']];
-    
-    $file = file_save_upload('csv_file', $validators, FALSE, 0);
-    
+    $validators = [
+      'FileExtension' => ['csv'],
+    ];
+
+    $file = file_save_upload('csv_file', $validators, 'temporary://', FileSystemInterface::EXISTS_RENAME);
+
     if ($file) {
       $form_state->setValue('uploaded_file', $file);
     }
@@ -173,14 +184,19 @@ class BulkUploadForm extends FormBase {
     // Prepare the directory
     \Drupal::service('file_system')->prepareDirectory($destination, \Drupal\Core\File\FileSystemInterface::CREATE_DIRECTORY | \Drupal\Core\File\FileSystemInterface::MODIFY_PERMISSIONS);
 
-    // Move the file
-    $file = file_move($file, $destination . '/' . $file->getFilename(), \Drupal\Core\File\FileSystemInterface::EXISTS_REPLACE);
+    // Move the file using the file repository service.
+    $destination_uri = $destination . '/' . $file->getFilename();
+    $file_repository = \Drupal::service('file.repository');
+    $file = $file_repository->move($file, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
 
     if (!$file) {
       // The file wasn't moved into the correct destination. Kill the process.
       $this->messenger->addError($this->t('The file could not be uploaded. Please contact the site administrator if the problem persists.'));
       return;
     }
+
+    $file->setTemporary(FALSE);
+    $file->save();
 
     // Create a notice to tell them that their file is being processed.
     $message = $this->t('The file @filename has been uploaded and is being processed.', ['@filename' => $file->getFilename()]);
