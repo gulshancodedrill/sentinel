@@ -1,5 +1,9 @@
 <?php
 
+use Drupal\Core\Database\Connection;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\user\UserInterface;
 use Drupal\views\Plugin\views\query\QueryPluginBase;
 use Drupal\views\Plugin\views\query\Sql;
 use Drupal\views\ViewExecutable;
@@ -37,7 +41,7 @@ function sentinel_portal_entities_views_query_alter(ViewExecutable $view, QueryP
   $current_user = \Drupal::currentUser();
 
   // Restrict results to the logged-in user's client unless they have admin access.
-  if ($current_user->isAuthenticated()) {
+  if ($current_user->isAuthenticated() && !$current_user->hasPermission('administer sentinel_sample')) {
     $uid = (int) $current_user->id();
     if ($uid > 0) {
       $query->addWhere(0, "$client_alias.uid", $uid, '=');
@@ -45,4 +49,272 @@ function sentinel_portal_entities_views_query_alter(ViewExecutable $view, QueryP
   }
 }
 
+/**
+ * Helper to retrieve the entity type manager service.
+ *
+ * @return \Drupal\Core\Entity\EntityTypeManagerInterface
+ *   The entity type manager service.
+ */
+function _sentinel_portal_entities_entity_type_manager(): EntityTypeManagerInterface {
+  return \Drupal::entityTypeManager();
+}
+
+/**
+ * Helper to retrieve the database connection service.
+ *
+ * @return \Drupal\Core\Database\Connection
+ *   The database connection service.
+ */
+function _sentinel_portal_entities_database(): Connection {
+  return \Drupal::database();
+}
+
+/**
+ * Create a notice for a user.
+ *
+ * @param \Drupal\Core\Session\AccountInterface|\Drupal\user\UserInterface $user
+ *   The user that should receive the notice.
+ * @param string $title
+ *   Notice title.
+ * @param string $message
+ *   Notice message.
+ *
+ * @return \Drupal\sentinel_portal_entities\Entity\SentinelNotice|false
+ *   The created notice entity or FALSE on failure.
+ */
+function _sentinel_portal_entities_create_notice($user, string $title, string $message) {
+  if ($user instanceof AccountInterface && !($user instanceof UserInterface)) {
+    $user = \Drupal::entityTypeManager()->getStorage('user')->load($user->id());
+  }
+
+  if (!$user instanceof UserInterface) {
+    return FALSE;
+  }
+
+  $storage = _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_notice');
+
+  $values = [
+    'uid' => $user->id(),
+    'title' => $title,
+    'notice' => $message,
+    'notice_read' => FALSE,
+    'created' => \Drupal::time()->getRequestTime(),
+  ];
+
+  /** @var \Drupal\sentinel_portal_entities\Entity\SentinelNotice $entity */
+  $entity = $storage->create($values);
+  $entity->save();
+
+  return $entity;
+}
+
+/**
+ * Load a sentinel client entity by Drupal user.
+ *
+ * @param \Drupal\Core\Session\AccountInterface|\Drupal\user\UserInterface|int|null $account
+ *   The user, user ID, or NULL for current user.
+ *
+ * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|false
+ *   Sentinel client entity or FALSE if none found.
+ */
+function sentinel_portal_entities_get_client_by_user($account = NULL) {
+  if ($account === NULL) {
+    $account = \Drupal::currentUser();
+  }
+
+  if (is_numeric($account)) {
+    $uid = (int) $account;
+    $user = \Drupal::entityTypeManager()->getStorage('user')->load($uid);
+  }
+  elseif ($account instanceof AccountInterface && !($account instanceof UserInterface)) {
+    $uid = (int) $account->id();
+    $user = \Drupal::entityTypeManager()->getStorage('user')->load($uid);
+  }
+  elseif ($account instanceof UserInterface) {
+    $uid = (int) $account->id();
+    $user = $account;
+  }
+  else {
+    return FALSE;
+  }
+
+  if (!$uid || !$user instanceof UserInterface) {
+    return FALSE;
+  }
+
+  static $cache = [];
+  if (isset($cache[$uid])) {
+    return $cache[$uid];
+  }
+
+  $storage = _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_client');
+
+  $ids = \Drupal::entityQuery('sentinel_client')
+    ->condition('uid', $uid)
+    ->range(0, 1)
+    ->accessCheck(FALSE)
+    ->execute();
+
+  if (!$ids && $user->getEmail()) {
+    $ids = \Drupal::entityQuery('sentinel_client')
+      ->condition('email', $user->getEmail(), '=')
+      ->range(0, 1)
+      ->accessCheck(FALSE)
+      ->execute();
+  }
+
+  if (!$ids) {
+    $cache[$uid] = FALSE;
+    return FALSE;
+  }
+
+  $client = $storage->load(reset($ids));
+  $cache[$uid] = $client ?: FALSE;
+
+  return $cache[$uid];
+}
+
+/**
+ * Load a sentinel client by UCR number.
+ *
+ * @param int $ucr
+ *   The UCR identifier.
+ *
+ * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|false
+ *   Sentinel client entity or FALSE if not found.
+ */
+function sentinel_portal_entities_get_client_by_ucr($ucr) {
+  if (empty($ucr)) {
+    return FALSE;
+  }
+
+  $ids = \Drupal::entityQuery('sentinel_client')
+    ->condition('ucr', $ucr)
+    ->range(0, 1)
+    ->accessCheck(FALSE)
+    ->execute();
+
+  if (!$ids) {
+    return FALSE;
+  }
+
+  return _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_client')->load(reset($ids));
+}
+
+/**
+ * Retrieve sentinel sample field metadata keyed by machine name.
+ *
+ * @return array
+ *   Associative array of field definitions matching the legacy schema data.
+ */
+function sentinel_portal_entities_get_sample_fields(): array {
+  $fields = &drupal_static(__FUNCTION__);
+  if (!isset($fields)) {
+    $fields = [];
+    $definitions = \Drupal::service('entity_field.manager')->getFieldDefinitions('sentinel_sample', 'sentinel_sample');
+    foreach ($definitions as $field_name => $definition) {
+      $fields[$field_name] = [
+        'type' => $definition->getType(),
+        'settings' => $definition->getSettings(),
+        'portal_config' => $definition->getSetting('portal_config') ?? [],
+      ];
+    }
+  }
+  return $fields;
+}
+
+/**
+ * Validate a pack reference number.
+ */
+function valid_pack_reference_number($packref): bool {
+  $pattern = '/^([0-9]{3})[:\s-]?([0-9]{3,10}[a-zA-Z]?)$/';
+  $packref = trim((string) $packref);
+  if (!preg_match($pattern, $packref)) {
+    return FALSE;
+  }
+
+  return strpos($packref, ':') === 3;
+}
+
+/**
+ * Normalise a pack reference number to NNN:XXXX format.
+ */
+function sentinel_portal_entities_format_packref($packref) {
+  $pattern = '/^([0-9]{3})[:\s-]?([0-9]{3,10}[a-zA-Z]?)$/';
+  $matches = [];
+  preg_match($pattern, trim((string) $packref), $matches);
+  if (!empty($matches[1]) && !empty($matches[2])) {
+    return $matches[1] . ':' . $matches[2];
+  }
+  return FALSE;
+}
+
+/**
+ * Load a sentinel sample by pack reference number.
+ */
+function sentinel_portal_entities_get_sample_by_reference_number($pack_reference_number, $ucr = FALSE) {
+  if (empty($pack_reference_number)) {
+    return FALSE;
+  }
+
+  $query = \Drupal::entityQuery('sentinel_sample')
+    ->condition('pack_reference_number', $pack_reference_number)
+    ->range(0, 1)
+    ->accessCheck(FALSE);
+
+  if ($ucr !== FALSE) {
+    $query->condition('ucr', $ucr);
+  }
+
+  $ids = $query->execute();
+
+  if (!$ids) {
+    return FALSE;
+  }
+
+  return _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_sample')->load(reset($ids));
+}
+
+/**
+ * Create a sentinel sample entity from raw data.
+ */
+function sentinel_portal_entities_create_sample(array $data) {
+  $storage = _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_sample');
+  $filtered = array_filter($data, static function ($value) {
+    return !($value === '' || $value === NULL);
+  });
+
+  /** @var \Drupal\sentinel_portal_entities\Entity\SentinelSample $entity */
+  $entity = $storage->create($filtered);
+  $entity->save();
+
+  return $entity;
+}
+
+/**
+ * Update an existing sentinel sample entity with raw data.
+ */
+function sentinel_portal_entities_update_sample($sample, array $data) {
+  if (is_numeric($sample)) {
+    $sample = _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_sample')->load($sample);
+  }
+
+  if (!$sample) {
+    return FALSE;
+  }
+
+  foreach ($data as $field => $value) {
+    if ($sample->hasField($field)) {
+      if ($value === NULL || $value === '') {
+        $sample->set($field, NULL);
+      }
+      else {
+        $sample->set($field, $value);
+      }
+    }
+  }
+
+  $sample->save();
+  return $sample;
+}
 

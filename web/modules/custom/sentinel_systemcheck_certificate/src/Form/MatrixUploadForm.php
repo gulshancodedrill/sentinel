@@ -46,7 +46,11 @@ class MatrixUploadForm extends FormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $file = file_save_upload('file-upload', ['file_validate_extensions' => ['csv']], FALSE, FileSystemInterface::EXISTS_REPLACE);
+    $validators = [
+      'FileExtension' => ['csv'],
+    ];
+
+    $file = file_save_upload('file-upload', $validators, FALSE, FileSystemInterface::EXISTS_REPLACE);
 
     if ($file) {
       $form_state->setValue('file-upload', $file);

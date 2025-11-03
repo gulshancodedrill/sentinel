@@ -4,6 +4,8 @@ namespace Drupal\sentinel_portal_queue\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Link;
+use Drupal\Core\Url;
 
 /**
  * Form for queue administration.
@@ -177,6 +179,7 @@ class QueueAdminForm extends FormBase {
 
     $rows = [];
     while ($item = $result->fetchAssoc()) {
+      $view_link = Link::fromTextAndUrl($this->t('View'), Url::fromRoute('sentinel_portal_queue.view_item', ['item_id' => $item['item_id']]))->toString();
       $rows[] = [
         $item['item_id'],
         $item['name'],
@@ -185,7 +188,7 @@ class QueueAdminForm extends FormBase {
         date('Y-m-d H:i:s', $item['expire']),
         date('Y-m-d H:i:s', $item['created']),
         $item['failed'],
-        \Drupal::l($this->t('View'), \Drupal\Core\Url::fromRoute('sentinel_portal_queue.view_item', ['item_id' => $item['item_id']])),
+        $view_link,
       ];
     }
 
@@ -207,6 +210,9 @@ class QueueAdminForm extends FormBase {
       '#empty' => $this->t('No queue items found.'),
     ];
 
+    $renderer = \Drupal::service('renderer');
+    $output = $renderer->render($table);
+
     // Get total count
     $count_query = $database->select('sentinel_portal_queue', 'q');
     foreach ($filters as $filter) {
@@ -214,7 +220,6 @@ class QueueAdminForm extends FormBase {
     }
     $count = $count_query->countQuery()->execute()->fetchField();
 
-    $output = \Drupal::service('renderer')->render($table);
     $output .= '<p>' . $this->t('Total number of items in queue: @no_items', ['@no_items' => $count]) . '</p>';
 
     return $output;

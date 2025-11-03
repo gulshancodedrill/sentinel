@@ -2,7 +2,7 @@ sentinel_portal_bulk_upload.upload:
   path: '/portal/bulk-upload'
   defaults:
     _form: '\Drupal\sentinel_portal_bulk_upload\Form\BulkUploadForm'
-    _title: 'Sample Bulk Upload'
+    _title: 'Bulk Upload'
   requirements:
     _permission: 'sentinel portal bulk upload'
   options:

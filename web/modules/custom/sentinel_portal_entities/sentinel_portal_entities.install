@@ -404,14 +404,20 @@ function sentinel_portal_entities_schema() {
   $schema['sentinel_portal_queue'] = [
     'description' => 'Stores items in queues.',
     'fields' => [
-      'item_id' => [ 'type' => 'serial', 'not null' => TRUE ],
-      'queue' => [ 'type' => 'varchar', 'length' => 255, 'not null' => TRUE ],
+      'item_id' => [ 'type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE ],
+      'name' => [ 'type' => 'varchar', 'length' => 255, 'not null' => TRUE, 'default' => '' ],
       'data' => [ 'type' => 'blob', 'not null' => TRUE, 'size' => 'big' ],
+      'pid' => [ 'type' => 'int', 'unsigned' => TRUE, 'not null' => FALSE ],
+      'action' => [ 'type' => 'varchar', 'length' => 255, 'not null' => TRUE, 'default' => '' ],
+      'failed' => [ 'type' => 'int', 'not null' => FALSE, 'default' => 0 ],
       'expire' => [ 'type' => 'int', 'not null' => TRUE, 'default' => 0 ],
       'created' => [ 'type' => 'int', 'not null' => TRUE, 'default' => 0 ],
     ],
     'primary key' => ['item_id'],
-    'indexes' => [ 'expire' => ['expire'] ],
+    'indexes' => [
+      'expire' => ['expire'],
+      'name_created' => ['name', 'created'],
+    ],
   ];
 
   return $schema;

@@ -60,16 +60,66 @@ function sentinel_portal_queue_run_action($queue_item_data) {
  */
 function sentinel_portal_queue_create_item($sample, $action, $expire = FALSE) {
   $queue = \Drupal::queue('sentinel_queue');
-  $item = [
-    'pid' => $sample->pid ?? $sample->id(),
-    'action' => $action,
-  ];
-
+  $payload = new \stdClass();
+  $payload->pid = $sample->pid ?? (method_exists($sample, 'id') ? $sample->id() : NULL);
+  $payload->action = $action;
+  $payload->created = \Drupal::time()->getCurrentTime();
   if ($expire !== FALSE) {
-    $item['expire'] = $expire;
+    $payload->expire = $expire;
   }
 
-  $queue->createItem($item);
+  $item_id = $queue->createItem($payload);
+
+  if ($item_id) {
+    $connection = \Drupal::database();
+    $fields = [
+      'name' => 'sentinel_queue',
+      'data' => serialize($payload),
+      'pid' => $payload->pid,
+      'action' => $action,
+      'failed' => 0,
+      'expire' => $payload->expire ?? 0,
+      'created' => $payload->created,
+    ];
+
+    $exists = (bool) $connection->select('sentinel_portal_queue', 'q')
+      ->fields('q', ['item_id'])
+      ->condition('item_id', $item_id)
+      ->execute()
+      ->fetchField();
+
+    if ($exists) {
+      $connection->update('sentinel_portal_queue')
+        ->fields($fields)
+        ->condition('item_id', $item_id)
+        ->execute();
+    }
+    else {
+      $fields['item_id'] = $item_id;
+      $connection->insert('sentinel_portal_queue')
+        ->fields($fields)
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Remove a queue record from the tracking table.
+ */
+function sentinel_portal_queue_delete_record($item_id) {
+  \Drupal::database()->delete('sentinel_portal_queue')
+    ->condition('item_id', $item_id)
+    ->execute();
+}
+
+/**
+ * Increment failed count for a queue item.
+ */
+function sentinel_portal_queue_increment_failed($item_id) {
+  \Drupal::database()->update('sentinel_portal_queue')
+    ->expression('failed', 'failed + 1')
+    ->condition('item_id', $item_id)
+    ->execute();
 }
 
 /**
@@ -209,6 +259,7 @@ function _sentinel_portal_queue_process_sendresults($queue, $item) {
     if ($result === FALSE) {
       // Something failed in the send email function.
       \Drupal::logger('sentinel_portal_queue')->info('Failed to send entity mail! @id', ['@id' => $item->pid]);
+      sentinel_portal_queue_increment_failed($item->item_id);
     }
     else {
       // Everything went well in the send email function.
@@ -219,6 +270,7 @@ function _sentinel_portal_queue_process_sendresults($queue, $item) {
 
       // As we have sent the email we can delete the item from the queue.
       $queue->deleteItem($item);
+      sentinel_portal_queue_delete_record($item->item_id);
     }
   }
   else {
@@ -245,6 +297,7 @@ function _sentinel_portal_queue_invoke_send_results_hook($queue, $item) {
 
     // As we have sent the email we can delete the item from the queue.
     $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
   }
   else {
     \Drupal::logger('sentinel_portal_queue')->error('Sample entity could not be loaded @id', ['@id' => $item->pid]);
@@ -272,6 +325,7 @@ function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
   if (!$sentinel_sample) {
     \Drupal::logger('sentinel_portal_queue')->error('Sample not found for PID @pid', ['@pid' => $item->pid]);
     $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     return FALSE;
   }
 
@@ -288,6 +342,7 @@ function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
     // The validation errors were fixed since this queue item was created.
     // Delete the items from the queue and return.
     $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     return TRUE;
   }
 
@@ -323,6 +378,7 @@ function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
 
   // Delete the item here.
   $queue->deleteItem($item);
+  sentinel_portal_queue_delete_record($item->item_id);
 
   return $result['result'] == TRUE;
 }
@@ -345,6 +401,7 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
   if (!$sentinel_sample) {
     \Drupal::logger('sentinel_portal_queue')->error('Sample not found for PID @pid', ['@pid' => $item->pid]);
     $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     return FALSE;
   }
 
@@ -354,6 +411,7 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
   if ($is_pass == FALSE && $is_fail == FALSE) {
     // Sample has already been reported on. Delete it from the queue and return.
     $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     return TRUE;
   }
 
@@ -370,6 +428,7 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
 
   // Delete the item from the queue.
   $queue->deleteItem($item);
+  sentinel_portal_queue_delete_record($item->item_id);
   return TRUE;
 }
 
