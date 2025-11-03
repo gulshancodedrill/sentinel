@@ -1,0 +1,8 @@
+condition_entity_import.trigger:
+  path: '/admin/config/sentinel/condition-entity-import'
+  defaults:
+    _form: '\Drupal\condition_entity_import\Form\ImportTriggerForm'
+    _title: 'Import Condition Entities'
+  requirements:
+    _permission: 'administer site configuration'
+

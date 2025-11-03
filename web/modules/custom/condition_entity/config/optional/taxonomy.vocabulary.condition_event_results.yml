@@ -1,9 +1,0 @@
-langcode: en
-status: true
-dependencies: {  }
-name: 'Condition event results'
-vid: condition_event_results
-description: 'Sentinel Certificate pass/fail values'
-weight: 0
-new_revision: false
-
