@@ -1,8 +1,0 @@
-condition_entity.pdf_logic:
-  path: '/portal/pdf-logic'
-  defaults:
-    _controller: '\Drupal\condition_entity\Controller\PdfLogicController::page'
-    _title: 'PDF logic'
-  requirements:
-    _permission: 'sentinel portal'
-

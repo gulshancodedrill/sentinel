@@ -1,0 +1,9 @@
+name: 'Condition Entity Import'
+type: module
+description: 'Imports condition entities from JSON export via queue'
+core_version_requirement: ^11
+package: Sentinel
+dependencies:
+  - eck
+  - taxonomy
+
