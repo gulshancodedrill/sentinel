@@ -6,6 +6,7 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\Url;
+use Drupal\Core\Database\Query\PagerSelectExtender;
 
 /**
  * Form for queue administration.
@@ -131,11 +132,7 @@ class QueueAdminForm extends FormBase {
         break;
     }
 
-    $table = $this->buildQueueTable($filters, $order);
-
-    $form['results'] = [
-      '#markup' => $table,
-    ];
+    $form['results'] = $this->buildQueueTable($filters, $order);
 
     return $form;
   }
@@ -169,37 +166,62 @@ class QueueAdminForm extends FormBase {
       $query->condition($filter['field'], $filter['value']);
     }
 
-    // Apply ordering
+    // Apply ordering.
     if (!empty($order)) {
       $query->orderBy($order['field'], $order['direction']);
     }
 
-    $query->range(0, 25);
-    $result = $query->execute();
+    // Clone the query so we can calculate total count independently of pager.
+    $count_query = clone $query;
+
+    /** @var \Drupal\Core\Database\Query\PagerSelectExtender $pager */
+    $pager = $query->extend(PagerSelectExtender::class)->limit(25);
+    $result = $pager->execute();
 
     $rows = [];
     while ($item = $result->fetchAssoc()) {
-      $view_link = Link::fromTextAndUrl($this->t('View'), Url::fromRoute('sentinel_portal_queue.view_item', ['item_id' => $item['item_id']]))->toString();
+      $pid_value = $item['pid'];
+      $pid_cell = !empty($pid_value)
+        ? ['data' => Link::fromTextAndUrl($pid_value, Url::fromRoute('entity.sentinel_sample.canonical', ['sentinel_sample' => $pid_value]))->toRenderable()]
+        : ['data' => ['#markup' => $this->t('N/A')]];
+
+      $operations = [
+        'view' => [
+          'title' => $this->t('View'),
+          'url' => Url::fromRoute('sentinel_portal_queue.view_item', ['item_id' => $item['item_id']]),
+        ],
+        'release' => [
+          'title' => $this->t('Release'),
+          'url' => Url::fromRoute('sentinel_portal_queue.release_item', ['item_id' => $item['item_id']]),
+        ],
+        'delete' => [
+          'title' => $this->t('Delete'),
+          'url' => Url::fromRoute('sentinel_portal_queue.delete_item', ['item_id' => $item['item_id']]),
+          'attributes' => ['class' => ['queue-delete-link']],
+        ],
+      ];
+
       $rows[] = [
         $item['item_id'],
-        $item['name'],
-        $item['pid'],
+        $pid_cell,
         $item['action'],
-        date('Y-m-d H:i:s', $item['expire']),
-        date('Y-m-d H:i:s', $item['created']),
-        $item['failed'],
-        $view_link,
+        date('d/m/Y H:i', $item['expire']),
+        date('d/m/Y H:i', $item['created']),
+        [
+          'data' => [
+            '#type' => 'operations',
+            '#links' => $operations,
+          ],
+        ],
       ];
     }
 
     $header = [
-      $this->t('ID'),
-      $this->t('Name'),
+      $this->t('Item ID'),
       $this->t('PID'),
       $this->t('Action'),
       $this->t('Expires'),
       $this->t('Created'),
-      $this->t('Failed'),
       $this->t('Operations'),
     ];
 
@@ -210,19 +232,20 @@ class QueueAdminForm extends FormBase {
       '#empty' => $this->t('No queue items found.'),
     ];
 
-    $renderer = \Drupal::service('renderer');
-    $output = $renderer->render($table);
-
     // Get total count
-    $count_query = $database->select('sentinel_portal_queue', 'q');
-    foreach ($filters as $filter) {
-      $count_query->condition($filter['field'], $filter['value']);
-    }
     $count = $count_query->countQuery()->execute()->fetchField();
 
-    $output .= '<p>' . $this->t('Total number of items in queue: @no_items', ['@no_items' => $count]) . '</p>';
-
-    return $output;
+    return [
+      'table' => $table,
+      'summary' => [
+        '#markup' => $this->t('Total number of items in queue: @no_items', ['@no_items' => $count]),
+        '#prefix' => '<p>',
+        '#suffix' => '</p>',
+      ],
+      'pager' => [
+        '#type' => 'pager',
+      ],
+    ];
   }
 
 }

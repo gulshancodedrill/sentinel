@@ -1,0 +1,10 @@
+hold_states.on_hold_samples:
+  path: '/portal/admin/on-hold-samples'
+  defaults:
+    _controller: '\Drupal\hold_states\Controller\OnHoldSamplesController::listPage'
+    _title: 'On hold samples'
+  requirements:
+    _permission: 'sentinel view all sentinel_sample'
+  options:
+    _admin_route: FALSE
+

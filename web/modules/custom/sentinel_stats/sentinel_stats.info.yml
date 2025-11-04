@@ -1,14 +1,8 @@
 name: 'Sentinel Stats'
 type: module
-description: 'Used for creating an entity when a sample is calculated'
+description: 'Sentinel statistics entities and import functionality'
+package: 'Sentinel'
 core_version_requirement: ^11
-package: Sentinel
 dependencies:
-  - condition_entity
-  - eck
-  - taxonomy
-  - text
-  - views
-  - sentinel_systemcheck_certificate
-
-
+  - drupal:system
+  - eck:eck

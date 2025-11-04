@@ -1,12 +1,9 @@
-name: 'Hold states'
+name: 'Hold States'
 type: module
-description: 'Hold states feature'
+description: 'Manages on-hold samples'
+package: 'Sentinel'
 core_version_requirement: ^11
-package: Sentinel
 dependencies:
-  - sentinel_portal_entities
-  - taxonomy
-  - text
-  - options
-
-
+  - drupal:system
+  - sentinel_portal_entities:sentinel_portal_entities
+  - drupal:taxonomy
