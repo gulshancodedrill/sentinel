@@ -44,6 +44,7 @@
         "drupal/menu_link_attributes": "^1.5",
         "drupal/mimemail": "^2.0",
         "drupal/module_filter": "^5.0",
+        "drupal/paragraphs": "^1.19",
         "drupal/pathauto": "^1.14",
         "drupal/potx": "^1.1",
         "drupal/rdf": "^3.0@beta",

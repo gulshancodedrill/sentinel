@@ -99,7 +99,7 @@ class ReportsController extends ControllerBase {
     foreach ($headers as $header) {
       $query->addField('ss', $header);
     }
-    $query->condition('ss.id', $pids, 'IN');
+    $query->condition('ss.pid', $pids, 'IN');
     $results = $query->execute();
 
     $output = fopen($file_path, 'a');

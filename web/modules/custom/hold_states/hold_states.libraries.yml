@@ -1,0 +1,7 @@
+bulk_operations:
+  js:
+    js/bulk-operations.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+

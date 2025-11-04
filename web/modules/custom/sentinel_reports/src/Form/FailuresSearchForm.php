@@ -52,8 +52,8 @@ class FailuresSearchForm extends FormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    // Set cookie for app server.
-    if (!isset($_COOKIE['ah_app_server']) && !\Drupal::service('kernel')->isCLI()) {
+    // Set cookie for app server when running via web request.
+    if (!isset($_COOKIE['ah_app_server']) && PHP_SAPI !== 'cli') {
       if ($hostname = strtok(gethostname(), '.')) {
         setcookie('ah_app_server', $hostname, time() + (86400), '/');
       }

@@ -2,90 +2,105 @@
 
 body {
   color: #333;
-  background: #292929;
+  background: #fff;
+  font-weight: 300;
 }
-
+a {
+  color: #333333;
+  font-weight: 400;
+}
 #page,
 #main-wrapper,
 .region-primary-menu .menu-item a.is-active,
 .region-primary-menu .menu-item--active-trail a {
-  background: #fff;
+background: #fff;
 }
 
 .tabs ul.primary li a.is-active {
-  background-color: #fff;
+background-color: #fff;
 }
 
 .tabs ul.primary li.is-active a {
-  background-color: #fff;
-  border-bottom-color: #fff;
+background-color: #fff;
+border-bottom-color: #fff;
 }
 
 #navbar-top {
-  background-color: #055a8e;
+background-color: #055a8e;
 }
 
 #navbar-main {
-    width: 100%;
-    max-width: 75rem;
-    margin-right: auto;
-    margin-left: auto;
-    padding: 0;
+  width: 100%;
+  max-width: 75rem;
+  margin-right: auto;
+  margin-left: auto;
+  padding: 0;
 }
 
 a,
 .link {
-  color: #0071b3;
+color: #333;
 }
 
 a:hover,
 a:focus,
 .link:hover,
 .link:focus {
-  color: #018fe2;
+color: #018fe2;
 }
 .nav-item .dropdown-item a.active {
-  color: white;
+color: white;
 }
 .nav-link {
-  color: rgb(231, 231, 231);
+color: rgb(231, 231, 231);
 }
 .nav-link:hover,
 .nav-link:focus {
-  color: rgb(231, 231, 231);
+color: rgb(231, 231, 231);
 }
 a:active,
 .link:active {
-  color: #23aeff;
+color: #23aeff;
 }
 
 .page-item.active .page-link {
-  background-color: #0071b3;
-  border-color: #0071b3;
+background-color: #0071b3;
+border-color: #0071b3;
 }
 
 .page-link,
 .page-link:hover {
-  color: #0071b3;
+color: #0071b3;
 }
 
 .sidebar .block {
-  background-color: #f6f6f2;
-  border-color: #f9f9f9;
+background-color: #f6f6f2;
+border-color: #f9f9f9;
 }
-
-.btn-primary {
-  background-color: #007bff;
-  border-color: #007bff;
+form input[type=submit], div button, .btn.btn-primary {
+  display: block;
+  margin: 0;
+  padding: 0.5em 1em;
+  border: none !important;
+  border-radius: 0.5em;
+  outline: none;
+  background: #333333;
+  color: white;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: sans-serif;
+  font-size: 100%;
+  line-height: 1.15;
 }
-
-.btn-primary:hover,
-.btn-primary:focus {
-  background-color: #0256b1;
+form input.form-submit {
+  margin-top: 1.5em;
+  width: auto;
 }
-
+form button.form-submit {
+margin-top: 1.5em !important;
+}
 .site-footer {
-  background: #fff;
+background: #fff;
 }
 
 .region-header,
@@ -97,22 +112,22 @@ a:active,
 .region-header .site-branding a,
 .region-secondary-menu .menu-item a,
 .region-secondary-menu .menu-item a.is-active {
-  color: #fffeff;
+color: #fffeff;
 }
 
 
 /* ---------- Color Form ----------- */
 
 [dir="rtl"] .color-form .color-palette {
-  margin-left: 0;
-  margin-right: 20px;
+margin-left: 0;
+margin-right: 20px;
 }
 
 [dir="rtl"] .color-form .form-item label {
-  float: right;
+float: right;
 }
 
 [dir="rtl"] .color-form .color-palette .lock {
-  right: -20px;
-  left: 0;
+right: -20px;
+left: 0;
 }

@@ -1,5 +1,8 @@
 <?php
 
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Url;
+
 /**
  * @file
  * Service functions for Sentinel Reports module.
@@ -21,6 +24,33 @@ if (!defined('CHART_ID_CATEGORY_CONCERN_RELATING_TO_CLEAN')) {
 if (!defined('CHART_ID_CATEGORY_CONCERN_RELATING_TO_BOTH_CLEAN_AND_INHIBITOR')) {
   define('CHART_ID_CATEGORY_CONCERN_RELATING_TO_BOTH_CLEAN_AND_INHIBITOR', 5);
 }
+if (!defined('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_FLUSHING')) {
+  define('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_FLUSHING', 6);
+}
+if (!defined('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_CLEANING')) {
+  define('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_CLEANING', 7);
+}
+if (!defined('CHART_ID_CATEGORY_NEEDED_MORE_INHIBITOR')) {
+  define('CHART_ID_CATEGORY_NEEDED_MORE_INHIBITOR', 8);
+}
+if (!defined('CHART_ID_CATEGORY_A_NON_SENTINEL_INHIBITOR_WAS_USED')) {
+  define('CHART_ID_CATEGORY_A_NON_SENTINEL_INHIBITOR_WAS_USED', 9);
+}
+if (!defined('CHART_ID_CATEGORY_INHIBITOR_NEEDED_MORE_THOROUGH_CIRCULATION')) {
+  define('CHART_ID_CATEGORY_INHIBITOR_NEEDED_MORE_THOROUGH_CIRCULATION', 10);
+}
+if (!defined('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_FLUSHING_AND_NEEDED_MORE_CLEANING')) {
+  define('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_FLUSHING_AND_NEEDED_MORE_CLEANING', 11);
+}
+if (!defined('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_FLUSHING_AND_INHIBITOR_NEEDED_MORE_THOROUGH_CIRCULATION')) {
+  define('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_FLUSHING_AND_INHIBITOR_NEEDED_MORE_THOROUGH_CIRCULATION', 12);
+}
+if (!defined('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_CLEANING_NEEDED_MORE_INHIBITOR')) {
+  define('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_CLEANING_NEEDED_MORE_INHIBITOR', 13);
+}
+if (!defined('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_CLEANING_AND_INHIBITOR_NEEDED_MORE_THOROUGH_CIRCULATION')) {
+  define('CHART_ID_CATEGORY_NEEDED_MORE_THOROUGH_CLEANING_AND_INHIBITOR_NEEDED_MORE_THOROUGH_CIRCULATION', 14);
+}
 
 /**
  * Gets an array of headers that are to be exported as part of the CSV file.
@@ -30,7 +60,6 @@ if (!defined('CHART_ID_CATEGORY_CONCERN_RELATING_TO_BOTH_CLEAN_AND_INHIBITOR')) 
  */
 function _sentinel_reports_get_csv_export_headers() {
   return [
-    'id',
     'pack_reference_number',
     'pack_type',
     'date_installed',
@@ -93,11 +122,13 @@ function _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $in
       $client = sentinel_portal_entities_get_client_by_user($current_user);
     }
     else {
-      return ['content' => render($html), 'export_link' => $link];
+      $renderer = \Drupal::service('renderer');
+      return ['content' => $renderer->render($html), 'export_link' => $link];
     }
 
     if (!$client) {
-      return ['content' => render($html), 'export_link' => $link];
+      $renderer = \Drupal::service('renderer');
+      return ['content' => $renderer->render($html), 'export_link' => $link];
     }
 
     if (function_exists('get_more_clients_based_client_cohorts')) {
@@ -164,9 +195,11 @@ function _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $in
     }
   }
 
+  $renderer = \Drupal::service('renderer');
+
   return [
-    'content' => render($html),
-    'export_link' => !empty($link) ? render($link) : '',
+    'content' => $renderer->render($html),
+    'export_link' => !empty($link) ? $renderer->render($link) : '',
   ];
 }
 
@@ -198,7 +231,7 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
   $current_user = \Drupal::currentUser();
   if (!$current_user->hasPermission('sentinel view all sentinel_sample')) {
     $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
-    $query->condition('sc.id', $cids, 'IN');
+    $query->condition('sc.cid', $cids, 'IN');
   }
 
   if (!empty($date_range)) {
@@ -225,23 +258,23 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
       'ConcernsRelatingToClean',
       'ConcernsRelatingToBothCleanAndInhibitor',
     ];
-    
+
+    $namespace = 'Drupal\\sentinel_reports\\Service\\CategoryStats\\';
     $total_fails = 0;
     $segments = [];
     $pids = [];
-    
-    // Load classes if they exist.
-    $class_path = \Drupal::service('module_handler')->getModuleDirectories()['sentinel_reports'] . '/src/Service/CategoryStats';
-    
+
     foreach ($categories as $category) {
-      $class_name = $category;
-      if (class_exists($class_name)) {
-        $category_stat_object = new $class_name($cids, $date_range, $location, $installer_name);
-        $category_result_object = $category_stat_object->getResultObject();
-        $pids[] = $category_stat_object->getPids();
-        $segments[] = $category_result_object;
-        $total_fails += $category_result_object->total;
+      $class_name = $namespace . $category;
+      if (!class_exists($class_name)) {
+        continue;
       }
+
+      $category_stat_object = new $class_name($cids, $date_range, $location, $installer_name);
+      $category_result_object = $category_stat_object->getResultObject();
+      $pids[] = $category_stat_object->getPids();
+      $segments[] = $category_result_object;
+      $total_fails += $category_result_object->total ?? 0;
     }
 
     $overall_passes_object = (object) [
@@ -297,7 +330,7 @@ function _sentinel_reports_render_export_link($uuid_key) {
       'target' => '_blank',
     ],
   ];
-  
-  return render($link);
+
+  return \Drupal::service('renderer')->render($link);
 }
 

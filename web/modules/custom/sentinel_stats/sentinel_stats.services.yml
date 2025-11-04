@@ -1,0 +1,10 @@
+services:
+  sentinel_stats.commands:
+    class: Drupal\sentinel_stats\Commands\SentinelStatsCommands
+    arguments: ['@entity_type.manager', '@queue']
+    tags:
+      - { name: drush.command }
+  logger.channel.sentinel_stats:
+    parent: logger.channel_base
+    arguments: ['sentinel_stats']
+
