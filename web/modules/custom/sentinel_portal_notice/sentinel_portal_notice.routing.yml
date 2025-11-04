@@ -1,0 +1,32 @@
+sentinel_portal_notice.notices:
+  path: '/portal/notices'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_notice\Controller\NoticeController::listPage'
+    _title: 'Notices'
+  requirements:
+    _permission: 'sentinel portal notice'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_notice.notice_view:
+  path: '/portal/notices/{sentinel_notice}'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_notice\Controller\NoticeController::viewPage'
+    _title: 'Notice'
+  requirements:
+    _permission: 'sentinel portal notice'
+    sentinel_notice: \d+
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_notice.notice_delete:
+  path: '/portal/notices/{sentinel_notice}/delete'
+  defaults:
+    _form: '\Drupal\sentinel_portal_notice\Form\NoticeDeleteForm'
+    _title: 'Delete Notice'
+  requirements:
+    _permission: 'sentinel portal notice'
+    sentinel_notice: \d+
+  options:
+    _admin_route: FALSE
+

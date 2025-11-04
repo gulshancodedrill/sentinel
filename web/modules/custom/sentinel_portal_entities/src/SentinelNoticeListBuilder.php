@@ -18,10 +18,10 @@ class SentinelNoticeListBuilder extends EntityListBuilder {
     $current_user = \Drupal::currentUser();
     $query = $this->getStorage()->getQuery()
       ->accessCheck(FALSE)
-      ->sort('nid', 'ASC');
+      ->sort('created', 'DESC');
 
     // If not admin, only show notices for current user
-    if (!$current_user->hasPermission('administer sentinel_notice')) {
+    if (!$current_user->hasPermission('sentinel view all sentinel_notice')) {
       $query->condition('uid', $current_user->id());
     }
     // Admin sees all notices
@@ -36,8 +36,9 @@ class SentinelNoticeListBuilder extends EntityListBuilder {
    * {@inheritdoc}
    */
   public function buildHeader() {
-    $header['label'] = $this->t('Label');
-    $header['operations'] = $this->t('Operations');
+    $header['title'] = $this->t('Title');
+    $header['created'] = $this->t('Created');
+    $header['read'] = $this->t('Read');
     return $header;
   }
 
@@ -47,14 +48,34 @@ class SentinelNoticeListBuilder extends EntityListBuilder {
   public function buildRow(EntityInterface $entity) {
     /* @var \Drupal\sentinel_portal_entities\Entity\SentinelNotice $entity */
     $notice_read = $entity->get('notice_read')->value;
+    $created = $entity->get('created')->value;
+    $created_formatted = $created ? date('d/m/Y H:i:s', $created) : '';
     
-    $row['label']['data'] = [
-      '#markup' => $notice_read ? 
-        Link::createFromRoute($entity->label(), 'entity.sentinel_notice.canonical', ['sentinel_notice' => $entity->id()])->toString() : 
-        '<strong>' . Link::createFromRoute($entity->label(), 'entity.sentinel_notice.canonical', ['sentinel_notice' => $entity->id()])->toString() . '</strong>',
-    ];
+    $class = $notice_read ? 'notice-read' : 'notice-unread';
     
-    $row['operations']['data'] = $this->buildOperations($entity);
+    if ($notice_read) {
+      $row['title']['data'] = [
+        '#markup' => Link::createFromRoute($entity->label(), 'sentinel_portal_notice.notice_view', ['sentinel_notice' => $entity->id()])->toString(),
+      ];
+      $row['created']['data'] = [
+        '#markup' => $created_formatted,
+      ];
+      $row['read']['data'] = [
+        '#markup' => $this->t('Read'),
+      ];
+    } else {
+      $row['title']['data'] = [
+        '#markup' => '<strong>' . Link::createFromRoute($entity->label(), 'sentinel_portal_notice.notice_view', ['sentinel_notice' => $entity->id()])->toString() . '</strong>',
+      ];
+      $row['created']['data'] = [
+        '#markup' => '<strong>' . $created_formatted . '</strong>',
+      ];
+      $row['read']['data'] = [
+        '#markup' => $this->t('Unread'),
+      ];
+    }
+    
+    $row['#attributes']['class'][] = $class;
     
     return $row;
   }
@@ -75,13 +96,19 @@ class SentinelNoticeListBuilder extends EntityListBuilder {
     ];
     
     // Add custom CSS
-    $build['#attached']['library'][] = 'sentinel_portal_entities/notice-styling';
+    $build['#attached']['library'][] = 'sentinel_portal_notice/notice-styling';
+    
+    // Add table attributes for styling
+    if (isset($build['table'])) {
+      $build['table']['#attributes']['class'][] = 'table-bordered';
+      $build['table']['#attributes']['class'][] = 'table-hover';
+    }
     
     // Add message if no notices found
     $current_user_id = \Drupal::currentUser()->id();
     if (empty($build['table']['#rows'])) {
       $build['no_notices'] = [
-        '#markup' => '<div class="alert alert-warning">' . $this->t('No notices found for user ID: @uid', ['@uid' => $current_user_id]) . '</div>',
+        '#markup' => '<div class="alert alert-warning">' . $this->t('No notices found') . '</div>',
         '#weight' => -1,
       ];
     }

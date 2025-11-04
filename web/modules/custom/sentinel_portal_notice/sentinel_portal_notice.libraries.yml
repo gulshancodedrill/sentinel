@@ -1,0 +1,5 @@
+notice-styling:
+  css:
+    theme:
+      css/notice.css: {}
+

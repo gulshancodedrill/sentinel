@@ -1,0 +1,7 @@
+'sentinel portal notice':
+  title: 'Sentinel Portal Notice'
+  description: 'Access sentinel portal notices.'
+
+'sentinel view all sentinel_notice':
+  title: 'View all sentinel notices'
+  description: 'View all sentinel notices regardless of owner.'
