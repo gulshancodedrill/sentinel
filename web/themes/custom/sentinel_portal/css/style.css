@@ -118,9 +118,10 @@ h3 {
  div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.bulk-upload::before {
   content: "\f0ee";
  }
- #header.header a.navbar-brand img {
-     margin-right: 0.5rem;
- }
+#header.header a.navbar-brand img {
+    margin-right: 0.5rem;
+    max-width: 134px;
+}
  #main-wrapper .container {
      width: 100%;
      max-width: 75rem;
