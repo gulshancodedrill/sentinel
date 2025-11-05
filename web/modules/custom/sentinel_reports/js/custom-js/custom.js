@@ -7,14 +7,21 @@
 
   Drupal.behaviors.sentinelReportsChart = {
     attach: function (context, settings) {
-      var pass_fails = drupalSettings.sentinel_reports ? drupalSettings.sentinel_reports.pass_fails : null;
+      var pass_fails = settings.sentinel_reports ? settings.sentinel_reports.pass_fails : null;
 
       if (!pass_fails || !pass_fails.length) {
         return;
       }
 
       var holder = $('#hierarchical-pie-demo', context);
-      holder.once('sentinel-reports-chart').each(function () {
+      
+      // Check if already initialized and remove old chart.
+      if (holder.length && holder.children().length > 0) {
+        holder.empty();
+        holder.removeData('sentinel-reports-chart');
+      }
+
+      if (holder.length && typeof HierarchicalPie !== 'undefined') {
         holder.empty();
 
         new HierarchicalPie({
@@ -44,7 +51,7 @@
         $('#failures-search-form__total-tests__tests').text(total_num_tests);
         $('#failures-search-form__total-tests__passed').text(num_tests_passed);
         $('#failures-search-form__total-tests__failed').text(num_tests_failed);
-      });
+      }
     }
   };
 })(jQuery, Drupal, drupalSettings);

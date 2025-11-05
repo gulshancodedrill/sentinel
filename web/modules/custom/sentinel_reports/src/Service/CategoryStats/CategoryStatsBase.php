@@ -130,11 +130,11 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
     }
 
     if (!$this->currentUserCanViewAllSamples()) {
-      $arguments['cids'] = $cids;
+      $arguments['cids[]'] = $cids;
     }
 
-    $arguments['date_from'] = $date_from;
-    $arguments['date_to'] = $date_to;
+    $arguments['date_from'] = $date_from . ' 00:00:00';
+    $arguments['date_to'] = $date_to . ' 23:59:59';
 
     if (!empty($installer_name)) {
       $arguments['installer_name'] = '%' . $this->database->escapeLike($installer_name) . '%';
@@ -196,27 +196,33 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
 
       $total_count += $total;
 
-      $uuidKey = $uuid->generate();
-      $cache->set('sentinel_reports_' . $uuidKey, [
-        'pids' => $pids,
-        'category' => $columnName,
-        'date_from' => $this->dateFrom,
-        'date_to' => $this->dateTo,
-      ], Cache::PERMANENT);
+      $uuidKey = '';
+      if ($pids !== '') {
+        $uuidKey = $uuid->generate();
+        $cache->set('sentinel_reports_' . $uuidKey, [
+          'pids' => $pids,
+          'category' => $columnName,
+          'date_from' => $this->dateFrom,
+          'date_to' => $this->dateTo,
+        ], Cache::PERMANENT);
+      }
 
       $infoArrayPidsKeys[$columnName] = $uuidKey;
       $this->queryResult[$columnName] = $total;
     }
 
-    $key = $uuid->generate();
+    $key = '';
     $this->pids = implode('+', array_filter($allPids));
 
-    $cache->set('sentinel_reports_' . $key, [
-      'pids' => $this->pids,
-      'category' => $categoryName,
-      'date_from' => $this->dateFrom,
-      'date_to' => $this->dateTo,
-    ], Cache::PERMANENT);
+    if ($this->pids !== '') {
+      $key = $uuid->generate();
+      $cache->set('sentinel_reports_' . $key, [
+        'pids' => $this->pids,
+        'category' => $categoryName,
+        'date_from' => $this->dateFrom,
+        'date_to' => $this->dateTo,
+      ], Cache::PERMANENT);
+    }
   }
 
   /**
@@ -244,12 +250,13 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
     $segments = [];
 
     foreach ($infoArray as $objectInfo) {
+      $export_key = $objectInfo['pids'] ?? '';
       $segments[] = $this->getStatObjectBasedOnValues(
         $objectInfo['category_name'],
         $objectInfo['chart_id'],
         $this->queryResult[$objectInfo['db_query_result_name']] ?? 0,
         [],
-        _sentinel_reports_render_export_link($objectInfo['pids'])
+        $export_key ? _sentinel_reports_render_export_link($export_key) : ''
       );
     }
 
