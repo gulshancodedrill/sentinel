@@ -35,30 +35,21 @@ class TestEntityPdfController extends ControllerBase {
 
     // Get the content for the PDF using the same function as sentinel samples.
     $theme_vars = _get_result_content($test_entity_id, 'test_entity');
+    $theme_vars['pdf'] = TRUE;
     
-    // Get the template path.
+    // Get template path.
     $module_path = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
     $template_path = $module_path . '/templates/sentinel_certificate.html.twig';
     
-
-    // Generate HTML for PDF using the helper function from certificate module.
-    if (function_exists('_get_result_content')) {
-      $theme_vars = _get_result_content($test_entity_id, 'test_entity');
-      $theme_vars['pdf'] = TRUE;
-      
-      // Get template path.
-      $module_path = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
-      $template_path = $module_path . '/templates/sentinel_certificate.html.twig';
-      
-      // Get CSS.
-      $css_path = \Drupal::root() . '/' . \Drupal::service('extension.list.theme')->getPath('sentinel_portal') . '/css/pdf-only.css';
-      $css = '';
-      if (file_exists($css_path)) {
-        $css = '<style>' . file_get_contents($css_path) . '</style>';
-      }
-      
-      // Build complete HTML.
-      $html = '<!DOCTYPE html>
+    // Get CSS.
+    $css_path = \Drupal::root() . '/' . \Drupal::service('extension.list.theme')->getPath('sentinel_portal') . '/css/pdf-only.css';
+    $css = '';
+    if (file_exists($css_path)) {
+      $css = '<style>' . file_get_contents($css_path) . '</style>';
+    }
+    
+    // Build complete HTML.
+    $html = '<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -66,26 +57,21 @@ class TestEntityPdfController extends ControllerBase {
   ' . $css . '
 </head>
 <body>';
+    
+    $html .= \Drupal::service('twig')->render($template_path, $theme_vars);
+    $html .= '</body></html>';
+    
+    // Create DomPDF object.
+    if (function_exists('sentinel_systemcheck_certificate_get_dompdf_object')) {
+      $dompdf = sentinel_systemcheck_certificate_get_dompdf_object($html);
       
-      $html .= \Drupal::service('twig')->render($template_path, $theme_vars);
-      $html .= '</body></html>';
+      // Stream PDF to browser.
+      $response = new \Symfony\Component\HttpFoundation\Response($dompdf->output());
+      $response->headers->set('Content-Type', 'application/pdf');
+      $response->headers->set('Content-Disposition', 'inline; filename="test_certificate_result.pdf"');
       
-      // Create DomPDF object.
-      if (function_exists('sentinel_systemcheck_certificate_get_dompdf_object')) {
-        $dompdf = sentinel_systemcheck_certificate_get_dompdf_object($html);
-        
-        // Stream PDF to browser.
-        $response = new \Symfony\Component\HttpFoundation\Response($dompdf->output());
-        $response->headers->set('Content-Type', 'application/pdf');
-        $response->headers->set('Content-Disposition', 'inline; filename="test_certificate_result.pdf"');
-        
-        return $response;
-      }
-    } catch (\Exception $e) {
-      // Theme or CSS file not found, continue without styling.
-      \Drupal::logger('sentinel_certificate_test_entity')->warning('PDF CSS not found: @message', ['@message' => $e->getMessage()]);
+      return $response;
     }
-
     
     // If functions not available, throw error.
     throw new NotFoundHttpException('PDF generation not available.');
