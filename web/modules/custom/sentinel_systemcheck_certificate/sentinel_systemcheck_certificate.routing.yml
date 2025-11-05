@@ -29,6 +29,17 @@ sentinel_systemcheck_certificate.view_pdf:
       sample_id:
         type: integer
 
+sentinel_systemcheck_certificate.download_pdf:
+  path: '/download-my-results-pdf/{sample_id}'
+  defaults:
+    _controller: '\Drupal\sentinel_systemcheck_certificate\Controller\CertificateController::downloadPdf'
+  requirements:
+    _permission: 'sentinel portal'
+  options:
+    parameters:
+      sample_id:
+        type: integer
+
 sentinel_systemcheck_certificate.regenerate_pdf:
   path: '/portal/admin/samples/pdf/{sample_id}/refresh'
   defaults:
@@ -39,5 +50,4 @@ sentinel_systemcheck_certificate.regenerate_pdf:
     parameters:
       sample_id:
         type: integer
-
 
