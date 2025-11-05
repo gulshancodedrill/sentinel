@@ -118,9 +118,10 @@ h3 {
  div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.bulk-upload::before {
   content: "\f0ee";
  }
- #header.header a.navbar-brand img {
-     margin-right: 0.5rem;
- }
+#header.header a.navbar-brand img {
+    margin-right: 0.5rem;
+    max-width: 134px;
+}
  #main-wrapper .container {
      width: 100%;
      max-width: 75rem;
@@ -564,7 +565,28 @@ div#block-sentinelportal-theme-system-main {
      width: 100%;
    }
    
-   #edit-field-user-cohorts-und {
-     height: 400px;
-   }
+  #edit-field-user-cohorts-und {
+    height: 400px;
+  }
+  
+  /* Notice count badge */
+  .notice-count {
+    display: inline-block;
+    min-width: 20px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    background-color: #dc3545;
+    border-radius: 10px;
+    margin-left: 5px;
+  }
+  
+  .badge-danger {
+    background-color: #dc3545;
+  }
  

@@ -1,0 +1,11 @@
+name: 'Sentinel Portal Notice'
+type: module
+description: 'Provides notice functionality for the Sentinel Portal.'
+core_version_requirement: ^11
+package: 'Sentinel'
+dependencies:
+  - sentinel_portal_entities
+  - sentinel_portal_module
+
+
+
