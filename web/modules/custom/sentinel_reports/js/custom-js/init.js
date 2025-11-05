@@ -22,7 +22,10 @@
         setValue: function (s, s1, s2) {
           $('#edit-date-from').val(s1);
           $('#edit-date-to').val(s2);
-          $('#edit-date-from').trigger('change');
+          setTimeout(function () {
+            $('#edit-date-from').trigger('blur');
+            $('#edit-date-to').trigger('blur');
+          }, 0);
         },
         startDate: $('#edit-date-from').attr('data-min-date')
       });

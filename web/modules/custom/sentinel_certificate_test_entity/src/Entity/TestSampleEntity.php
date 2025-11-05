@@ -169,4 +169,50 @@ class TestSampleEntity extends EckEntity {
     return FALSE;
   }
 
+  /**
+   * Magic getter to map test entity fields to expected property names.
+   *
+   * @param string $name
+   *   Property name.
+   *
+   * @return mixed
+   *   Field value or NULL.
+   */
+  public function &__get($name) {
+    // Map expected property names to test entity field names.
+    $field_map = [
+      'appearance_result' => 'field_test_appearance_result',
+      'ph_result' => 'field_test_ph_level',
+      'boron_result' => 'field_test_boron_result',
+      'molybdenum_result' => 'field_test_molybdenum_result',
+      'boiler_type' => 'field_test_boiler_type',
+      'sys_cond_result' => 'field_system_conductivity_result',
+      'mains_cond_result' => 'field_main_conductivity_result',
+      'sys_calcium_result' => 'field_test_system_calcium_result',
+      'mains_calcium_result' => 'field_test_main_calcium_result',
+      'iron_result' => 'field_test_dissolved_iron_result',
+      'copper_result' => 'field_test_copper_result',
+      'aluminium_result' => 'field_test_dissolved_aluminium',
+      'sys_cl_result' => 'field_system_chloride_result',
+      'mains_cl_result' => 'field_test_mains_chloride_result',
+      'system_6_months' => 'field_test_system_6_months',
+      'pack_reference_number' => 'field_test_pack_reference_number',
+      'sentinel_x100_result' => 'field_test_molybdenum_result', // Calculated value
+    ];
+
+    // Check if the property has a mapped field.
+    if (isset($field_map[$name]) && $this->hasField($field_map[$name])) {
+      $field_value = $this->get($field_map[$name]);
+      if (!$field_value->isEmpty()) {
+        $value = $field_value->value ?? $field_value->target_id;
+        return $value;
+      }
+      $null = NULL;
+      return $null;
+    }
+
+    // Fall back to parent implementation.
+    return parent::__get($name);
+  }
+
 }

@@ -16,8 +16,8 @@ class TestEntityPdfController extends ControllerBase {
    * @param int $test_entity_id
    *   The test entity ID.
    *
-   * @return \Symfony\Component\HttpFoundation\Response
-   *   PDF response.
+   * @return array
+   *   Render array with PDF HTML.
    */
   public function viewPdf($test_entity_id) {
     // Check if entity exists.
@@ -25,9 +25,22 @@ class TestEntityPdfController extends ControllerBase {
     $entity = $entity_storage->load($test_entity_id);
     
     if (!$entity) {
-      throw new NotFoundHttpException();
+      throw new NotFoundHttpException('Test entity not found.');
     }
+
+    // Check if _get_result_content function exists.
+    if (!function_exists('_get_result_content')) {
+      throw new NotFoundHttpException('PDF generation function _get_result_content not found. Please ensure sentinel_systemcheck_certificate module is enabled.');
+    }
+
+    // Get the content for the PDF using the same function as sentinel samples.
+    $theme_vars = _get_result_content($test_entity_id, 'test_entity');
     
+    // Get the template path.
+    $module_path = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
+    $template_path = $module_path . '/templates/sentinel_certificate.html.twig';
+    
+
     // Generate HTML for PDF using the helper function from certificate module.
     if (function_exists('_get_result_content')) {
       $theme_vars = _get_result_content($test_entity_id, 'test_entity');
@@ -68,7 +81,11 @@ class TestEntityPdfController extends ControllerBase {
         
         return $response;
       }
+    } catch (\Exception $e) {
+      // Theme or CSS file not found, continue without styling.
+      \Drupal::logger('sentinel_certificate_test_entity')->warning('PDF CSS not found: @message', ['@message' => $e->getMessage()]);
     }
+
     
     // If functions not available, throw error.
     throw new NotFoundHttpException('PDF generation not available.');

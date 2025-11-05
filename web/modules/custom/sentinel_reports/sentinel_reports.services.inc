@@ -145,7 +145,7 @@ function _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $in
       $date_from,
       $date_to,
     ], $location, $installer_name);
-
+    
     if (!empty($data_passes)) {
       // Build render array with data.
       $build = [
@@ -165,41 +165,45 @@ function _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $in
 
       $html = $build;
 
-      // Create export link.
-      try {
-        $date_obj_from = \DateTime::createFromFormat('Y-m-d', $date_from);
-        $date_obj_to = \DateTime::createFromFormat('Y-m-d', $date_to);
-
-        if ($date_obj_from !== FALSE && $date_obj_to !== FALSE) {
-          $url = Url::fromRoute('sentinel_portal_sample.export', [], [
-            'query' => [
-              'date_reported_1[min][date]' => $date_obj_from->format('m/d/Y'),
-              'date_reported_1[max][date]' => $date_obj_to->format('m/d/Y'),
-              'installer_name' => $installer_name,
-            ],
-          ]);
+      // Create export link for "Export all data".
+      // Get the export key from the data.
+      $export_key = !empty($data_passes[1]->export_key) ? $data_passes[1]->export_key : '';
+      
+      if (!empty($export_key)) {
+        try {
+          $url = Url::fromRoute('sentinel_reports.export_stats', ['key_name' => $export_key]);
           
           $link = [
             '#type' => 'link',
             '#title' => t('Export all data'),
             '#url' => $url,
             '#attributes' => [
-              'target' => '_blank',
+              'class' => ['button', 'button--primary'],
             ],
           ];
         }
-      }
-      catch (\Exception $e) {
-        \Drupal::logger('sentinel_reports')->error('Error creating export link: @message', ['@message' => $e->getMessage()]);
+        catch (\Exception $e) {
+          \Drupal::logger('sentinel_reports')->error('Error creating export link: @message', ['@message' => $e->getMessage()]);
+        }
       }
     }
   }
 
+  $attachments = [];
+  if (is_array($html) && isset($html['#attached'])) {
+    $attachments = $html['#attached'];
+    unset($html['#attached']);
+  }
+
   $renderer = \Drupal::service('renderer');
 
+  $content = is_array($html) ? $renderer->renderRoot($html) : (string) $html;
+  $export = (!empty($link) && is_array($link)) ? $renderer->renderRoot($link) : '';
+
   return [
-    'content' => $renderer->render($html),
-    'export_link' => !empty($link) ? $renderer->render($link) : '',
+    'content' => $content,
+    'export_link' => $export,
+    'attachments' => $attachments,
   ];
 }
 
@@ -224,8 +228,10 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
   // Set group_concat_max_len.
   $database->query('SET SESSION group_concat_max_len = 18446744073709551615');
 
+  // First, get the counts.
   $query = $database->select('sentinel_sample', 'ss');
-  $query->addExpression('count(CASE WHEN ss.pass_fail = 1 THEN 1 END)', 'total_passed');
+  $query->addExpression('COUNT(CASE WHEN ss.pass_fail = 1 THEN 1 END)', 'total_passed');
+  $query->addExpression('COUNT(CASE WHEN ss.pass_fail = 0 THEN 1 END)', 'total_failed');
 
   // If the user does not have permission to view all the stats then restrict.
   $current_user = \Drupal::currentUser();
@@ -235,7 +241,10 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
   }
 
   if (!empty($date_range)) {
-    $query->condition('ss.date_reported', $date_range, 'BETWEEN');
+    // Add time to dates to properly compare with datetime field.
+    $date_from = $date_range[0] . ' 00:00:00';
+    $date_to = $date_range[1] . ' 23:59:59';
+    $query->condition('ss.date_reported', [$date_from, $date_to], 'BETWEEN');
   }
 
   // Add in location condition.
@@ -250,9 +259,36 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
 
   $result = $query->execute()->fetchObject();
 
+  // Now get all PIDs separately to avoid GROUP_CONCAT size issues.
+  $pids_query = $database->select('sentinel_sample', 'ss');
+  $pids_query->fields('ss', ['pid']);
+  
+  if (!$current_user->hasPermission('sentinel view all sentinel_sample')) {
+    $pids_query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
+    $pids_query->condition('sc.cid', $cids, 'IN');
+  }
+  
+  if (!empty($date_range)) {
+    $pids_query->condition('ss.date_reported', [$date_from, $date_to], 'BETWEEN');
+  }
+  
+  if (!empty($location)) {
+    $pids_query->condition('ss.town_city', '%' . $database->escapeLike($location) . '%', 'LIKE');
+  }
+  
+  if (!empty($installer_name)) {
+    $pids_query->condition('ss.installer_name', '%' . $database->escapeLike($installer_name) . '%', 'LIKE');
+  }
+  
+  $all_pids_result = $pids_query->execute()->fetchCol();
+  $all_sample_pids = implode('+', $all_pids_result);
+
   $all_result_info = [];
 
-  if (!empty($result->total_passed)) {
+  if (!empty($result->total_passed) || !empty($result->total_failed)) {
+    // Use the actual failed count from the query instead of category stats.
+    $total_fails = (int) $result->total_failed;
+
     $categories = [
       'ConcernsRelatingToInhibitor',
       'ConcernsRelatingToClean',
@@ -260,7 +296,6 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
     ];
 
     $namespace = 'Drupal\\sentinel_reports\\Service\\CategoryStats\\';
-    $total_fails = 0;
     $segments = [];
     $pids = [];
 
@@ -270,11 +305,18 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
         continue;
       }
 
-      $category_stat_object = new $class_name($cids, $date_range, $location, $installer_name);
-      $category_result_object = $category_stat_object->getResultObject();
-      $pids[] = $category_stat_object->getPids();
-      $segments[] = $category_result_object;
-      $total_fails += $category_result_object->total ?? 0;
+      try {
+        $category_stat_object = new $class_name($cids, $date_range, $location, $installer_name);
+        $category_result_object = $category_stat_object->getResultObject();
+        $pids[] = $category_stat_object->getPids();
+        $segments[] = $category_result_object;
+      }
+      catch (\Exception $e) {
+        \Drupal::logger('sentinel_reports')->warning('Category stats error for @category: @message', [
+          '@category' => $category,
+          '@message' => $e->getMessage(),
+        ]);
+      }
     }
 
     $overall_passes_object = (object) [
@@ -282,14 +324,31 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
       'id_category' => CHART_ID_CATEGORY_PASSES,
       'value' => $result->total_passed,
     ];
-    $key = \Drupal::service('uuid')->generate();
-    $all_pids = implode('+', $pids);
+    
+    // Create export key for ALL samples (passed + failed).
+    $key_all = \Drupal::service('uuid')->generate();
 
-    \Drupal::cache()->set('sentinel_reports_' . $key, [
-      'pids' => $all_pids,
-      'category' => 'all-fails',
+    \Drupal::cache()->set('sentinel_reports_' . $key_all, [
+      'cids' => $cids,
+      'category' => 'all-samples',
       'date_from' => $date_range[0],
       'date_to' => $date_range[1],
+      'location' => $location,
+      'installer_name' => $installer_name,
+      'pass_fail_filter' => NULL, // No filter - export all
+    ], Cache::PERMANENT);
+
+    // Create separate export key for FAILED samples only.
+    $key_failed = \Drupal::service('uuid')->generate();
+
+    \Drupal::cache()->set('sentinel_reports_' . $key_failed, [
+      'cids' => $cids,
+      'category' => 'failed-samples',
+      'date_from' => $date_range[0],
+      'date_to' => $date_range[1],
+      'location' => $location,
+      'installer_name' => $installer_name,
+      'pass_fail_filter' => 0, // Only failed samples
     ], Cache::PERMANENT);
 
     $overall_failed_object = (object) [
@@ -297,7 +356,8 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
       'id_category' => CHART_ID_CATEGORY_FAILS,
       'value' => $total_fails,
       'categories' => $segments,
-      'export_link' => _sentinel_reports_render_export_link($key),
+      'export_link' => _sentinel_reports_render_export_link($key_failed),
+      'export_key' => $key_all, // For "Export all data" link
     ];
 
     $all_result_info = [$overall_passes_object, $overall_failed_object];
@@ -316,6 +376,10 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
  *   A link HTML.
  */
 function _sentinel_reports_render_export_link($uuid_key) {
+  if (empty($uuid_key)) {
+    return '';
+  }
+
   $url = Url::fromRoute('sentinel_reports.export_stats', ['key_name' => $uuid_key], [
     'attributes' => [
       'target' => '_blank',

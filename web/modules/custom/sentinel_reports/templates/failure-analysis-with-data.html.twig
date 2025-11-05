@@ -1,3 +1,8 @@
+{% set num_passed = data.0.value|default(0) %}
+{% set num_failed = data.1.value|default(0) %}
+{% set total_tests = num_passed + num_failed %}
+{% set pass_rate = total_tests > 0 ? ((num_passed / total_tests) * 100)|round : 0 %}
+
 <div id="failures-search-form__graphs-and-data">
   <div class="failures-search-form__group">
     <div id="failures-search-form__total-tests">
@@ -5,15 +10,15 @@
 
       <div class="failures-search-form__total-tests__stats">
         <div class="failures-search-form__total-tests__stat">
-          <span id="failures-search-form__total-tests__tests" class="failures-search-form__total-tests__figure"></span> Tests
+          <span id="failures-search-form__total-tests__tests" class="failures-search-form__total-tests__figure">{{ total_tests }}</span> Tests
         </div>
 
         <div class="failures-search-form__total-tests__stat">
-          <span id="failures-search-form__total-tests__passed" class="failures-search-form__total-tests__figure"></span> Passed
+          <span id="failures-search-form__total-tests__passed" class="failures-search-form__total-tests__figure" style="color: green;">{{ num_passed }}</span> Passed
         </div>
 
         <div class="failures-search-form__total-tests__stat">
-          <span id="failures-search-form__total-tests__failed" class="failures-search-form__total-tests__figure"></span> Failed
+          <span id="failures-search-form__total-tests__failed" class="failures-search-form__total-tests__figure" style="color: red;">{{ num_failed }}</span> Failed
         </div>
       </div>
     </div>
@@ -21,7 +26,7 @@
     <div id="failures-search-form__success-rate">
       <h3 class="failures-search-form__section-title">Pass rate for this period</h3>
 
-      <span id="failures-search-form__success-rate__figure"></span>
+      <span id="failures-search-form__success-rate__figure" style="color: green; font-size: 2em; font-weight: bold;">{{ pass_rate }}%</span>
     </div>
   </div>
 
@@ -45,10 +50,26 @@
               <th>Value</th>
             </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>
+            <tr>
+              <td class="color-cell">
+                <span class="cat-color" style="background: green; display: inline-block; width: 15px; height: 15px;"></span>
+              </td>
+              <td>Passes</td>
+              <td class="value">{{ num_passed }}</td>
+            </tr>
+            <tr>
+              <td class="color-cell">
+                <span class="cat-color" style="background: red; display: inline-block; width: 15px; height: 15px;"></span>
+              </td>
+              <td>Fails Download</td>
+              <td class="value">{{ num_failed }}</td>
+            </tr>
+          </tbody>
         </table>
       </div>
     </div>
+    {% verbatim %}
     <script id="rowTemplate" type="text/template">
       <td class="color-cell">
         <span class="cat-color" style="background: {{color}};"></span>
@@ -59,6 +80,7 @@
       </td>
       <td class="value">{{value}}</td>
     </script>
+    {% endverbatim %}
 
     <small><i>Results shown are for packs in your account. If you feel that packs are missing from your account, please contact us: info.uk@sentinelprotects.com.</i></small>
   </div>

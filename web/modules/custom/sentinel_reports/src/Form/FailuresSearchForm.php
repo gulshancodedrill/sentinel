@@ -59,6 +59,14 @@ class FailuresSearchForm extends FormBase {
       }
     }
 
+    $analysis = $form_state->get('analysis_output');
+    if (!$analysis) {
+      $analysis = [
+        'content' => '',
+        'export_link' => '',
+      ];
+    }
+
     $form['container'] = [
       '#type' => 'markup',
       '#markup' => '<div id="failures-search-form__form-inputs" class="views-exposed-widgets clearfix"><h4 style="font-weight: 900;">Filter reports by date</h4><div id="failures-search-form__form-inputs__container">',
@@ -78,39 +86,47 @@ class FailuresSearchForm extends FormBase {
       '#attributes' => [
         'data-min-date' => [$earliest_date],
       ],
-      '#ajax' => [
-        'callback' => '::failureAnalysisAjax',
-        'wrapper' => 'failures-search-form__graphs-and-data',
-        'method' => 'replace',
-        'effect' => 'fade',
-      ],
     ];
 
     $form['container']['date-range']['date_to'] = [
       '#type' => 'textfield',
       '#title' => $this->t('To date'),
-      '#ajax' => [
-        'callback' => '::failureAnalysisAjax',
-        'wrapper' => 'failures-search-form__graphs-and-data',
-        'method' => 'replace',
-        'effect' => 'fade',
-      ],
     ];
 
     $form['container']['installer_name'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Installer Name'),
-      '#ajax' => [
-        'callback' => '::failureAnalysisAjax',
-        'wrapper' => 'failures-search-form__graphs-and-data',
-        'method' => 'replace',
-        'effect' => 'fade',
-      ],
     ];
 
     $form['container']['location'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Location'),
+    ];
+
+    $form['container']['#suffix'] = '</div></div>';
+
+    $form['stats'] = [
+      '#type' => 'markup',
+      '#markup' => $analysis['content'],
+      '#prefix' => '<div id="failures-search-form__graphs-and-data">',
+      '#suffix' => '</div>',
+    ];
+
+    $form['export_link'] = [
+      '#type' => 'markup',
+      '#markup' => $analysis['export_link'],
+      '#prefix' => '<div id="failures-search-form__graphs-and-data_exportlink">',
+      '#suffix' => '</div>',
+    ];
+
+    $form['actions'] = [
+      '#type' => 'actions',
+    ];
+
+    $form['actions']['apply_filters'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Apply filters'),
+      '#button_type' => 'primary',
       '#ajax' => [
         'callback' => '::failureAnalysisAjax',
         'wrapper' => 'failures-search-form__graphs-and-data',
@@ -119,16 +135,21 @@ class FailuresSearchForm extends FormBase {
       ],
     ];
 
-    $form['container']['#suffix'] = '</div></div>';
-
-    $form['stats'] = [
-      '#type' => 'container',
-      '#attributes' => ['id' => 'failures-search-form__graphs-and-data'],
-    ];
-
     // Attach libraries.
     $form['#attached']['library'][] = 'sentinel_reports/daterangepicker';
     $form['#attached']['library'][] = 'sentinel_reports/custom-js';
+
+    // Attach drupalSettings from the analysis if available.
+    if (!empty($analysis['attachments'])) {
+      if (!empty($analysis['attachments']['library'])) {
+        foreach ($analysis['attachments']['library'] as $library) {
+          $form['#attached']['library'][] = $library;
+        }
+      }
+      if (!empty($analysis['attachments']['drupalSettings'])) {
+        $form['#attached']['drupalSettings'] = $analysis['attachments']['drupalSettings'];
+      }
+    }
 
     return $form;
   }
@@ -145,6 +166,14 @@ class FailuresSearchForm extends FormBase {
     $installer_name = trim($form_state->getValue('installer_name', ''));
     $location = trim($form_state->getValue('location', ''));
 
+    // Convert date format if needed (e.g., from mm/dd/yyyy to yyyy-mm-dd).
+    if (!empty($date_from) && preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $date_from, $matches)) {
+      $date_from = sprintf('%04d-%02d-%02d', $matches[3], $matches[1], $matches[2]);
+    }
+    if (!empty($date_to) && preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $date_to, $matches)) {
+      $date_to = sprintf('%04d-%02d-%02d', $matches[3], $matches[1], $matches[2]);
+    }
+
     if (empty($installer_name)) {
       $installer_name = FALSE;
     }
@@ -154,11 +183,19 @@ class FailuresSearchForm extends FormBase {
 
     // Build the stats output.
     $html = _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $installer_name, $location);
+    $form_state->set('analysis_output', $html);
 
-    $response->addCommand(new ReplaceCommand('#failures-search-form__graphs-and-data', $html['content']));
+    // Replace the stats container with new content.
+    $stats_html = '<div id="failures-search-form__graphs-and-data">' . $html['content'] . '</div>';
+    $response->addCommand(new ReplaceCommand('#failures-search-form__graphs-and-data', $stats_html));
     
-    if (!empty($html['export_link'])) {
-      $response->addCommand(new ReplaceCommand('#failures-search-form__graphs-and-data_exportlink', $html['export_link']));
+    // Replace the export link container.
+    $export_html = '<div id="failures-search-form__graphs-and-data_exportlink">' . ($html['export_link'] ?? '') . '</div>';
+    $response->addCommand(new ReplaceCommand('#failures-search-form__graphs-and-data_exportlink', $export_html));
+
+    // Attach drupalSettings and libraries for the chart.
+    if (!empty($html['attachments']['drupalSettings'])) {
+      $response->addCommand(new \Drupal\Core\Ajax\SettingsCommand($html['attachments']['drupalSettings'], FALSE));
     }
 
     return $response;
@@ -168,7 +205,29 @@ class FailuresSearchForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    // No direct submission - handled via AJAX.
+    $date_from = $form_state->getValue('date_from');
+    $date_to = $form_state->getValue('date_to');
+    $installer_name = trim($form_state->getValue('installer_name', ''));
+    $location = trim($form_state->getValue('location', ''));
+
+    if (!empty($date_from) && preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $date_from, $matches)) {
+      $date_from = sprintf('%04d-%02d-%02d', $matches[3], $matches[1], $matches[2]);
+    }
+    if (!empty($date_to) && preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $date_to, $matches)) {
+      $date_to = sprintf('%04d-%02d-%02d', $matches[3], $matches[1], $matches[2]);
+    }
+
+    if ($installer_name === '') {
+      $installer_name = FALSE;
+    }
+
+    if ($location === '') {
+      $location = FALSE;
+    }
+
+    $html = _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $installer_name, $location);
+    $form_state->set('analysis_output', $html);
+    $form_state->setRebuild(TRUE);
   }
 
 }

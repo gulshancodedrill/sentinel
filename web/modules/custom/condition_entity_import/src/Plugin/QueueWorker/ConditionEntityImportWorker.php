@@ -110,16 +110,13 @@ class ConditionEntityImportWorker extends QueueWorkerBase implements ContainerFa
     }
 
     // Handle taxonomy reference field (Condition Event Result).
-    // Map Drupal 7 term IDs to Drupal 11 term IDs.
+    // Use term IDs directly from Drupal 7.
     if (!empty($data['field_condition_event_result']['und'])) {
       $values['field_condition_event_result'] = [];
       foreach ($data['field_condition_event_result']['und'] as $item) {
         if (!empty($item['tid'])) {
-          $d7_tid = (int) $item['tid'];
-          $d11_tid = $this->mapTermId($d7_tid);
-          if ($d11_tid) {
-            $values['field_condition_event_result'][] = $d11_tid;
-          }
+          $tid = (int) $item['tid'];
+          $values['field_condition_event_result'][] = $tid;
         }
       }
     }
@@ -148,24 +145,6 @@ class ConditionEntityImportWorker extends QueueWorkerBase implements ContainerFa
     return ($langcode === 'und' || empty($langcode)) ? 'en' : $langcode;
   }
 
-  /**
-   * Maps Drupal 7 condition event result term IDs to Drupal 11 term IDs.
-   *
-   * @param int $d7_tid
-   *   The Drupal 7 term ID.
-   *
-   * @return int|null
-   *   The Drupal 11 term ID or NULL if no mapping exists.
-   */
-  protected function mapTermId(int $d7_tid): ?int {
-    $map = [
-      1 => 7363, // Pass
-      2 => 7364, // Fail
-      3 => 7365, // Warning
-    ];
-
-    return $map[$d7_tid] ?? NULL;
-  }
 
 }
 

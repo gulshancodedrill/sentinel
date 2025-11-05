@@ -30,6 +30,7 @@
         "drupal/dashboard": "^2.1",
         "drupal/date_popup": "^2.0",
         "drupal/devel": "^5.4",
+        "drupal/devel_php": "^1.7",
         "drupal/diff": "^1.9",
         "drupal/eck": "^2.1@beta",
         "drupal/entity": "^1.6",
