@@ -1535,4 +1535,112 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
         // Use validation service (matches D7 SentinelSampleEntityValidation::validateSample)
         return \Drupal\sentinel_portal_entities\Service\SentinelSampleValidation::validateSample($data);
     }
+
+  /**
+   * Get the country code for the sample based on pack reference number.
+   *
+   * Returns the country code conforming to ISO 3166-1 alpha-2 standard.
+   *
+   * @return string
+   *   The country code (gb, de, fr, it).
+   */
+  public function getSampleCountry() {
+    return self::packGetCountryType($this->pack_reference_number->value);
+  }
+
+  /**
+   * Get country type from pack reference number.
+   *
+   * @param string $pack_reference_number
+   *   The pack reference number.
+   *
+   * @return string
+   *   The country code.
+   */
+  public static function packGetCountryType($pack_reference_number = NULL) {
+    if (empty($pack_reference_number)) {
+      return 'gb';
+    }
+
+    switch (substr($pack_reference_number, 0, 3)) {
+      case '120':
+        // Italian.
+        return 'it';
+
+      case '210':
+        // Deliberate fall through.
+      case '110':
+        // German.
+        return 'de';
+
+      case '130':
+        // French.
+        return 'fr';
+
+      case '001':
+        // United Kingdom of Great Britain and Northern Ireland.
+        // Deliberate fall through.
+      case '005':
+        // Deliberate fall through.
+      case '006':
+        // Deliberate fall through.
+      case '102':
+        // Deliberate fall through.
+      default:
+        return 'gb';
+    }
+  }
+
+  /**
+   * Get the sample type based on pack reference number.
+   *
+   * @return string
+   *   The sample type (vaillant, standard, worcesterbosch_contract, worcesterbosch_service).
+   */
+  public function getSampleType() {
+    $data = [
+      'pack_reference_number' => $this->get('pack_reference_number')->value,
+      'customer_id' => $this->get('customer_id')->value ?? '',
+      'project_id' => $this->get('project_id')->value ?? '',
+      'boiler_id' => $this->get('boiler_id')->value ?? '',
+    ];
+    return self::getPackType($data);
+  }
+
+  /**
+   * Get pack type from pack reference number.
+   *
+   * Sample types:
+   * - Standard Systemcheck Pack: 102 (returns 'standard')
+   * - Vaillant Systemcheck Pack: 001 (returns 'vaillant')
+   * - Worcester Bosch Contract Form: 005 (returns 'worcesterbosch_contract')
+   * - Worcester Bosch Service Form: 006 (returns 'worcesterbosch_service')
+   *
+   * @param array $data
+   *   Array with keys: pack_reference_number, customer_id, project_id, boiler_id.
+   *
+   * @return string
+   *   The pack type.
+   */
+  public static function getPackType($data) {
+    switch (substr($data['pack_reference_number'], 0, 3)) {
+      case '001':
+        // Vaillant Systemcheck Pack.
+        return 'vaillant';
+
+      case '005':
+        // Worcester Bosch Contract Form.
+        return 'worcesterbosch_contract';
+
+      case '006':
+        // Worcester Bosch Service Form.
+        return 'worcesterbosch_service';
+
+      case '102':
+        // Deliberate fall through.
+      default:
+        // Standard Systemcheck Pack.
+        return 'standard';
+    }
+  }
 }

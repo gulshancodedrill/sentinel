@@ -16,6 +16,7 @@
     ],
     "require": {
         "composer/installers": "^2.3",
+        "dompdf/dompdf": "^3.1",
         "drupal/address": "^2.0",
         "drupal/admin_toolbar": "^3.6",
         "drupal/bootstrap_barrio": "^5.5",

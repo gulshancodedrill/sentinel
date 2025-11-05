@@ -1,74 +1,415 @@
 {#
 /**
  * @file
- * Template for displaying Sentinel certificates.
+ * Sentinel SystemCheck Certificate Template
+ * Converted from D7 sentinel_certificate.tpl.php
+ *
+ * Available variables:
+ * - original_sample_entity: The sample entity object
+ * - sentinel_sample_result: Results object after validation
+ * - formatted_results: Formatted numeric results
+ * - company_address: Formatted company address string
+ * - site_address: Formatted site address string
+ * - lang: Language code (gb, de, fr, it)
+ * - module_path: Path to certificate module
  */
 #}
-<div class="sentinel-certificate">
-  <h1>{{ 'Sentinel SystemCheck Certificate'|t }}</h1>
-  
-  {% if content.original_sample_entity %}
-    <div class="certificate-info">
-      <h2>{{ 'Sample Information'|t }}</h2>
-      <p><strong>{{ 'Sample ID:'|t }}</strong> {{ content.original_sample_entity.id }}</p>
-      <p><strong>{{ 'Pack Reference:'|t }}</strong> {{ content.original_sample_entity.pack_reference_number }}</p>
-      <p><strong>{{ 'Analysis Date:'|t }}</strong> {{ 'now'|date('Y-m-d H:i:s') }}</p>
-    </div>
 
-    {% if content.sentinel_sample_result %}
-      <div class="results">
-        <h2>{{ 'Results'|t }}</h2>
-        
-        {% if content.sentinel_sample_result.appearance_result %}
-          <div class="result-item">
-            <strong>{{ 'Visual Appearance:'|t }}</strong> {{ content.sentinel_sample_result.appearance_result.name }}
-            {% if content.sentinel_sample_result.appearance_feedback %}
-              <p>{{ content.sentinel_sample_result.appearance_feedback }}</p>
-            {% endif %}
-          </div>
-        {% endif %}
+{# Use absolute paths for DomPDF image rendering #}
+{% set img_path = img_path_abs %}
+{% set module_img_path = module_img_path_abs %}
 
-        {% if content.sentinel_sample_result.ph_result %}
-          <div class="result-item">
-            <strong>{{ 'pH Level:'|t }}</strong> {{ content.sentinel_sample_result.ph_result.name }}
-            {% if content.sentinel_sample_result.ph_feedback %}
-              <p>{{ content.sentinel_sample_result.ph_feedback }}</p>
-            {% endif %}
-          </div>
-        {% endif %}
+{# Get pass/fail value #}
+{% set pass_fail_value = field_values.pass_fail|default(1) %}
 
-        {% if content.sentinel_sample_result.sentinel_x100_result %}
-          <div class="result-item">
-            <strong>{{ 'Sentinel X100:'|t }}</strong> {{ content.sentinel_sample_result.sentinel_x100_result.name }}
-            {% if content.sentinel_sample_result.x100_feedback %}
-              <p>{{ content.sentinel_sample_result.x100_feedback }}</p>
-            {% endif %}
-          </div>
-        {% endif %}
+{# Determine result images based on pass/fail #}
+{% if pass_fail_value == 0 %}
+  {% set system_check_result = '<img src="' ~ img_path ~ '/' ~ lang ~ '-report-failed.jpg" alt="' ~ 'Overall result - Fail'|t ~ '" />' %}
+  {% set recommendation_logo = '<img class="result-icon" src="' ~ img_path ~ '/failed.jpg" alt="Fail" />' %}
+{% else %}
+  {% set system_check_result = '<img src="' ~ img_path ~ '/' ~ lang ~ '-report-success.jpg" alt="' ~ 'Overall result - Pass'|t ~ '" />' %}
+  {% set recommendation_logo = '<img class="result-icon" src="' ~ img_path ~ '/success.jpg" alt="Pass" />' %}
+{% endif %}
 
-        {% if content.sentinel_sample_result.recommendations %}
-          <div class="recommendations">
-            <h3>{{ 'Recommendations'|t }}</h3>
-            <p>{{ content.sentinel_sample_result.recommendations }}</p>
-          </div>
-        {% endif %}
-      </div>
-    {% endif %}
+{# Result icon variables #}
+{% set result_pass = '<img class="result-icon" src="' ~ img_path ~ '/success.jpg" alt="Pass" />' %}
+{% set result_fail = '<img class="result-icon" src="' ~ img_path ~ '/failed.jpg" alt="Fail" />' %}
+{% set result_pending = '<img class="result-icon" src="' ~ img_path ~ '/warning.jpg" alt="Warning" />' %}
 
-    {% if content.company_address %}
-      <div class="addresses">
-        <h2>{{ 'Addresses'|t }}</h2>
-        <div class="company-address">
-          <strong>{{ 'Company Address:'|t }}</strong> {{ content.company_address }}
-        </div>
-        {% if content.site_address %}
-          <div class="site-address">
-            <strong>{{ 'Site Address:'|t }}</strong> {{ content.site_address }}
-          </div>
-        {% endif %}
-      </div>
+{# Check if X100 level is very high but not a failure #}
+{% if sentinel_sample_result.x100_feedback and 'X100 level very high' in sentinel_sample_result.x100_feedback and sentinel_sample_result.failure_not_x100 is not defined %}
+  {% set recommendation_logo = '<img class="result-icon" src="' ~ img_path ~ '/warning.jpg" alt="Warning" />' %}
+{% endif %}
+
+{# System age text #}
+{% set system_6_months_val = field_values.system_6_months|upper|default('') %}
+{% if system_6_months_val == 'LESS6' %}
+  {% set system_age_text = 'Less than 6 months old'|t %}
+{% elseif system_6_months_val == 'MORE6' %}
+  {% set system_age_text = 'More than 6 months old'|t %}
+{% else %}
+  {% set system_age_text = '' %}
+{% endif %}
+
+{# Helper function to get result icon based on taxonomy name #}
+{% macro get_result_icon(result_obj, result_pass, result_fail, result_pending) %}
+  {% if result_obj and result_obj.entity %}
+    {% if result_obj.entity.name.value == 'Fail' %}
+      {{ result_fail|raw }}
+    {% elseif result_obj.entity.name.value == 'Warning' %}
+      {{ result_pending|raw }}
+    {% else %}
+      {{ result_pass|raw }}
     {% endif %}
   {% endif %}
+{% endmacro %}
+
+{% import _self as helper %}
+
+<div class="responsive-overflow">
+  <div class="pdf-report">
+    
+    {# Header with logo and result badge #}
+    <table class="table-layout">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;">
+            <img class="pdf-report__logo-image" src="{{ module_img_path }}/logo.png" alt="{{ 'Sentinel'|t }}" />
+            <span class="pdf-report__logo-caption"><strong>System</strong>Check</span>
+          </td>
+          <td align="right" style="vertical-align: top;">
+            {{ system_check_result|raw }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h1>{{ 'Independent Laboratory Report'|t }}</h1>
+
+    <div>
+      {# Report Details Table #}
+      <table>
+        <tr>
+          <td><strong>{{ 'Unique Pack Reference'|t }}:</strong> {{ field_values.pack_reference_number|default('') }}</td>
+          <td class="small"><strong>{{ 'Date Reported'|t }}:</strong> {{ field_values.date_reported_formatted|default('') }}</td>
+          <td class="small"><strong>{{ 'Date Received'|t }}:</strong> {{ field_values.date_booked_formatted|default('') }}</td>
+        </tr>
+        <tr>
+          <td><strong>{{ 'Sender\'s Name'|t }}:</strong> {{ field_values.installer_name|default('') }}</td>
+          <td class="small">
+            <strong>{{ 'Project Ref'|t }}:</strong> {{ field_values.project_id|default('') }}<br>
+            {% if field_values.engineers_code %}
+              <strong>{{ 'Engineer\'s Code'|t }}:</strong> {{ field_values.engineers_code }}
+            {% endif %}
+          </td>
+          <td class="small"><strong>{{ 'Boiler No'|t }}:</strong> {{ field_values.boiler_id|default('') }}</td>
+        </tr>
+        <tr>
+          <td><strong>{{ 'Sender\'s Company'|t }}:</strong> {{ field_values.company_name|default('') }}</td>
+          <td class="small" colspan="2"><strong>{{ 'System Age'|t }}:</strong> {{ system_age_text }}</td>
+        </tr>
+        <tr>
+          <td><strong>{{ 'Sender\'s Address'|t }}:</strong> {{ company_address }}</td>
+          <td class="small" colspan="2"><strong>{{ 'Site Address'|t }}:</strong> {{ site_address }}</td>
+        </tr>
+      </table>
+
+      {# Recommendations Section #}
+      <h2>{{ 'Recommendations'|t }}</h2>
+      <table class="recommendations-table">
+        <tr>
+          <td style="width: 18%;" align="center">
+            {{ recommendation_logo|raw }}
+          </td>
+          <td>{{ sentinel_sample_result.recommendations|raw }}</td>
+        </tr>
+      </table>
+
+      {# System Water Results Summary #}
+      <h2>{{ 'System Water Results'|t }}</h2>
+      <table class="table-horizontal">
+        
+        {# Appearance #}
+        {% if sentinel_sample_result.appearance_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'Appearance'|t }}</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.appearance_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.appearance_feedback|t|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# pH #}
+        {% if sentinel_sample_result.ph_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'pH'|t }}</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.ph_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.ph_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# Conductivity #}
+        {% if sentinel_sample_result.sys_cond_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'Conductivity'|t }}</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.sys_cond_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.conductivity_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# Chloride #}
+        {% if formatted_results.mains_cl_result is defined %}
+          <tr>
+            <th style="width: 20%;">{{ 'Chloride'|t }}</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.sys_cl_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.chloride_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# Calcium Hardness (conditional) #}
+        {% if sentinel_sample_result.sys_calcium_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'Calcium Hardness'|t }}</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.sys_calcium_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.calcium_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# Iron #}
+        {% if sentinel_sample_result.iron_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'Iron'|t }} ({{ 'Soluble'|t }})</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.iron_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.iron_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# Copper #}
+        {% if sentinel_sample_result.copper_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'Copper'|t }} ({{ 'Soluble'|t }})</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.copper_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.copper_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# Aluminium (conditional) #}
+        {% if sentinel_sample_result.aluminium_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'Aluminium'|t }} ({{ 'Soluble'|t }})</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.aluminium_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.aluminium_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+        {# Inhibitor #}
+        {% if sentinel_sample_result.sentinel_x100_result %}
+          <tr>
+            <th style="width: 20%;">{{ 'Inhibitor Concentration'|t }}</th>
+            <td style="width: 10%; vertical-align: top;" align="center">
+              {{ helper.get_result_icon(sentinel_sample_result.sentinel_x100_result, result_pass, result_fail, result_pending) }}
+            </td>
+            <td>{{ sentinel_sample_result.x100_feedback|raw }}</td>
+          </tr>
+        {% endif %}
+
+      </table>
+
+      {# Disclaimer #}
+      <div class="disclaimer">
+        <small>{{ 'Note: Interpretation of results is based on the system being treated with Sentinel X100'|t }}</small>
+      </div>
+
+      {# Detailed Results Table #}
+      <table class="table-centered">
+        <thead>
+          <tr>
+            <th>{{ 'Test'|t }}</th>
+            <th>{{ 'Mains Water Results'|t }}</th>
+            <th>{{ 'System Water Results'|t }}</th>
+            <th>{{ 'Recommended Results'|t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ 'Appearance'|t }}</td>
+            <td class="is-empty"></td>
+            <td>
+              {% if sentinel_sample_result.appearance_result and sentinel_sample_result.appearance_result.entity %}
+                {% if sentinel_sample_result.appearance_result.entity.name.value|lower == 'fail' %}
+                  {{ 'Water is very turbid'|t }}
+                {% else %}
+                  {{ sentinel_sample_result.appearance_result.entity.name.value|t }}
+                {% endif %}
+              {% endif %}
+            </td>
+            <td class="is-highlighted">{{ 'Clear or slighlty turbid'|t }}</td>
+          </tr>
+          <tr>
+            <td>{{ 'pH'|t }}</td>
+            <td class="is-empty"></td>
+            <td>{{ formatted_results.ph_result|default('') }}</td>
+            <td class="is-highlighted">{{ '6.5 - 8.5'|t }}</td>
+          </tr>
+          <tr>
+            <td>{{ 'Conductivity'|t }} &#x3BC;S/cm</td>
+            <td>{{ formatted_results.mains_cond_result|default('') }}</td>
+            <td>
+              {% if sentinel_sample_result.sys_cond_result and sentinel_sample_result.sys_cond_result.entity %}
+                {% if sentinel_sample_result.sys_cond_result.entity.name.value|lower == 'fail' %}
+                  {{ 'Excess detected'|t }}
+                {% else %}
+                  {{ sentinel_sample_result.sys_cond_result.entity.name.value|t }}
+                {% endif %}
+              {% endif %}
+            </td>
+            <td class="is-highlighted">{{ 'No excess'|t }}</td>
+          </tr>
+
+          {# Chloride (conditional) #}
+          {% if formatted_results.mains_cl_result is defined %}
+            <tr>
+              <td>{{ 'Chloride ppm'|t }}</td>
+              <td>{{ formatted_results.mains_cl_result }}</td>
+              <td>
+                {% if sentinel_sample_result.sys_cl_result and sentinel_sample_result.sys_cl_result.entity %}
+                  {% if sentinel_sample_result.sys_cl_result.entity.name.value|lower == 'fail' %}
+                    {{ 'Excess detected'|t }}
+                  {% else %}
+                    {{ sentinel_sample_result.sys_cl_result.entity.name.value|t }}
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td class="is-highlighted">{{ 'No excess'|t }}</td>
+            </tr>
+          {% endif %}
+
+          {# Calcium Hardness (conditional) #}
+          {% if field_values.sys_calcium_result %}
+            {% set calcium_signs = {'gb': 'ppm', 'it': 'ppm', 'de': 'ºdH', 'fr': 'ºTH'} %}
+            {% set calcium_sign = calcium_signs[lang]|default('ppm') %}
+            <tr>
+              <td>{{ 'Calcium Hardness (as CaCO'|t }}<span class="sub">3</span>) {{ calcium_sign }}</td>
+              <td>{{ formatted_results.mains_calcium_result|default('') }}</td>
+              <td>{{ field_values.sys_calcium_result }}</td>
+              <td class="is-highlighted">{{ 'Min 75% of mains unless treated with sufficient inhibitor'|t }}</td>
+            </tr>
+          {% endif %}
+
+          <tr>
+            <td>{{ 'Iron (soluble) ppm'|t }}</td>
+            <td class="is-empty"></td>
+            <td>{{ formatted_results.iron_result|default('') }}</td>
+            <td class="is-highlighted">{{ '125 maximum if treated with sufficient inhibitor'|t }}</td>
+          </tr>
+          <tr>
+            <td>{{ 'Copper (soluble) ppm'|t }}</td>
+            <td class="is-empty"></td>
+            <td>{{ formatted_results.copper_result|default('') }}</td>
+            <td class="is-highlighted">{{ '1 maximum if treated with sufficient inhibitor'|t }}</td>
+          </tr>
+
+          {# Aluminium (conditional) #}
+          {% if sentinel_sample_result.aluminium_result %}
+            <tr>
+              <td>{{ 'Aluminium (soluble) ppm'|t }}</td>
+              <td class="is-empty"></td>
+              <td>{{ formatted_results.aluminium_result|default('') }}</td>
+              <td class="is-highlighted">{{ '1 maximum if treated with sufficient inhibitor'|t }}</td>
+            </tr>
+          {% endif %}
+
+          <tr>
+            <td>{{ 'Inhibitor %'|t }}</td>
+            <td class="is-empty"></td>
+            <td>{{ formatted_results.sentinel_x100_result|default('') }}</td>
+            <td class="is-highlighted">{{ 'Min. 1.00%'|t }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {# Footer #}
+    <div>
+      <table class="table-layout">
+        <tbody>
+          <tr>
+            <td>
+              {{ 'Sentinel Performance Solutions Ltd, 7650 Daresbury Park, Warrington, WA4 4BS'|t }}
+              <br />
+              T: <a href="tel:{{ '+44 (0) 1928 704330'|t }}">{{ '+44 (0) 1928 704330'|t }}</a>
+              F: <a href="fax:{{ '+44 (0) 1928 562070'|t }}">{{ '+44 (0) 1928 562070'|t }}</a>
+              W: <a href="http://www.sentinelprotects.com/uk">sentinelprotects.com</a>
+            </td>
+            {% if lang == 'gb' or lang == 'it' %}
+              <td style="width: 40%; vertical-align: top;" align="right">
+                <table class="table-layout">
+                  <tr>
+                    <td>
+                      <a class="social-links__link" href="https://twitter.com/{{ 'SentinelHQ'|t }}">
+                        <img src="{{ img_path }}/twitter.png" />
+                      </a>
+                    </td>
+                    <td>
+                      <a class="social-links__link" href="https://twitter.com/{{ 'SentinelHQ'|t }}">
+                        @{{ 'SentinelHQ'|t }}
+                      </a>
+                    </td>
+                    <td>
+                      <a class="social-links__link" href="https://www.facebook.com/{{ 'SentinelCPM'|t }}">
+                        <img src="{{ img_path }}/facebook.png" />
+                      </a>
+                    </td>
+                    <td>
+                      <a class="social-links__link" href="https://www.facebook.com/{{ 'SentinelCPM'|t }}">
+                        {{ 'SentinelCPM'|t }}
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                  </tr>
+                </table>
+              </td>
+            {% endif %}
+          </tr>
+        </tbody>
+      </table>
+      <p>{{ 'ppm(parts per million) = mg/l'|t }}</p>
+      <p>
+        {% if lang == 'gb' %}
+          <small>
+            {{ 'Sentinel Performance Solutions Limited Registered in England and Wales'|t }}.
+            {{ 'Company No'|t }}. 5433529.
+            {{ 'VAT registration No'|t }}. GB1001 905 80.
+            {{ 'Registered as above'|t }}
+          </small>
+        {% endif %}
+      </p>
+    </div>
+
+  </div>
 </div>
 
-
+{% if pdf is not defined or not pdf %}
+  <p>
+    <a href="{{ path('sentinel_systemcheck_certificate.view_pdf', {'sample_id': original_sample_entity.id}) }}">
+      {{ 'Download as pdf'|t }}
+    </a>
+  </p>
+{% endif %}

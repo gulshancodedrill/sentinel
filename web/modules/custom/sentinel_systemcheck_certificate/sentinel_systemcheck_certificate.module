@@ -7,6 +7,115 @@
 
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Entity\ContentEntityInterface;
+
+/**
+ * Helper function to safely get field value from entity.
+ *
+ * @param object $entity
+ *   The entity object.
+ * @param string $field_name
+ *   The field name.
+ *
+ * @return mixed
+ *   The field value or NULL.
+ */
+function _get_field_value($entity, $field_name) {
+  if (!$entity instanceof ContentEntityInterface) {
+    return NULL;
+  }
+
+  $candidates = [$field_name];
+  if (strpos($field_name, 'field_') === 0) {
+    $candidates[] = substr($field_name, 6);
+  }
+  else {
+    $candidates[] = 'field_' . $field_name;
+  }
+
+  foreach (array_unique($candidates) as $candidate) {
+    if ($entity->hasField($candidate)) {
+      $field = $entity->get($candidate);
+      if ($field->isEmpty()) {
+        continue;
+      }
+
+      $first = $field->first();
+      if ($first && isset($first->value)) {
+        return $first->value;
+      }
+
+      $values = $field->getValue();
+      if (!empty($values)) {
+        $value = reset($values);
+        if (is_array($value) && isset($value['value'])) {
+          return $value['value'];
+        }
+        elseif (!is_array($value)) {
+          return $value;
+        }
+      }
+    }
+
+    if (isset($entity->{$candidate}) && $entity->{$candidate} !== NULL) {
+      $value = $entity->{$candidate};
+      if (is_scalar($value)) {
+        return $value;
+      }
+      elseif (is_object($value) && property_exists($value, 'value')) {
+        return $value->value;
+      }
+    }
+  }
+
+  return NULL;
+}
+
+/**
+ * Collect selected field values from an entity with fallback names.
+ *
+ * @param \Drupal\Core\Entity\ContentEntityInterface $entity
+ *   The entity to collect values from.
+ * @param array $map
+ *   Associative array where the key is the normalized name and the value is a
+ *   string or array of candidate field names.
+ *
+ * @return array
+ *   Array of collected values keyed by normalized field name.
+ */
+function sentinel_systemcheck_certificate_collect_entity_values(ContentEntityInterface $entity, array $map) {
+  $values = [];
+
+  foreach ($map as $key => $candidates) {
+    if (is_int($key)) {
+      $key = $candidates;
+      $candidates = [$candidates];
+    }
+    elseif (!is_array($candidates)) {
+      $candidates = [$candidates];
+    }
+
+    foreach ($candidates as $candidate) {
+      $value = _get_field_value($entity, $candidate);
+      if ($value !== NULL && $value !== '') {
+        $values[$key] = $value;
+        break;
+      }
+    }
+
+    if (!isset($values[$key]) && isset($entity->{$key}) && $entity->{$key} !== NULL) {
+      $property = $entity->{$key};
+      if (is_scalar($property)) {
+        $values[$key] = $property;
+      }
+      elseif (is_object($property) && property_exists($property, 'value')) {
+        $values[$key] = $property->value;
+      }
+    }
+  }
+
+  return $values;
+}
 
 /**
  * Populate results for a sample entity.
@@ -16,36 +125,41 @@ use Drupal\Core\File\FileSystemInterface;
  *
  * @param object $result_object
  *   The result object to populate.
- * @param \Drupal\sentinel_portal_entities\Entity\SentinelSample $sentinel_sample
- *   The sample entity.
+ * @param \Drupal\Core\Entity\ContentEntityInterface $sentinel_sample
+ *   The sample entity (SentinelSample or test_entity).
  * @param object $formatted_results
  *   Optional formatted results object.
  */
-function sentinel_systemcheck_certificate_populate_results($result_object, SentinelSample $sentinel_sample, $formatted_results = NULL) {
-  $lang = $sentinel_sample->getSampleCountry();
-  $appearance_result = !empty($sentinel_sample->appearance_result) ? $sentinel_sample->appearance_result : '';
-  $system_6_months = !empty($sentinel_sample->system_6_months) && $sentinel_sample->system_6_months != 'FALSE' && $sentinel_sample->system_6_months != 'TRUE' ? $sentinel_sample->system_6_months : '';
-  $ph = !empty($sentinel_sample->ph_result) ? $sentinel_sample->ph_result : '';
-  $boron_result = !empty($sentinel_sample->boron_result) ? $sentinel_sample->boron_result : '';
-  $boiler_type = !empty($sentinel_sample->boiler_type) ? $sentinel_sample->boiler_type : '';
-  $molybdenum_result = !empty($sentinel_sample->molybdenum_result) ? $sentinel_sample->molybdenum_result : '';
-  $sys_cond_result = !empty($sentinel_sample->sys_cond_result) ? (int)$sentinel_sample->sys_cond_result : '';
-  $mains_cond_result = !empty($sentinel_sample->mains_cond_result) ? (int)$sentinel_sample->mains_cond_result : '';
-  $mains_calcium_result = !empty($sentinel_sample->mains_calcium_result) ? (int)$sentinel_sample->mains_calcium_result : '';
-  $sys_calcium_result = !empty($sentinel_sample->sys_calcium_result) ? $sentinel_sample->sys_calcium_result : '';
-  $dissolved_iron = !empty($sentinel_sample->iron_result) ? $sentinel_sample->iron_result : '';
-  $copper_result = !empty($sentinel_sample->copper_result) ? $sentinel_sample->copper_result : '';
-  $dissolved_aluminium = !empty($sentinel_sample->aluminium_result) ? $sentinel_sample->aluminium_result : '';
+function sentinel_systemcheck_certificate_populate_results($result_object, ContentEntityInterface $sentinel_sample, $formatted_results = NULL) {
+  // Get country code - use method if available, otherwise default to 'gb'
+  $lang = method_exists($sentinel_sample, 'getSampleCountry') ? $sentinel_sample->getSampleCountry() : 'gb';
+  $appearance_result = _get_field_value($sentinel_sample, 'appearance_result') ?? '';
+  $system_6_months_val = _get_field_value($sentinel_sample, 'system_6_months');
+  $system_6_months = !empty($system_6_months_val) && $system_6_months_val != 'FALSE' && $system_6_months_val != 'TRUE' ? $system_6_months_val : '';
+  $ph = _get_field_value($sentinel_sample, 'ph_result') ?? '';
+  $boron_result = _get_field_value($sentinel_sample, 'boron_result') ?? '';
+  $boiler_type = _get_field_value($sentinel_sample, 'boiler_type') ?? '';
+  $molybdenum_result = _get_field_value($sentinel_sample, 'molybdenum_result') ?? '';
+  $sys_cond_result = _get_field_value($sentinel_sample, 'sys_cond_result');
+  $sys_cond_result = !empty($sys_cond_result) ? (int)$sys_cond_result : '';
+  $mains_cond_result = _get_field_value($sentinel_sample, 'mains_cond_result');
+  $mains_cond_result = !empty($mains_cond_result) ? (int)$mains_cond_result : '';
+  $mains_calcium_result = _get_field_value($sentinel_sample, 'mains_calcium_result');
+  $mains_calcium_result = !empty($mains_calcium_result) ? (int)$mains_calcium_result : '';
+  $sys_calcium_result = _get_field_value($sentinel_sample, 'sys_calcium_result') ?? '';
+  $dissolved_iron = _get_field_value($sentinel_sample, 'iron_result') ?? '';
+  $copper_result = _get_field_value($sentinel_sample, 'copper_result') ?? '';
+  $dissolved_aluminium = _get_field_value($sentinel_sample, 'aluminium_result') ?? '';
 
-  $sys_cl_result = !empty($sentinel_sample->sys_cl_result) ? $sentinel_sample->sys_cl_result : '';
-  $mains_cl_result = !empty($sentinel_sample->mains_cl_result) ? $sentinel_sample->mains_cl_result : '';
+  $sys_cl_result = _get_field_value($sentinel_sample, 'sys_cl_result') ?? '';
+  $mains_cl_result = _get_field_value($sentinel_sample, 'mains_cl_result') ?? '';
 
   if (!is_numeric($sys_cl_result) || !is_numeric($mains_cl_result)) {
     $sys_cl_result = '';
     $mains_cl_result = 0;
   }
 
-  $sys_cl_result = sentinel_systemcheck_certificate_calculate_excess_cloride_result($sentinel_sample->mains_cl_result, $boron_result, $sys_cl_result);
+  $sys_cl_result = sentinel_systemcheck_certificate_calculate_excess_cloride_result(_get_field_value($sentinel_sample, 'mains_cl_result'), $boron_result, $sys_cl_result);
 
   $vars = ['aluminium_result', 'copper_result', 'iron_result', 'ph_result', 'mains_cond_result', 'sentinel_x100_result', 'mains_cl_result'];
 
@@ -55,8 +169,9 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Senti
 
   // Make sure all numeric values follow the following number format except legacy samples.
   foreach ($vars as $var_name) {
-    if (isset($sentinel_sample->{$var_name}) && is_numeric($sentinel_sample->{$var_name})) {
-      $formatted_results->{$var_name} = number_format(max(round($sentinel_sample->{$var_name}, 2), 0), 2);
+    $field_value = _get_field_value($sentinel_sample, $var_name);
+    if ($field_value !== NULL && is_numeric($field_value)) {
+      $formatted_results->{$var_name} = number_format(max(round($field_value, 2), 0), 2);
     }
   }
 
@@ -78,14 +193,13 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Senti
     \Drupal::logger('sentinel_systemcheck_certificate')->critical('Results file inclusion failure!');
   }
 
-  if (isset($sentinel_sample->pid)) {
-    $pid = $sentinel_sample->pid;
-  } else {
+  $pid = $sentinel_sample->id();
+  if (!$pid) {
     // If the pid doesn't exist then this might be a test sample.
     $pid = 0;
   }
 
-  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats') && $sentinel_sample->entityType() != 'test_entity') {
+  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats') && $sentinel_sample->getEntityTypeId() != 'test_entity') {
     delete_old_stat_entities_if_any($pid);
   }
 
@@ -95,11 +209,12 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Senti
 
   $recommendations = _apply_hierachy_conditions_for_overall_recommendations($recommendations, $lang);
 
-  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats') && $sentinel_sample->entityType() != 'test_entity') {
+  if (\Drupal::moduleHandler()->moduleExists('sentinel_stats') && $sentinel_sample->getEntityTypeId() != 'test_entity') {
     delete_stat_recommendations_that_are_not_needed($recommendations, $pid);
   }
 
-  if ($sentinel_sample->pass_fail == 1 && $recommendations == '') {
+  $pass_fail = _get_field_value($sentinel_sample, 'pass_fail');
+  if ($pass_fail == 1 && $recommendations == '') {
     $recommendations = \Drupal::translation()->translate('Both the system water and the level of Inhibitor are acceptable. Check inhibitor levels annually to maintain protection.', [], ['langcode' => $lang]);
   }
 
@@ -119,8 +234,11 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Senti
   $result_object->x100_feedback = isset($x100_feedback) ? $x100_feedback : '';
   $result_object->recommendations = $recommendations;
 
-  if ($sentinel_sample->getSampleType() != 'vaillant') {
-    // If this is a Vaillant sample then we add more results to the feedback.
+  // Get sample type - use method if available, otherwise default to 'standard'
+  $sample_type = method_exists($sentinel_sample, 'getSampleType') ? $sentinel_sample->getSampleType() : 'standard';
+  
+  if ($sample_type != 'vaillant') {
+    // If this is NOT a Vaillant sample then we add more results to the feedback.
     $result_object->sys_calcium_result = isset($calcium_pass) ? $result_taxonomies[$calcium_pass] : '';
     $result_object->calcium_feedback = isset($calcium_feedback) ? $calcium_feedback : '';
     $result_object->aluminium_result = isset($dissolved_aluminium_pass) ? $result_taxonomies[$dissolved_aluminium_pass] : '';
@@ -143,12 +261,59 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Senti
  *   DomPDF object.
  */
 function sentinel_systemcheck_certificate_get_dompdf_object($data) {
-  // Note: In a real implementation, you would include DomPDF library
-  // For now, return a placeholder object
-  return (object) [
-    'data' => $data,
-    'generated' => TRUE,
-  ];
+  $options = new \Dompdf\Options();
+  $options->set('isHtml5ParserEnabled', TRUE);
+  $options->set('enable_css_float', TRUE);
+  $options->set('isRemoteEnabled', TRUE);
+  $options->set('chroot', \Drupal::root());
+  
+  $dompdf = new \Dompdf\Dompdf($options);
+  $dompdf->setPaper('A4', 'portrait');
+  $dompdf->loadHtml($data);
+  $dompdf->render();
+  
+  return $dompdf;
+}
+
+/**
+ * Generate PDF file from DomPDF object.
+ *
+ * @param \Dompdf\Dompdf $dompdf_object
+ *   The DomPDF object.
+ * @param string $filename
+ *   The filename for the PDF.
+ *
+ * @return object|bool
+ *   The file object or FALSE on failure.
+ */
+function sentinel_systemcheck_certificate_generate_pdf_file($dompdf_object, $filename) {
+  $pdf_output = $dompdf_object->output();
+  $file = sentinel_systemcheck_certificate_save_pdf($filename, $pdf_output);
+  return $file;
+}
+
+/**
+ * Save PDF data to file system.
+ *
+ * @param string $filename
+ *   The filename for the PDF.
+ * @param string $file_data
+ *   The PDF binary data.
+ *
+ * @return object|bool
+ *   The file object or FALSE on failure.
+ */
+function sentinel_systemcheck_certificate_save_pdf($filename, $file_data) {
+  $file_repository = \Drupal::service('file.repository');
+  
+  try {
+    $file = $file_repository->writeData($file_data, 'private://' . $filename, FileSystemInterface::EXISTS_REPLACE);
+    return $file;
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('sentinel_systemcheck_certificate')->error('Error saving PDF: @message', ['@message' => $e->getMessage()]);
+    return FALSE;
+  }
 }
 
 /**
@@ -312,6 +477,7 @@ function _get_injector_file($name) {
 function delete_old_stat_entities_if_any($pid) {
   if (\Drupal::moduleHandler()->moduleExists('sentinel_stats')) {
     $query = \Drupal::entityQuery('sentinel_stat')
+      ->accessCheck(FALSE)
       ->condition('field_stat_pack_reference_id', $pid);
     $entity_ids = $query->execute();
     
@@ -443,14 +609,51 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
     $site_address = sentinel_system_get_addresses_from_sample_entity('site', $sentinel_sample_entity);
 
     foreach (['date_reported', 'date_booked'] as $sampleDateProperty) {
-      if (!empty($sentinel_sample_entity->{$sampleDateProperty})) {
-        $date = new \DateTime(str_replace('/', '-', $sentinel_sample_entity->{$sampleDateProperty}));
-        if (is_object($date)) {
+      $date_value = _get_field_value($sentinel_sample_entity, $sampleDateProperty);
+      // Only process if it's a valid date string
+      if (!empty($date_value) && is_string($date_value) && strlen($date_value) > 5 && !is_numeric($date_value)) {
+        try {
+          $date = new \DateTime(str_replace('/', '-', $date_value));
           $sentinel_sample_entity->{$sampleDateProperty . '_formatted'} = $date->format('d/m/Y');
+        }
+        catch (\Exception $e) {
+          // If date parsing fails, don't set the formatted value
+          \Drupal::logger('sentinel_systemcheck_certificate')->warning('Invalid date format for @field: @value', [
+            '@field' => $sampleDateProperty,
+            '@value' => $date_value,
+          ]);
         }
       }
     }
   }
+
+  // Get country code - check if method exists
+  $lang = method_exists($sentinel_sample_entity, 'getSampleCountry') 
+    ? $sentinel_sample_entity->getSampleCountry() 
+    : 'gb';
+  
+  $module_path = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
+  $theme_path = \Drupal::service('extension.list.theme')->getPath('sentinel_portal');
+  
+  // Absolute paths for DomPDF (images must use file:// for DomPDF)
+  $root = \Drupal::root();
+  $img_path_abs = $root . '/' . $theme_path . '/img/pdfs';
+  $module_img_path_abs = $root . '/' . $module_path . '/images';
+
+  // Collect field values for template
+  $field_values = [
+    'pack_reference_number' => _get_field_value($sentinel_sample_entity, 'pack_reference_number'),
+    'installer_name' => _get_field_value($sentinel_sample_entity, 'installer_name'),
+    'company_name' => _get_field_value($sentinel_sample_entity, 'company_name'),
+    'project_id' => _get_field_value($sentinel_sample_entity, 'project_id'),
+    'boiler_id' => _get_field_value($sentinel_sample_entity, 'boiler_id'),
+    'engineers_code' => _get_field_value($sentinel_sample_entity, 'engineers_code'),
+    'system_6_months' => _get_field_value($sentinel_sample_entity, 'system_6_months'),
+    'pass_fail' => _get_field_value($sentinel_sample_entity, 'pass_fail'),
+    'sys_calcium_result' => _get_field_value($sentinel_sample_entity, 'sys_calcium_result'),
+    'date_reported_formatted' => $sentinel_sample_entity->date_reported_formatted ?? '',
+    'date_booked_formatted' => $sentinel_sample_entity->date_booked_formatted ?? '',
+  ];
 
   return [
     'sentinel_sample_result' => $sentinel_sample_result,
@@ -458,7 +661,12 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
     'formatted_results' => $formatted_results,
     'company_address' => $company_address,
     'site_address' => $site_address,
-    'lang' => $sentinel_sample_entity->getSampleCountry(),
+    'lang' => $lang,
+    'module_path' => $module_path,
+    'theme_path' => $theme_path,
+    'img_path_abs' => $img_path_abs,
+    'module_img_path_abs' => $module_img_path_abs,
+    'field_values' => $field_values,
   ];
 }
 
@@ -478,26 +686,27 @@ function sentinel_system_get_addresses_from_sample_entity($address_type, $sample
 
   if ($address_type == 'company') {
     $address = implode(', ', array_filter([
-      $sample_entity->company_address1,
-      $sample_entity->company_address2,
-      $sample_entity->company_town,
-      $sample_entity->company_county,
-      $sample_entity->company_postcode,
+      _get_field_value($sample_entity, 'company_address1'),
+      _get_field_value($sample_entity, 'company_address2'),
+      _get_field_value($sample_entity, 'company_town'),
+      _get_field_value($sample_entity, 'company_county'),
+      _get_field_value($sample_entity, 'company_postcode'),
     ]));
   } elseif ($address_type == 'site') {
+    $postcode = _get_field_value($sample_entity, 'postcode');
     $address = implode(', ', array_filter([
-      $sample_entity->property_number,
-      $sample_entity->street,
-      $sample_entity->town_city,
-      $sample_entity->county,
-      $sample_entity->postcode,
+      _get_field_value($sample_entity, 'property_number'),
+      _get_field_value($sample_entity, 'street'),
+      _get_field_value($sample_entity, 'town_city'),
+      _get_field_value($sample_entity, 'county'),
+      $postcode,
     ]));
 
-    if ($address == $sample_entity->postcode) {
+    if ($address == $postcode) {
       // For instances where the address is kept in the system location field we need to alter this.
       $address = implode(', ', array_filter([
-        $sample_entity->system_location,
-        $sample_entity->postcode,
+        _get_field_value($sample_entity, 'system_location'),
+        $postcode,
       ]));
     }
   }
@@ -511,6 +720,7 @@ function sentinel_system_get_addresses_from_sample_entity($address_type, $sample
 function _re_generate_logic_from_condition_entities() {
   // Load the entities in order of their event number.
   $query = \Drupal::entityQuery('condition_entity')
+    ->accessCheck(FALSE)
     ->sort('field_condition_event_number', 'ASC');
   $entity_ids = $query->execute();
 
