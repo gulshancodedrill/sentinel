@@ -1321,7 +1321,7 @@ class SentinelSampleSubmissionForm extends FormBase {
     try {
       $storage = $this->entityTypeManager->getStorage('sentinel_sample');
       // Get UCR from client record
-      $ucr_value = $client->getUcr();
+      $ucr_value = $client->get('ucr')->value;
       $sample = $storage->create([]);
       // Set UCR first
       if ($ucr_value && $sample->hasField('ucr')) {
