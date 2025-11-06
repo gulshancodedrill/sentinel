@@ -53,13 +53,34 @@
 
 {# Helper function to get result icon based on taxonomy name #}
 {% macro get_result_icon(result_obj, result_pass, result_fail, result_pending) %}
-  {% if result_obj and result_obj.entity %}
-    {% if result_obj.entity.name.value == 'Fail' %}
+  {% if result_obj %}
+    {% set label = '' %}
+    {% if result_obj.name is defined and result_obj.name.value is defined %}
+      {% set label = result_obj.name.value %}
+    {% elseif result_obj.getName is defined %}
+      {% set label = result_obj.getName() %}
+    {% elseif result_obj.entity is defined and result_obj.entity.name is defined and result_obj.entity.name.value is defined %}
+      {% set label = result_obj.entity.name.value %}
+    {% endif %}
+    {% set label = label|lower %}
+    {% if label == 'fail' %}
       {{ result_fail|raw }}
-    {% elseif result_obj.entity.name.value == 'Warning' %}
+    {% elseif label == 'warning' %}
       {{ result_pending|raw }}
-    {% else %}
+    {% elseif label %}
       {{ result_pass|raw }}
+    {% endif %}
+  {% endif %}
+{% endmacro %}
+
+{% macro result_label(result_obj) %}
+  {% if result_obj %}
+    {% if result_obj.name is defined and result_obj.name.value is defined %}
+      {{ result_obj.name.value }}
+    {% elseif result_obj.getName is defined %}
+      {{ result_obj.getName() }}
+    {% elseif result_obj.entity is defined and result_obj.entity.name is defined and result_obj.entity.name.value is defined %}
+      {{ result_obj.entity.name.value }}
     {% endif %}
   {% endif %}
 {% endmacro %}
@@ -128,7 +149,6 @@
       {# System Water Results Summary #}
       <h2>{{ 'System Water Results'|t }}</h2>
       <table class="table-horizontal">
-        
         {# Appearance #}
         {% if sentinel_sample_result.appearance_result %}
           <tr>
@@ -136,7 +156,7 @@
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.appearance_result, result_pass, result_fail, result_pending) }}
             </td>
-            <td>{{ sentinel_sample_result.appearance_feedback|t|raw }}</td>
+            <td>{{ sentinel_sample_result.appearance_feedback|raw }}</td>
           </tr>
         {% endif %}
 
@@ -248,16 +268,17 @@
         <tbody>
           <tr>
             <td>{{ 'Appearance'|t }}</td>
-            <td class="is-empty"></td>
-            <td>
-              {% if sentinel_sample_result.appearance_result and sentinel_sample_result.appearance_result.entity %}
-                {% if sentinel_sample_result.appearance_result.entity.name.value|lower == 'fail' %}
-                  {{ 'Water is very turbid'|t }}
-                {% else %}
-                  {{ sentinel_sample_result.appearance_result.entity.name.value|t }}
+              <td class="is-empty"></td>
+              {% set appearance_label = helper.result_label(sentinel_sample_result.appearance_result)|trim %}
+              <td>
+                {% if appearance_label %}
+                  {% if appearance_label|lower == 'fail' %}
+                    {{ 'Water is very turbid'|t }}
+                  {% else %}
+                    {{ appearance_label }}
+                  {% endif %}
                 {% endif %}
-              {% endif %}
-            </td>
+              </td>
             <td class="is-highlighted">{{ 'Clear or slighlty turbid'|t }}</td>
           </tr>
           <tr>
@@ -268,16 +289,17 @@
           </tr>
           <tr>
             <td>{{ 'Conductivity'|t }} &#x3BC;S/cm</td>
-            <td>{{ formatted_results.mains_cond_result|default('') }}</td>
-            <td>
-              {% if sentinel_sample_result.sys_cond_result and sentinel_sample_result.sys_cond_result.entity %}
-                {% if sentinel_sample_result.sys_cond_result.entity.name.value|lower == 'fail' %}
-                  {{ 'Excess detected'|t }}
-                {% else %}
-                  {{ sentinel_sample_result.sys_cond_result.entity.name.value|t }}
+              <td>{{ formatted_results.mains_cond_result|default('') }}</td>
+              {% set cond_label = helper.result_label(sentinel_sample_result.sys_cond_result)|trim %}
+              <td>
+                {% if cond_label %}
+                  {% if cond_label|lower == 'fail' %}
+                    {{ 'Excess detected'|t }}
+                  {% else %}
+                    {{ cond_label }}
+                  {% endif %}
                 {% endif %}
-              {% endif %}
-            </td>
+              </td>
             <td class="is-highlighted">{{ 'No excess'|t }}</td>
           </tr>
 
@@ -286,12 +308,13 @@
             <tr>
               <td>{{ 'Chloride ppm'|t }}</td>
               <td>{{ formatted_results.mains_cl_result }}</td>
+              {% set cl_label = helper.result_label(sentinel_sample_result.sys_cl_result)|trim %}
               <td>
-                {% if sentinel_sample_result.sys_cl_result and sentinel_sample_result.sys_cl_result.entity %}
-                  {% if sentinel_sample_result.sys_cl_result.entity.name.value|lower == 'fail' %}
+                {% if cl_label %}
+                  {% if cl_label|lower == 'fail' %}
                     {{ 'Excess detected'|t }}
                   {% else %}
-                    {{ sentinel_sample_result.sys_cl_result.entity.name.value|t }}
+                    {{ cl_label }}
                   {% endif %}
                 {% endif %}
               </td>
@@ -305,8 +328,8 @@
             {% set calcium_sign = calcium_signs[lang]|default('ppm') %}
             <tr>
               <td>{{ 'Calcium Hardness (as CaCO'|t }}<span class="sub">3</span>) {{ calcium_sign }}</td>
-              <td>{{ formatted_results.mains_calcium_result|default('') }}</td>
-              <td>{{ field_values.sys_calcium_result }}</td>
+              <td>{{ calcium_values.mains|default('') }}</td>
+              <td>{{ calcium_values.system|default('') }}</td>
               <td class="is-highlighted">{{ 'Min 75% of mains unless treated with sufficient inhibitor'|t }}</td>
             </tr>
           {% endif %}

@@ -56,7 +56,6 @@ function _get_field_value($entity, $field_name) {
         }
       }
     }
-
     if (isset($entity->{$candidate}) && $entity->{$candidate} !== NULL) {
       $value = $entity->{$candidate};
       if (is_scalar($value)) {
@@ -134,9 +133,11 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Conte
   // Get country code - use method if available, otherwise default to 'gb'
   $lang = method_exists($sentinel_sample, 'getSampleCountry') ? $sentinel_sample->getSampleCountry() : 'gb';
   $appearance_result = _get_field_value($sentinel_sample, 'appearance_result') ?? '';
+ // dd($appearance_result);
   $system_6_months_val = _get_field_value($sentinel_sample, 'system_6_months');
   $system_6_months = !empty($system_6_months_val) && $system_6_months_val != 'FALSE' && $system_6_months_val != 'TRUE' ? $system_6_months_val : '';
   $ph = _get_field_value($sentinel_sample, 'ph_result') ?? '';
+  //dd($ph);
   $boron_result = _get_field_value($sentinel_sample, 'boron_result') ?? '';
   $boiler_type = _get_field_value($sentinel_sample, 'boiler_type') ?? '';
   $molybdenum_result = _get_field_value($sentinel_sample, 'molybdenum_result') ?? '';
@@ -175,6 +176,16 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Conte
     }
   }
 
+  // Ensure sentinel_x100_result is calculated using molybdenum result to match D7 behaviour.
+  $molybdenum_numeric = _get_field_value($sentinel_sample, 'molybdenum_result');
+  if ($molybdenum_numeric !== NULL && is_numeric($molybdenum_numeric) && $molybdenum_numeric > 0) {
+    $x100_result = number_format(floor(($molybdenum_numeric / 75) * 100) / 100, 2);
+  }
+  else {
+    $x100_result = '0.00';
+  }
+  $formatted_results->sentinel_x100_result = $x100_result;
+
   $recommendations = [];
 
   $vocabulary = \Drupal::entityTypeManager()->getStorage('taxonomy_vocabulary')->loadByProperties(['vid' => 'condition_event_results']);
@@ -206,14 +217,13 @@ function sentinel_systemcheck_certificate_populate_results($result_object, Conte
   if (file_exists($real_path)) {
     include $real_path;
   }
-
   $recommendations = _apply_hierachy_conditions_for_overall_recommendations($recommendations, $lang);
 
   if (\Drupal::moduleHandler()->moduleExists('sentinel_stats') && $sentinel_sample->getEntityTypeId() != 'test_entity') {
     delete_stat_recommendations_that_are_not_needed($recommendations, $pid);
   }
 
-  $pass_fail = _get_field_value($sentinel_sample, 'pass_fail');
+  $pass_fail = _get_field_value($sentinel_sample, 'field_pass_fail');
   if ($pass_fail == 1 && $recommendations == '') {
     $recommendations = \Drupal::translation()->translate('Both the system water and the level of Inhibitor are acceptable. Check inhibitor levels annually to maintain protection.', [], ['langcode' => $lang]);
   }
@@ -374,6 +384,42 @@ function _calculate_sentinel_sample_result($result_object, $sentinel_sample) {
 
   if ($total_fail === TRUE) {
     $sentinel_sample->pass_fail = 0;
+  }
+}
+
+/**
+ * Convert calcium values based on country conventions.
+ *
+ * @param mixed $calcium_result
+ *   The raw calcium result value.
+ * @param string $country
+ *   The country code (e.g. gb, de, fr, it).
+ *
+ * @return mixed
+ *   Converted calcium value or original value if conversion not possible.
+ */
+function sentinel_systemcheck_certificate_get_calcium_value_by_country($calcium_result, $country) {
+  if ($calcium_result === NULL || $calcium_result === '') {
+    return $calcium_result;
+  }
+
+  if (!is_numeric($calcium_result)) {
+    return $calcium_result;
+  }
+
+  $country = strtolower($country ?? '');
+
+  switch ($country) {
+    case 'de':
+      return number_format(round($calcium_result * 0.1405, 2), 2);
+
+    case 'fr':
+      return number_format(round($calcium_result * 0.25, 2), 2);
+
+    case 'it':
+    case 'gb':
+    default:
+      return round($calcium_result * 2.5);
   }
 }
 
@@ -655,10 +701,15 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
     'boiler_id' => _get_field_value($sentinel_sample_entity, 'boiler_id'),
     'engineers_code' => _get_field_value($sentinel_sample_entity, 'engineers_code'),
     'system_6_months' => _get_field_value($sentinel_sample_entity, 'system_6_months'),
-    'pass_fail' => _get_field_value($sentinel_sample_entity, 'pass_fail'),
+    'pass_fail' => _get_field_value($sentinel_sample_entity, 'field_pass_fail'),
     'sys_calcium_result' => _get_field_value($sentinel_sample_entity, 'sys_calcium_result'),
     'date_reported_formatted' => $sentinel_sample_entity->date_reported_formatted ?? '',
     'date_booked_formatted' => $sentinel_sample_entity->date_booked_formatted ?? '',
+  ];
+
+  $calcium_values = [
+    'mains' => sentinel_systemcheck_certificate_get_calcium_value_by_country(_get_field_value($sentinel_sample_entity, 'mains_calcium_result'), $lang),
+    'system' => sentinel_systemcheck_certificate_get_calcium_value_by_country(_get_field_value($sentinel_sample_entity, 'sys_calcium_result'), $lang),
   ];
 
   return [
@@ -673,6 +724,7 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
     'img_path_abs' => $img_path_abs,
     'module_img_path_abs' => $module_img_path_abs,
     'field_values' => $field_values,
+    'calcium_values' => $calcium_values,
   ];
 }
 
