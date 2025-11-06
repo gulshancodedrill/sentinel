@@ -185,7 +185,9 @@ function get_company_addresses_for_cids($cids, $address_id = FALSE) {
     'field_address_postal_code',
     'field_address_address_line1',
     'field_address_address_line2',
+    'field_address_address_line3',
     'field_address_organization',
+    'field_address_dependent_locality',
   ]);
   
   // Join with sentinel_sample.
@@ -249,10 +251,15 @@ function get_sentinel_sample_addresses_for_cids($string, $address_id = FALSE) {
     'entity_id',
     'field_address_country_code',
     'field_address_administrative_area',
+    'field_address_dependent_locality',
     'field_address_locality',
     'field_address_postal_code',
     'field_address_address_line1',
     'field_address_address_line2',
+    'field_address_address_line3',
+    'field_address_organization',
+    'field_address_given_name',
+    'field_address_family_name',
   ]);
   
   $query->join('sentinel_sample__field_sentinel_sample_address', 'ssa', 'ssa.field_sentinel_sample_address_target_id = address.entity_id');

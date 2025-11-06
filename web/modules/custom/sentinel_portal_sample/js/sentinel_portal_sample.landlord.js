@@ -4,45 +4,71 @@
     
     Drupal.behaviors.sentinelPortalSampleLandlord = {
         attach: function(context, settings) {
+            var $manualContainer = $('.sample-landlord-field');
+            var $manualInput = $('#edit-landlord').length ? $('#edit-landlord') : $('.sample-landlord-field input[type="text"]');
+
+            if ($manualContainer.length) {
+                if ($manualInput.length && $manualInput.val()) {
+                    $manualContainer.show();
+                }
+                else {
+                    $manualContainer.hide();
+                }
+            }
+
+            var revealLandlordField = function(value) {
+                var $container = $('.sample-landlord-field');
+                if ($container.length) {
+                    $container.stop(true, true).slideDown();
+                }
+
+                if (value !== undefined) {
+                    var $field = $('#edit-landlord');
+                    if (!$field.length) {
+                        $field = $('.sample-landlord-field input[type="text"]');
+                    }
+                    if ($field.length) {
+                        $field.val(value);
+                    }
+                }
+            };
+
             var toggleHiddenForm = function ($btn) {
-                $('.sample-landlord-field').slideDown();
-                $btn.slideUp();
+                revealLandlordField();
+                $btn.stop(true, true).slideUp();
             };
 
             // Wait for Drupal.ajax to be available before adding commands
             function addAjaxCommand() {
                 if (typeof Drupal !== 'undefined' && Drupal.ajax && Drupal.ajax.prototype && Drupal.ajax.prototype.commands) {
-                    // Our function name is prototyped as part of the Drupal.ajax namespace, adding to the commands:
                     Drupal.ajax.prototype.commands.sample_landlord_update = function(ajax, response, status)
                     {
-                        // Set a hard limit to stop the timeout going forever.
-                        var maxCheckExistLimit = 100;
+                        if (!response.data) {
+                            return;
+                        }
 
-                        // Periodically check that an element on the form exists that we can use.
+                        var maxCheckExistLimit = 100;
                         var checkExist = setInterval(function() {
-                            if (maxCheckExistLimit == 0) {
-                                // Looks like we weren't able to find the field in time so we
-                                // stop the timer.
+                            if (maxCheckExistLimit === 0) {
                                 clearInterval(checkExist);
+                                return;
                             }
 
-                            var $field = $('.sample-landlord-field input[type="text"]');
+                            var selector = response.data.landlord_field_selector || '#edit-landlord';
+                            var $field = $(selector);
                             if ($field.length) {
-                                $('.sample-landlord-field').slideDown();
-                                $('.sample-landlord-add-button').slideUp();
-                                $field.val(response.data.term_name);
+                                var value = response.data.raw || response.data.term_name || (response.element ? response.element.value : '') || $('#edit-landlord-selection').val() || $('#edit-system-details-landlord-selection').val();
+                                revealLandlordField(value);
+                                $('.sample-landlord-add-button').stop(true, true).slideUp();
 
-                                // Stop the timer.
                                 clearInterval(checkExist);
                             }
                             else {
-                                // Decrement the hard limit.
                                 maxCheckExistLimit--;
                             }
-                        }, 100); // check every 100ms
+                        }, 100);
                     };
                 } else {
-                    // If Drupal.ajax is not ready, try again in 100ms
                     setTimeout(addAjaxCommand, 100);
                 }
             }
@@ -57,6 +83,28 @@
                     console.log('Landlord button clicked');
                     toggleHiddenForm($(this));
                     return false;
+                });
+            });
+
+            // Immediately populate landlord field when a suggestion is chosen.
+            once('sample-landlord-autocomplete', '#edit-system-details-landlord-selection, #edit-landlord-selection', context).forEach(function(element) {
+                var $input = $(element);
+
+                $input.on('autocompleteselect', function() {
+                    // Trigger change so the AJAX request mirrors Drupal 7 behaviour.
+                    setTimeout(function($el) {
+                        $el.trigger('change');
+                    }, 0, $input);
+                });
+
+                $input.on('change', function() {
+                    var value = $input.val();
+                    if (!value) {
+                        return;
+                    }
+
+                    revealLandlordField(value);
+                    $('.sample-landlord-add-button').stop(true, true).slideUp();
                 });
             });
 

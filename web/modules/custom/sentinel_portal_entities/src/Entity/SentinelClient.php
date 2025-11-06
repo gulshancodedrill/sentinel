@@ -89,7 +89,90 @@ class SentinelClient extends ContentEntityBase implements ContentEntityInterface
    *   The UCR value.
    */
   public function getUcr() {
-    return $this->get('ucr')->value;
+    $real_ucr = $this->ensureRealUcr();
+    return $real_ucr ? $this->generateUcr($real_ucr) : NULL;
+  }
+
+  /**
+   * Get the stored (non-luhn) UCR value.
+   */
+  public function getRealUcr(): ?int {
+    $value = $this->get('ucr')->value;
+    return $value === NULL ? NULL : (int) $value;
+  }
+
+  /**
+   * Ensure the client has a stored UCR, creating one if needed.
+   */
+  public function ensureRealUcr(): ?int {
+    $current = $this->getRealUcr();
+    if ($current) {
+      return $current;
+    }
+
+    $next = $this->calculateNextRealUcr();
+    if ($next <= 0) {
+      return NULL;
+    }
+
+    $this->set('ucr', $next);
+
+    if (!$this->isNew()) {
+      try {
+        $this->save();
+      }
+      catch (\Throwable $exception) {
+        \Drupal::logger('sentinel_portal_entities')->error('Failed to assign UCR to sentinel client @id: @message', [
+          '@id' => $this->id(),
+          '@message' => $exception->getMessage(),
+        ]);
+      }
+    }
+
+    return $next;
+  }
+
+  /**
+   * Explicitly set the stored (non-luhn) UCR value.
+   */
+  public function setRealUcr(int $ucr): self {
+    $this->set('ucr', $ucr);
+    return $this;
+  }
+
+  /**
+   * Set the stored UCR from a full luhn number.
+   */
+  public function setUcr($fullNumber): self {
+    $this->set('ucr', (int) floor(((int) $fullNumber) / 10));
+    return $this;
+  }
+
+  /**
+   * Validate a full UCR using the luhn algorithm.
+   */
+  public function validateUcr(int $full_number): bool {
+    $number = (int) floor($full_number / 10);
+    return $full_number === $this->generateUcr($number);
+  }
+
+  /**
+   * Determine the next available non-luhn UCR value.
+   */
+  protected function calculateNextRealUcr(): int {
+    $connection = \Drupal::database();
+    $query = $connection->select('sentinel_client', 'sc')
+      ->fields('sc', ['ucr'])
+      ->condition('ucr', NULL, 'IS NOT NULL')
+      ->orderBy('ucr', 'DESC')
+      ->range(0, 1);
+
+    $last = $query->execute()->fetchField();
+    if ($last === NULL) {
+      return 1;
+    }
+
+    return ((int) $last) + 1;
   }
 
   /**

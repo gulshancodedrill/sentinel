@@ -1,12 +1,14 @@
 <?php
 
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\user\UserInterface;
 use Drupal\views\Plugin\views\query\QueryPluginBase;
 use Drupal\views\Plugin\views\query\Sql;
 use Drupal\views\ViewExecutable;
+use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 
 /**
  * @file
@@ -172,6 +174,86 @@ function sentinel_portal_entities_get_client_by_user($account = NULL) {
   $cache[$uid] = $client ?: FALSE;
 
   return $cache[$uid];
+}
+
+/**
+ * Ensure a sentinel client exists for a user and keep it in sync.
+ *
+ * @param \Drupal\user\UserInterface $user
+ *   The user being synchronised.
+ *
+ * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|null
+ *   The sentinel client entity or NULL on failure.
+ */
+function sentinel_portal_entities_sync_client_from_user(UserInterface $user): ?SentinelClient {
+  $storage = _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_client');
+
+  /** @var \Drupal\sentinel_portal_entities\Entity\SentinelClient|null $client */
+  $client = sentinel_portal_entities_get_client_by_user($user);
+
+  if (!$client) {
+    $values = [
+      'uid' => $user->id(),
+      'name' => $user->getDisplayName(),
+      'email' => $user->getEmail(),
+      'api_key' => '',
+      'send_pending' => FALSE,
+    ];
+
+    /** @var \Drupal\sentinel_portal_entities\Entity\SentinelClient $client */
+    $client = $storage->create($values);
+    $client->save();
+  }
+  else {
+    $needs_save = FALSE;
+
+    if ($client->get('uid')->value !== $user->id()) {
+      $client->set('uid', $user->id());
+      $needs_save = TRUE;
+    }
+
+    $client_name = $client->get('name')->value ?? '';
+    $user_name = $user->getDisplayName();
+    if ($client_name !== $user_name) {
+      $client->set('name', $user_name);
+      $needs_save = TRUE;
+    }
+
+    $client_email = $client->get('email')->value ?? '';
+    $user_email = $user->getEmail();
+    if ($user_email && $client_email !== $user_email) {
+      $client->set('email', $user_email);
+      $needs_save = TRUE;
+    }
+
+    if ($needs_save) {
+      $client->save();
+    }
+  }
+
+  if ($client instanceof SentinelClient && method_exists($client, 'ensureRealUcr')) {
+    $client->ensureRealUcr();
+  }
+
+  return $client;
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function sentinel_portal_entities_entity_insert(EntityInterface $entity) {
+  if ($entity instanceof UserInterface) {
+    sentinel_portal_entities_sync_client_from_user($entity);
+  }
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function sentinel_portal_entities_entity_update(EntityInterface $entity) {
+  if ($entity instanceof UserInterface) {
+    sentinel_portal_entities_sync_client_from_user($entity);
+  }
 }
 
 /**
