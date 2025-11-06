@@ -6,6 +6,7 @@ use Drupal\rest\Plugin\ResourceBase;
 use Drupal\rest\ResourceResponse;
 use Drupal\sentinel_portal_entities\Exception\SentinelSampleValidationException;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
+use Drupal\sentinel_portal_services\Helper\SentinelSampleEntityHelper;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -99,9 +100,12 @@ class SampleServiceResource extends ResourceBase {
         $sample->toArray($global_access) : 
         [];
 
+      // Normalize the response to match Drupal 7 format
+      $normalized_data = $this->normalizeResponseData($return_array);
+
       $response_data = [
         'status' => '200',
-        'message' => $return_array,
+        'message' => $normalized_data,
       ];
 
       $response = new ResourceResponse($response_data, Response::HTTP_OK);
@@ -159,121 +163,64 @@ class SampleServiceResource extends ResourceBase {
       throw new BadRequestHttpException('ucr is not valid');
     }
 
-    // Get sample fields
-    $sample_fields = function_exists('sentinel_portal_entities_get_sample_fields') ? 
-      sentinel_portal_entities_get_sample_fields() : 
-      [];
-
-    if (empty($sample_fields)) {
-      $sample_fields = [];
-      $temp_sample = $entity_type_manager->getStorage('sentinel_sample')->create([]);
-      foreach ($temp_sample->getFieldDefinitions() as $field_name => $definition) {
-        $sample_fields[$field_name] = [
-          'type' => $definition->getType(),
-          'size' => $definition->getSetting('size') ?? NULL,
-          'portal_config' => [
-            'access' => [
-              'data' => 'user',
-            ],
-          ],
-        ];
-      }
-    }
-
+    // Process and validate the incoming data
     $sample = [];
     $errors = [];
     $global_access = $client_data->get('global_access')->value ?? FALSE;
 
-    // Process each field
-    foreach ($sample_fields as $field_name => $field) {
+    // Skip admin/system fields
+    $skip_fields = ['updated', 'created', 'pid', 'vid', 'uuid', 'changed'];
+
+    // Process each field in the incoming data
+    foreach ($data as $field_name => $value) {
       // Skip admin fields
-      if (in_array($field_name, ['updated', 'created'])) {
+      if (in_array($field_name, $skip_fields)) {
         continue;
       }
 
-      if (isset($data[$field_name])) {
-        if (!isset($field['portal_config']['access']['data'])) {
+      $data_item = is_string($value) ? trim($value) : $value;
+
+      // Validate datetime fields
+      if (in_array($field_name, ['date_installed', 'date_sent', 'date_booked', 'date_processed', 'date_reported'])) {
+        if ($data_item == '') {
           continue;
         }
 
-        // Check access
-        if (($field['portal_config']['access']['data'] == 'admin' && $global_access == TRUE) || 
-            $field['portal_config']['access']['data'] == 'user') {
-          $data_item = trim($data[$field_name]);
+        $formatted_date = SentinelSampleValidation::validateDate($data_item);
+        if ($formatted_date === FALSE) {
+          $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid date.');
+          continue;
+        }
+        $sample[$field_name] = $formatted_date;
+        continue;
+      }
+
+      // Validate pass/fail fields
+      if (stripos($field_name, 'pass_fail') !== FALSE) {
+        $data_item = strtolower($data_item);
+        if ($data_item == 'f') {
+          $data_item = 0;
+        }
+        elseif ($data_item == 'p') {
+          $data_item = 1;
+        }
+        elseif ($data_item == '') {
+          $data_item = NULL;
         }
         else {
+          $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid pass/fail value.');
           continue;
         }
+      }
 
-        // Validate datetime fields
-        if ($field['type'] == 'datetime') {
-          if ($data_item == '') {
-            continue;
-          }
-
-          $formatted_date = SentinelSampleValidation::validateDate($data_item);
-          if ($formatted_date === FALSE) {
-            $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid date.');
-            continue;
-          }
-          $sample[$field_name] = $formatted_date;
+      // Skip NULL values for chloride fields
+      if (in_array($field_name, ['mains_cl_result', 'sys_cl_result'])) {
+        if ($data_item === 'NULL' || $data_item === '') {
           continue;
         }
-
-        // Validate pass/fail fields
-        if ($field['type'] == 'int' && (isset($field['size']) && $field['size'] == 'tiny')) {
-          if (stripos($field_name, 'pass_fail') !== FALSE) {
-            $data_item = strtolower($data_item);
-            if ($data_item == 'f') {
-              $data_item = 0;
-            }
-            elseif ($data_item == 'p') {
-              $data_item = 1;
-            }
-            elseif ($data_item == '') {
-              $data_item = NULL;
-            }
-            else {
-              $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid pass/fail value.');
-              continue;
-            }
-          }
-        }
-
-        // Skip NULL values for specific fields
-        if (in_array($field_name, ['mains_cl_result', 'sys_cl_result'])) {
-          if ($data[$field_name] == 'NULL' || $data[$field_name] == '') {
-            continue;
-          }
-        }
-
-        $sample[$field_name] = $data_item;
-      }
-    }
-
-    try {
-      $api_validation_errors = SentinelSampleValidation::validateSampleInApi($sample, $client_data);
-      $errors = $errors + $api_validation_errors;
-    }
-    catch (SentinelSampleValidationException $e) {
-      $error_payload = [];
-      foreach ($e->getErrors() as $field => $message) {
-        $error_payload[] = [
-          'error_column' => $field,
-          'error_description' => $message,
-        ];
       }
 
-      $response_data = [
-        'status' => Response::HTTP_NOT_ACCEPTABLE,
-        'message' => $e->getMessage(),
-        'error' => $error_payload,
-      ];
-
-      $response = new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
-      $response->addCacheableDependency(['#cache' => ['max-age' => 0]]);
-
-      return $response;
+      $sample[$field_name] = $data_item;
     }
 
     // Fix UCR (remove luhn number)
@@ -301,8 +248,12 @@ class SampleServiceResource extends ResourceBase {
     $sample_entity_original = NULL;
     $sample_update = FALSE;
     $message = '';
+    
+    // Only validate on CREATE, not on UPDATE
+    $is_new_sample = empty($existing_id);
 
     if ($existing_id) {
+      // UPDATE existing sample
       $sample_entity = $sample_storage->load($existing_id);
 
       if (!$sample_entity) {
@@ -315,41 +266,56 @@ class SampleServiceResource extends ResourceBase {
 
       $sample_entity_original = clone $sample_entity;
 
-      // Duplicate handling.
-      $duplicate_test = $sample_storage->create([]);
-      SentinelSampleEntityHelper::applySampleData($duplicate_test, $sample);
-      if (method_exists($sample_entity, 'id')) {
-        $duplicate_test->set('duplicate_of', $sample_entity->id());
-      }
-
-      if (SentinelSampleEntityHelper::isDuplicate($duplicate_test)) {
-        $duplicate_test->set('duplicate_of', $sample_entity->id());
-        $duplicate_existing = SentinelSampleEntityHelper::findDuplicate($duplicate_test);
-
-        if ($duplicate_existing) {
-          $sample_entity = $duplicate_existing;
-          unset($sample['pack_reference_number']);
-        }
-        else {
-          SentinelSampleEntityHelper::renameDuplicate($duplicate_test);
-          $sample['pack_reference_number'] = $duplicate_test->get('pack_reference_number')->value;
-          $sample['duplicate_of'] = $sample_entity->id();
+      // Apply sample data to existing entity (merge)
+      foreach ($sample as $field_name => $value) {
+        if ($sample_entity->hasField($field_name)) {
+          $sample_entity->set($field_name, $value);
         }
       }
-
-      SentinelSampleEntityHelper::applySampleData($sample_entity, $sample);
+      
       $sample_entity->save();
 
       $sample_update = TRUE;
       $message = 'Sample updated';
     }
     else {
+      // CREATE new sample - validate required fields
+      try {
+        $api_validation_errors = SentinelSampleValidation::validateSampleInApi($sample, $client_data);
+        $errors = $errors + $api_validation_errors;
+      }
+      catch (SentinelSampleValidationException $e) {
+        $error_payload = [];
+        foreach ($e->getErrors() as $field => $message) {
+          $error_payload[] = [
+            'error_column' => $field,
+            'error_description' => $message,
+          ];
+        }
+
+        $response_data = [
+          'status' => Response::HTTP_NOT_ACCEPTABLE,
+          'message' => $e->getMessage(),
+          'error' => $error_payload,
+        ];
+
+        $response = new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
+        $response->addCacheableDependency(['#cache' => ['max-age' => 0]]);
+
+        return $response;
+      }
+      
+      // Check if pack reference already exists (shouldn't at this point)
       if (!empty($sample['pack_reference_number']) && SentinelSampleEntityHelper::loadSampleByPackReference($sample['pack_reference_number'])) {
         throw new BadRequestHttpException('Access denied.');
       }
 
       $sample_entity = $sample_storage->create([]);
-      SentinelSampleEntityHelper::applySampleData($sample_entity, $sample);
+      foreach ($sample as $field_name => $value) {
+        if ($sample_entity->hasField($field_name)) {
+          $sample_entity->set($field_name, $value);
+        }
+      }
       $sample_entity->save();
 
       $sample_update = FALSE;
@@ -426,6 +392,182 @@ class SampleServiceResource extends ResourceBase {
     }
 
     return FALSE;
+  }
+
+  /**
+   * Normalize response data to match Drupal 7 format.
+   *
+   * Converts Drupal 11's nested field arrays into simple key-value pairs
+   * and returns them in the exact same order as Drupal 7.
+   *
+   * @param array $data
+   *   The raw entity data array.
+   *
+   * @return array
+   *   The normalized data array in D7 field order.
+   */
+  protected function normalizeResponseData(array $data) {
+    // First, extract and normalize all values
+    $temp_normalized = [];
+    
+    foreach ($data as $field_name => $field_value) {
+      // Skip system fields and internal fields we don't need in API response
+      if (in_array($field_name, ['pid', 'uuid', 'vid', 'revision_default', 'changed', 'old_pack_reference_number', 'duplicate_of', 'legacy', 'api_created_by', 'ucr'])) {
+        continue;
+      }
+      
+      // Handle different field value structures
+      if (is_array($field_value)) {
+        // Check if it's a field array with 'value' keys
+        if (isset($field_value[0]) && is_array($field_value[0])) {
+          if (isset($field_value[0]['value'])) {
+            // Single or multi-value field with 'value' key
+            $temp_normalized[$field_name] = $field_value[0]['value'];
+          }
+          elseif (isset($field_value[0]['target_id'])) {
+            // Entity reference field
+            $temp_normalized[$field_name] = $field_value[0]['target_id'];
+          }
+          else {
+            // Complex field, take first item
+            $temp_normalized[$field_name] = $field_value[0];
+          }
+        }
+        elseif (empty($field_value)) {
+          // Empty array = null
+          $temp_normalized[$field_name] = null;
+        }
+        else {
+          // Direct array value
+          $temp_normalized[$field_name] = $field_value;
+        }
+      }
+      else {
+        // Direct value
+        $temp_normalized[$field_name] = $field_value;
+      }
+    }
+    
+    // Convert pass_fail numeric values to "P" or "F" to match D7
+    if (isset($temp_normalized['pass_fail'])) {
+      $temp_normalized['pass_fail'] = $temp_normalized['pass_fail'] == 1 ? 'P' : ($temp_normalized['pass_fail'] == 0 ? 'F' : null);
+    }
+    
+    // Convert all *_pass_fail fields
+    foreach ($temp_normalized as $key => $value) {
+      if (strpos($key, '_pass_fail') !== false && $value !== null) {
+        $temp_normalized[$key] = $value == 1 ? 'P' : ($value == 0 ? 'F' : null);
+      }
+    }
+    
+    // Format dates to match D7 format (remove seconds)
+    $date_fields = ['date_installed', 'date_sent', 'date_booked', 'date_processed', 'date_reported', 'created', 'updated'];
+    foreach ($date_fields as $date_field) {
+      if (isset($temp_normalized[$date_field]) && !empty($temp_normalized[$date_field])) {
+        // Convert from "2015-06-07 00:00:00" to "2015-06-07T00:00"
+        $temp_normalized[$date_field] = str_replace(' ', 'T', substr($temp_normalized[$date_field], 0, 16));
+      }
+    }
+    
+    // Ensure nitrate_result is string if it exists
+    if (isset($temp_normalized['nitrate_result']) && is_numeric($temp_normalized['nitrate_result'])) {
+      $temp_normalized['nitrate_result'] = (string)$temp_normalized['nitrate_result'];
+    }
+    
+    // Define the exact field order to match Drupal 7
+    $field_order = [
+      'pack_reference_number',
+      'project_id',
+      'installer_name',
+      'installer_email',
+      'company_name',
+      'company_email',
+      'company_address1',
+      'company_address2',
+      'company_town',
+      'company_county',
+      'company_postcode',
+      'company_tel',
+      'system_location',
+      'system_age',
+      'system_6_months',
+      'uprn',
+      'property_number',
+      'street',
+      'town_city',
+      'county',
+      'postcode',
+      'landlord',
+      'boiler_manufacturer',
+      'boiler_id',
+      'boiler_type',
+      'engineers_code',
+      'service_call_id',
+      'date_installed',
+      'date_sent',
+      'date_booked',
+      'date_processed',
+      'date_reported',
+      'fileid',
+      'filename',
+      'client_id',
+      'client_name',
+      'customer_id',
+      'lab_ref',
+      'pack_type',
+      'card_complete',
+      'on_hold',
+      'pass_fail',
+      'appearance_result',
+      'appearance_pass_fail',
+      'mains_cond_result',
+      'sys_cond_result',
+      'cond_pass_fail',
+      'mains_cl_result',
+      'sys_cl_result',
+      'cl_pass_fail',
+      'iron_result',
+      'iron_pass_fail',
+      'copper_result',
+      'copper_pass_fail',
+      'aluminium_result',
+      'aluminium_pass_fail',
+      'mains_calcium_result',
+      'sys_calcium_result',
+      'calcium_pass_fail',
+      'ph_result',
+      'ph_pass_fail',
+      'sentinel_x100_result',
+      'sentinel_x100_pass_fail',
+      'molybdenum_result',
+      'molybdenum_pass_fail',
+      'boron_result',
+      'boron_pass_fail',
+      'manganese_result',
+      'manganese_pass_fail',
+      'nitrate_result',
+      'mob_ratio',
+      'created',
+      'updated',
+      'installer_company',
+    ];
+    
+    // Build the final array in the correct order
+    $normalized = [];
+    foreach ($field_order as $field_name) {
+      if (array_key_exists($field_name, $temp_normalized)) {
+        $normalized[$field_name] = $temp_normalized[$field_name];
+      }
+    }
+    
+    // Add any remaining fields that weren't in the order list (for future compatibility)
+    foreach ($temp_normalized as $field_name => $value) {
+      if (!isset($normalized[$field_name])) {
+        $normalized[$field_name] = $value;
+      }
+    }
+    
+    return $normalized;
   }
 
   /**
