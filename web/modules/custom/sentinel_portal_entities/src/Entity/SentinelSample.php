@@ -34,12 +34,9 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
  *   admin_permission = "administer sentinel_sample",
  *   entity_keys = {
  *     "id" = "pid",
- *     "revision" = "vid",
  *     "label" = "pack_reference_number",
  *     "uuid" = "uuid",
  *   },
- *   revision_table = "sentinel_sample_revision",
- *   revision_data_table = "sentinel_sample_field_data",
  *   translatable = FALSE,
  *   links = {
  *     "canonical" = "/portal/admin/samples/manage/{sentinel_sample}/view",

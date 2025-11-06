@@ -7,8 +7,6 @@ use Drupal\rest\ResourceResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpFoundation\Response;
-use Psr\Log\LoggerInterface;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Provides a Customer Service Resource.
@@ -26,11 +24,13 @@ class CustomerServiceResource extends ResourceBase {
   /**
    * Responds to GET requests.
    *
+   * Returns a customer ID for given customer details. Creates one if it doesn't exist.
+   *
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The request object.
    *
    * @return \Drupal\rest\ResourceResponse
-   *   The response containing customer ID.
+   *   The response containing customer data.
    */
   public function get(Request $request = NULL) {
     if (!$request) {
@@ -38,76 +38,72 @@ class CustomerServiceResource extends ResourceBase {
     }
 
     $key = $request->query->get('key');
-    $email = $request->query->get('email');
-    $name = $request->query->get('name');
-    $company = $request->query->get('company');
+    $email = trim($request->query->get('email') ?? '');
+    $name = trim($request->query->get('name') ?? '');
+    $company = trim($request->query->get('company') ?? '');
 
     // Validate the API key
-    if (!$this->validateApiKey($key)) {
+    $client_data = $this->getClientByApiKey($key);
+    if (!$client_data) {
       throw new BadRequestHttpException('API key is invalid');
     }
 
-    // Normalize the strings
-    $email = trim($email);
-    $name = trim($name);
-
-    // Validate email
-    if (!\Drupal::service('email.validator')->isValid($email)) {
-      // Check for multi-address value
+    // Validate email address
+    if (!$this->validateEmail($email)) {
+      // Try to handle multi-address (separated by semicolon)
       if (strpos($email, ';') !== FALSE) {
-        $multiple_addresses = preg_split('/;/', $email);
-        
-        $config = \Drupal::config('sentinel_portal_module.settings');
-        $stop_emails_string = $config->get('stop_emails') ?? '';
-        $stop_emails = explode(PHP_EOL, $stop_emails_string);
-
+        $multiple_addresses = explode(';', $email);
         $email_found = FALSE;
 
         foreach ($multiple_addresses as $address) {
-          $domain = strtolower(trim(substr($address, strpos($address, '@') + 1)));
-          if (!in_array($domain, $stop_emails)) {
+          $address = trim($address);
+          if ($this->validateEmail($address)) {
             $email = $address;
             $email_found = TRUE;
             break;
           }
         }
 
-        if ($email_found === FALSE) {
-          $email = array_shift($multiple_addresses);
+        if (!$email_found) {
+          $email = trim($multiple_addresses[0]);
         }
       }
 
-      if (!\Drupal::service('email.validator')->isValid($email)) {
-        throw new BadRequestHttpException('Email parameter is not a valid email address');
+      if (!$this->validateEmail($email)) {
+        $response_data = [
+          'status' => 406,
+          'message' => 'Not acceptable',
+          'error' => [
+            [
+              'error_column' => 'email',
+              'error_description' => 'not a valid email address',
+            ],
+          ],
+        ];
+
+        return new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
       }
     }
 
-    // Query for existing client
     $entity_type_manager = \Drupal::entityTypeManager();
     $storage = $entity_type_manager->getStorage('sentinel_client');
-    
+
+    // Query for existing client by email
     $query = $storage->getQuery()
       ->condition('email', $email)
       ->condition('api_key', '', '=')
       ->accessCheck(FALSE);
 
-    if (!is_null($company) && trim($company) != '') {
-      $company = trim($company);
-    }
-    else {
-      $company = '';
-    }
-
     $result = $query->execute();
 
     if (empty($result)) {
-      // Create new client
+      // Client doesn't exist, create new one
       $client_data = [
         'email' => $email,
         'name' => $name,
       ];
 
-      if ($company != '') {
+      if (!empty($company)) {
         $client_data['company'] = $company;
       }
 
@@ -115,24 +111,27 @@ class CustomerServiceResource extends ResourceBase {
       $client->save();
     }
     else {
+      // Client exists, load it
       $client_ids = array_values($result);
       $clients = $storage->loadMultiple($client_ids);
       $client = reset($clients);
 
-      if ($company != '') {
+      // Update company if provided
+      if (!empty($company)) {
         $client->set('company', $company);
         $client->save();
       }
     }
 
+    // Build return array
     $return_array = [
-      'name' => $client->get('name')->value,
-      'email' => $client->get('email')->value,
-      'customer_id' => method_exists($client, 'getUcr') ? $client->getUcr() : '',
+      'name' => $client->get('name')->value ?? '',
+      'email' => $client->get('email')->value ?? '',
+      'customer_id' => method_exists($client, 'getUcr') ? $client->getUcr() : ($client->get('ucr')->value ?? ''),
     ];
 
-    if ($company != '') {
-      $return_array['company'] = $client->get('company')->value;
+    if (!empty($company)) {
+      $return_array['company'] = $client->get('company')->value ?? '';
     }
 
     $response_data = [
@@ -142,37 +141,58 @@ class CustomerServiceResource extends ResourceBase {
 
     $response = new ResourceResponse($response_data, Response::HTTP_OK);
     $response->addCacheableDependency(['#cache' => ['max-age' => 0]]);
-    
+
     return $response;
   }
 
   /**
-   * Validates the API key.
+   * Gets client data by API key.
    *
    * @param string $key
    *   The API key.
    *
-   * @return bool
-   *   TRUE if valid, FALSE otherwise.
+   * @return mixed
+   *   The client entity or FALSE.
    */
-  protected function validateApiKey($key) {
+  protected function getClientByApiKey($key) {
     if (empty($key)) {
       return FALSE;
     }
 
     $entity_type_manager = \Drupal::entityTypeManager();
     $storage = $entity_type_manager->getStorage('sentinel_client');
-    
+
     $query = $storage->getQuery()
       ->condition('api_key', $key)
       ->accessCheck(FALSE);
 
     $result = $query->execute();
 
-    return !empty($result);
+    if (!empty($result)) {
+      $client_ids = array_values($result);
+      $clients = $storage->loadMultiple($client_ids);
+      return reset($clients);
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Validate email address.
+   *
+   * @param string $email
+   *   The email to validate.
+   *
+   * @return bool
+   *   TRUE if valid, FALSE otherwise.
+   */
+  protected function validateEmail($email) {
+    if (empty($email)) {
+      return FALSE;
+    }
+
+    // Use Drupal's email validator
+    return \Drupal::service('email.validator')->isValid($email);
   }
 
 }
-
-
-
