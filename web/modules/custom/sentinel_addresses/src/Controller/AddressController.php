@@ -2,6 +2,7 @@
 
 namespace Drupal\sentinel_addresses\Controller;
 
+use Drupal\Component\Utility\Html;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -71,12 +72,12 @@ class AddressController extends ControllerBase {
     $addresses = get_sentinel_sample_addresses_for_cids($string);
     $addresses = array_slice($addresses, 0, 10);
 
-    $matches = [];
+    $suggestions = [];
 
     if ($addresses) {
       foreach ($addresses as $row) {
         $address_parts = [];
-        
+
         if (!empty($row->field_address_address_line1)) {
           $address_parts[] = $row->field_address_address_line1;
         }
@@ -94,11 +95,16 @@ class AddressController extends ControllerBase {
         }
 
         $address_string = implode(', ', array_filter($address_parts));
-        $matches['(' . $row->entity_id . ') ' . $address_string] = $address_string;
+        $value = '(' . $row->entity_id . ') ' . $address_string;
+
+        $suggestions[] = [
+          'value' => $value,
+          'label' => Html::escape($address_string),
+        ];
       }
     }
 
-    return new JsonResponse($matches);
+    return new JsonResponse($suggestions);
   }
 
   /**

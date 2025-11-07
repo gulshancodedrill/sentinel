@@ -2,12 +2,13 @@
 
 namespace Drupal\sentinel_portal_sample\Form;
 
+use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
+use Drupal\sentinel_portal_sample\Controller\SentinelSampleController;
 use Drupal\user\Entity\User;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -126,10 +127,35 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#weight' => 4,
     ];
 
+    $company_address_options = ['' => $this->t('Please select')];
+    $client = $this->getCurrentClient();
+    if ($client instanceof SentinelClient && function_exists('get_company_addresses_for_cids')) {
+      $cids = function_exists('get_more_clients_based_client_cohorts') ? get_more_clients_based_client_cohorts($client) : [];
+      $cids[] = $client->id();
+
+      $addresses = get_company_addresses_for_cids($cids);
+      foreach ($addresses as $address) {
+        $parts = array_filter([
+          $address->field_address_organization ?? '',
+          $address->field_address_address_line1 ?? '',
+          $address->field_address_address_line2 ?? '',
+          $address->field_address_address_line3 ?? '',
+          $address->field_address_locality ?? '',
+          $address->field_address_postal_code ?? '',
+        ]);
+        $label = implode(', ', $parts);
+        $company_address_options[$address->entity_id] = $label ?: $this->t('Address @id', ['@id' => $address->entity_id]);
+      }
+    }
+
     $form['company_details']['company_address']['company_address_selection'] = [
       '#type' => 'select',
       '#title' => $this->t('Select company address'),
-      '#options' => ['' => $this->t('Please select')],
+      '#options' => $company_address_options,
+      '#ajax' => [
+        'callback' => '::ajaxSelectCompanyAddress',
+        'event' => 'change',
+      ],
       '#weight' => 1,
     ];
 
@@ -535,6 +561,10 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#title' => $this->t('Search for LA/HA'),
       '#description' => $this->t('Please select Landlord from the system list. If Landlord is not present, please enter in the field below.'),
       '#autocomplete_route_name' => 'sentinel_portal_sample.landlord.autocomplete',
+      '#ajax' => [
+        'callback' => '::ajaxSelectLandlord',
+        'event' => 'change',
+      ],
       '#weight' => 1,
     ];
 
@@ -575,7 +605,11 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Search for property address'),
       '#description' => $this->t('Please input the property number or street name to find the full property address.'),
-      '#autocomplete_route_name' => 'sentinel_portal_sample.landlord.autocomplete',
+      '#autocomplete_route_name' => 'sentinel_portal_sample.sample_address_autocomplete',
+      '#ajax' => [
+        'callback' => '::ajaxSelectSampleAddress',
+        'event' => 'autocompleteclose',
+      ],
       '#weight' => 1,
     ];
 
@@ -897,6 +931,34 @@ class SentinelSampleSubmissionForm extends FormBase {
     $form['#attached']['library'][] = 'core/drupal.date';
 
     return $form;
+  }
+
+  /**
+   * AJAX callback when a landlord is selected from autocomplete.
+   */
+  public function ajaxSelectLandlord(array &$form, FormStateInterface $form_state) {
+    return $this->getSampleController()->selectLandlord($form, $form_state);
+  }
+
+  /**
+   * AJAX callback when a company address is selected from the dropdown.
+   */
+  public function ajaxSelectCompanyAddress(array &$form, FormStateInterface $form_state) {
+    return $this->getSampleController()->selectCompanyAddress($form, $form_state);
+  }
+
+  /**
+   * AJAX callback when a sample address is selected from autocomplete.
+   */
+  public function ajaxSelectSampleAddress(array &$form, FormStateInterface $form_state) {
+    return $this->getSampleController()->selectSampleAddress($form, $form_state);
+  }
+
+  /**
+   * Helper to resolve the sample controller.
+   */
+  protected function getSampleController(): SentinelSampleController {
+    return \Drupal::classResolver()->getInstanceFromDefinition(SentinelSampleController::class);
   }
 
   /**
@@ -1259,7 +1321,7 @@ class SentinelSampleSubmissionForm extends FormBase {
     try {
       $storage = $this->entityTypeManager->getStorage('sentinel_sample');
       // Get UCR from client record
-      $ucr_value = $client->getUcr();
+      $ucr_value = $client->get('ucr')->value;
       $sample = $storage->create([]);
       // Set UCR first
       if ($ucr_value && $sample->hasField('ucr')) {

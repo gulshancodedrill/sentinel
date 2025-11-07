@@ -4,6 +4,15 @@ bulk_operations:
   dependencies:
     - core/jquery
     - core/drupal
+    - core/once
+
+export_download:
+  js:
+    js/export-download.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - core/once
 
 
 

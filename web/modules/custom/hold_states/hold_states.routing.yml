@@ -8,6 +8,25 @@ hold_states.on_hold_samples:
   options:
     _admin_route: FALSE
 
+hold_states.export_download:
+  path: '/portal/admin/on-hold-samples/export'
+  defaults:
+    _controller: '\Drupal\hold_states\Controller\OnHoldSamplesExportController::download'
+  requirements:
+    _permission: 'sentinel view all sentinel_sample'
+  options:
+    _admin_route: FALSE
+
+hold_states.export_ready:
+  path: '/portal/admin/on-hold-samples/export-ready'
+  defaults:
+    _controller: '\Drupal\hold_states\Controller\OnHoldSamplesExportController::ready'
+    _title: 'On hold samples export'
+  requirements:
+    _permission: 'sentinel view all sentinel_sample'
+  options:
+    _admin_route: FALSE
+
 
 
 
