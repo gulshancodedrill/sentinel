@@ -53,6 +53,7 @@
         "drupal/rules": "^4.0",
         "drupal/seckit": "^2.0",
         "drupal/securelogin": "^2.0",
+        "drupal/smtp": "^1.4",
         "drupal/username_enumeration_prevention": "^1.4",
         "drupal/views_bulk_operations": "^4.4",
         "drupal/views_data_export": "^1.8",

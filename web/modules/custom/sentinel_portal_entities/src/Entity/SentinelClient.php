@@ -83,10 +83,13 @@ class SentinelClient extends ContentEntityBase implements ContentEntityInterface
   }
 
   /**
-   * Get the UCR value.
+   * Get the UCR.
    *
-   * @return int|null
-   *   The UCR value.
+   * The number returned will always be the luhn algorithm number.
+   * This matches Drupal 7 behavior exactly.
+   *
+   * @return int
+   *   The generated ucr number with the luhn checksum.
    */
   public function getUcr() {
     $real_ucr = $this->ensureRealUcr();

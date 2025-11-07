@@ -2,11 +2,17 @@
 
 namespace Drupal\sentinel_portal_entities\Entity;
 
+use DateTime;
 use Drupal\Core\Entity\ContentEntityBase;
+use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
-use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Site\Settings;
+use Drupal\file\Entity\File;
+use Drupal\file\FileInterface;
 
 /**
  * Defines the Sentinel Sample entity.
@@ -49,6 +55,76 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
  * )
  */
 class SentinelSample extends ContentEntityBase implements ContentEntityInterface {
+
+  /**
+   * {@inheritdoc}
+   */
+  public function preSave(EntityStorageInterface $storage) {
+    // Normalize legacy datetime values that only store a year (e.g. "2025").
+    foreach (['created', 'changed'] as $field_name) {
+      if ($this->hasField($field_name)) {
+        $current_value = NULL;
+
+        if (!$this->get($field_name)->isEmpty()) {
+          $current_value = $this->get($field_name)->value;
+        }
+
+        if ($current_value === NULL || $current_value === '') {
+          $current_value = $this->getFieldStringValue($field_name);
+        }
+
+        $normalized = $this->normalizeDatetimeValue($current_value);
+        if ($normalized !== NULL) {
+          $this->set($field_name, ['value' => $normalized]);
+          // Ensure the raw values array is normalized too.
+          if (!isset($this->values[$field_name][0])) {
+            $this->values[$field_name][0] = [];
+          }
+          $this->values[$field_name][0]['value'] = $normalized;
+        }
+      }
+      else {
+        // Fall back to property storage (legacy data).
+        if (property_exists($this, $field_name) && isset($this->{$field_name})) {
+          $normalized = $this->normalizeDatetimeValue($this->{$field_name});
+          if ($normalized !== NULL) {
+            $this->{$field_name} = $normalized;
+          }
+        }
+      }
+    }
+
+    parent::preSave($storage);
+  }
+
+  /**
+   * Ensure datetime values are formatted correctly.
+   *
+   * @param string|null $value
+   *   The incoming datetime value.
+   *
+   * @return string|null
+   *   Normalized datetime string or NULL if it cannot be parsed.
+   */
+  protected function normalizeDatetimeValue($value): ?string {
+    if ($value === NULL || $value === '') {
+      return NULL;
+    }
+
+    // Year-only values get normalised to Jan 1st of that year.
+    if (preg_match('/^\d{4}$/', trim($value))) {
+      return trim($value) . '-01-01T00:00:00';
+    }
+
+    // Attempt to parse any other value via DateTime.
+    try {
+      $date = new DateTime($value);
+      return $date->format('Y-m-d\TH:i:s');
+    }
+    catch (\Exception $e) {
+      return NULL;
+    }
+  }
 
   /**
    * {@inheritdoc}
@@ -1672,5 +1748,386 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
         // Standard Systemcheck Pack.
         return 'standard';
     }
+  }
+
+  /**
+   * Get a scalar value from an entity field or legacy property.
+   */
+  protected function getFieldStringValue(string $field_name): ?string {
+    if ($this->hasField($field_name)) {
+      $field = $this->get($field_name);
+      if (!$field->isEmpty()) {
+        $value = $field->value;
+        if ($value !== NULL && $value !== '') {
+          return $value;
+        }
+      }
+    }
+
+    if (property_exists($this, $field_name) && isset($this->{$field_name}) && $this->{$field_name} !== '') {
+      return $this->{$field_name};
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Build a single line system address.
+   */
+  public function getSystemAddress(): string {
+    $parts = [];
+
+    foreach (['property_number', 'street', 'town_city', 'county', 'postcode'] as $field_name) {
+      $value = $this->getFieldStringValue($field_name);
+      if (!empty($value)) {
+        $parts[] = $value;
+      }
+    }
+
+    $address = implode(', ', array_filter($parts));
+    $postcode = $this->getFieldStringValue('postcode') ?? '';
+    if ($address !== '' && $address !== $postcode) {
+      return $address;
+    }
+
+    return $this->getFieldStringValue('system_location') ?? '';
+  }
+
+  /**
+   * Determine if the sample originates from legacy data.
+   */
+  public function isLegacy(): bool {
+    $legacy = $this->getFieldStringValue('legacy');
+    if ($legacy === NULL) {
+      return FALSE;
+    }
+
+    return (bool) $legacy;
+  }
+
+  /**
+   * Determine if the sample overall result is PASS.
+   */
+  public function isPass(): bool {
+    $value = $this->getFieldStringValue('pass_fail');
+    return $value !== NULL && (int) $value === 1;
+  }
+
+  /**
+   * Determine if the sample overall result is FAIL.
+   */
+  public function isFail(): bool {
+    $value = $this->getFieldStringValue('pass_fail');
+    return $value !== NULL && (int) $value === 0;
+  }
+
+  /**
+   * Check if the sample contains a full set of reported results.
+   */
+  public function isReported(): bool {
+    $fields = sentinel_portal_entities_get_sample_fields();
+
+    switch ($this->getSampleType()) {
+      case 'vaillant':
+        $sample_type = 'vaillant';
+        break;
+
+      case 'worcesterbosch_contract':
+      case 'worcesterbosch_service':
+      case 'standard':
+      default:
+        $sample_type = 'standard';
+    }
+
+    $required_fields = [];
+    foreach ($fields as $field_name => $definition) {
+      $portal_config = $definition['portal_config'] ?? [];
+      if (!empty($portal_config['required_results_field'][$sample_type])) {
+        $required_fields[] = $field_name;
+      }
+    }
+
+    if (empty($required_fields)) {
+      return FALSE;
+    }
+
+    foreach ($required_fields as $field_name) {
+      $value = $this->getFieldStringValue($field_name);
+      if ($value === NULL) {
+        return FALSE;
+      }
+    }
+
+    return TRUE;
+  }
+
+  /**
+   * Get (or generate) the PDF certificate URI for this sample.
+   *
+   * @return string|false
+   *   The file URI or FALSE on failure.
+   */
+  public function GetPDF() {
+    // Attempt to load existing managed file.
+    $file_id = $this->getFieldStringValue('fileid');
+    if (!empty($file_id)) {
+      $file = File::load((int) $file_id);
+      if ($file instanceof FileInterface) {
+        $real_path = \Drupal::service('file_system')->realpath($file->getFileUri());
+        if ($real_path && file_exists($real_path)) {
+          return $file->getFileUri();
+        }
+      }
+    }
+
+    // Attempt to reuse existing filename from storage directories.
+    $filename = $this->getFieldStringValue('filename');
+    if (!empty($filename)) {
+      $locations = [
+        $this->getCurrentPdfDirectory() . $filename,
+        $this->getLegacyPdfDirectory() . $filename,
+      ];
+      foreach ($locations as $uri) {
+        $real_path = \Drupal::service('file_system')->realpath($uri);
+        if ($real_path && file_exists($real_path)) {
+          $file = $this->registerExistingPdf($uri, $filename);
+          if ($file instanceof FileInterface) {
+            return $file->getFileUri();
+          }
+          return $uri;
+        }
+      }
+    }
+
+    $file = $this->SavePdf();
+    if ($file instanceof FileInterface) {
+      return $file->getFileUri();
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Generate and persist a PDF certificate for this sample.
+   */
+  public function SavePdf() {
+    if (!$this->id()) {
+      return FALSE;
+    }
+
+    if (!function_exists('_get_result_content') || !function_exists('sentinel_systemcheck_certificate_get_dompdf_object')) {
+      return FALSE;
+    }
+
+    $html = $this->buildPdfHtml();
+    if ($html === NULL) {
+      return FALSE;
+    }
+
+    try {
+      $dompdf = sentinel_systemcheck_certificate_get_dompdf_object($html);
+      $pdf_data = $dompdf->output();
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->error('Unable to render PDF for sample @id: @message', [
+        '@id' => $this->id(),
+        '@message' => $e->getMessage(),
+      ]);
+      return FALSE;
+    }
+
+    $directory = $this->getCurrentPdfDirectory();
+    $this->ensureDirectory($directory);
+
+    $filename = $this->generatePdfFilename();
+    $uri = $directory . $filename;
+
+    try {
+      $file_repository = \Drupal::service('file.repository');
+      $file = $file_repository->writeData($pdf_data, $uri, FileSystemInterface::EXISTS_REPLACE);
+      if ($file instanceof FileInterface) {
+        $file->setPermanent();
+        $file->save();
+
+        // Update database directly to avoid created field validation
+        $connection = \Drupal::database();
+        $connection->update('sentinel_sample')
+          ->fields([
+            'fileid' => (string) $file->id(),
+            'filename' => $file->getFilename(),
+          ])
+          ->condition('pid', $this->id())
+          ->execute();
+        
+        // Update the in-memory entity values to match database
+        $this->set('fileid', (string) $file->id());
+        $this->set('filename', $file->getFilename());
+        
+        return $file;
+      }
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->error('Unable to save PDF for sample @id: @message', [
+        '@id' => $this->id(),
+        '@message' => $e->getMessage(),
+      ]);
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Generate a short-lived token for secure PDF downloads.
+   */
+  public function getPdfToken(): string {
+    $pack_reference = $this->getFieldStringValue('pack_reference_number') ?? (string) $this->id();
+    $updated = $this->getFieldStringValue('updated') ?? '';
+    $seed = $pack_reference . ':' . $updated;
+
+    $private_key = \Drupal::service('private_key')->get();
+    $hash_salt = Settings::get('hash_salt');
+    $secret = ($private_key ?: '') . ($hash_salt ?: '');
+
+    if ($secret === '') {
+      $secret = 'sentinel-secret';
+    }
+
+    return substr(hash_hmac('sha256', $seed, $secret), 0, 8);
+  }
+
+  /**
+   * Register an existing unmanaged PDF as a managed file.
+   */
+  protected function registerExistingPdf(string $uri, string $filename) {
+    $real_path = \Drupal::service('file_system')->realpath($uri);
+    if (!$real_path || !file_exists($real_path)) {
+      return FALSE;
+    }
+
+    $existing = NULL;
+    $file_id = $this->getFieldStringValue('fileid');
+    if (!empty($file_id)) {
+      $existing = File::load((int) $file_id);
+    }
+
+    if ($existing instanceof FileInterface) {
+      return $existing;
+    }
+
+    $file = File::create([
+      'uri' => $uri,
+      'filename' => $filename,
+      'status' => FileInterface::STATUS_PERMANENT,
+    ]);
+    $file->save();
+
+    // Update database directly to avoid created field validation
+    $connection = \Drupal::database();
+    $connection->update('sentinel_sample')
+      ->fields([
+        'fileid' => (string) $file->id(),
+        'filename' => $filename,
+      ])
+      ->condition('pid', $this->id())
+      ->execute();
+    
+    // Update the in-memory entity values to match database
+    $this->set('fileid', (string) $file->id());
+    $this->set('filename', $filename);
+
+    return $file;
+  }
+
+  /**
+   * Build the HTML used for PDF rendering.
+   */
+  protected function buildPdfHtml(): ?string {
+    if (!function_exists('_get_result_content')) {
+      return NULL;
+    }
+
+    $theme_vars = _get_result_content($this->id(), 'sentinel_sample');
+    $theme_vars['pdf'] = TRUE;
+
+    $module_path = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
+    $template_path = $module_path . '/templates/sentinel_certificate.html.twig';
+
+    $css_path = \Drupal::root() . '/' . \Drupal::service('extension.list.theme')->getPath('sentinel_portal') . '/css/pdf-only.css';
+    $css = '';
+    if (file_exists($css_path)) {
+      $css = '<style>' . file_get_contents($css_path) . '</style>';
+    }
+
+    $html = '<!DOCTYPE html><html><head>' .
+      '<meta charset="utf-8">' .
+      '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />' .
+      '<meta name="viewport" content="width=device-width, initial-scale=1" />' .
+      '<meta name="Generator" content="Drupal 11" />' .
+      $css .
+      '</head><body>';
+
+    $html .= \Drupal::service('twig')->render($template_path, $theme_vars);
+    $html .= '</body></html>';
+
+    return $html;
+  }
+
+  /**
+   * Get the directory (with trailing slash) used for current PDFs.
+   */
+  protected function getCurrentPdfDirectory(): string {
+    $created_value = $this->getFieldStringValue('created');
+    if ($created_value) {
+      try {
+        $date = new DateTime($created_value);
+        return 'private://new-pdf-certificates/' . $date->format('m-Y') . '/';
+      }
+      catch (\Exception $e) {
+        // Fall through to default.
+      }
+    }
+
+    return 'private://new-pdf-certificates/other/';
+  }
+
+  /**
+   * Get the directory path for legacy PDFs.
+   */
+  protected function getLegacyPdfDirectory(): string {
+    return 'private://legacy-pdf-certificates/';
+  }
+
+  /**
+   * Ensure a directory exists within the private file system.
+   */
+  protected function ensureDirectory(string $uri): void {
+    $file_system = \Drupal::service('file_system');
+    $file_system->prepareDirectory($uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+  }
+
+  /**
+   * Create a predictable filename for generated PDFs.
+   */
+  protected function generatePdfFilename(): string {
+    $pack_ref = $this->getFieldStringValue('pack_reference_number') ?? 'sample';
+    $pack_ref = str_replace(':', '-', $pack_ref);
+    $pack_ref = preg_replace('/[^A-Za-z0-9\-]/', '-', $pack_ref);
+    $pack_ref = trim($pack_ref, '-');
+
+    $address = [];
+    foreach (['property_number', 'street'] as $field_name) {
+      $value = $this->getFieldStringValue($field_name);
+      if (!empty($value)) {
+        $address[] = preg_replace('/[^A-Za-z0-9\-]/', '-', $value);
+      }
+    }
+
+    if (!empty($address)) {
+      $pack_ref .= '-' . implode('-', $address);
+    }
+
+    $pack_ref = strtolower(preg_replace('/-+/', '-', $pack_ref));
+
+    return $pack_ref . '-' . $this->id() . '.pdf';
   }
 }
