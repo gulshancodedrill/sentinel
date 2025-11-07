@@ -744,6 +744,39 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
             ->setReadOnly(TRUE)
             ->setDisplayConfigurable('view', TRUE);
 
+        // Hold state legacy reference (taxonomy term ID).
+        $fields['sentinel_sample_hold_state_target_id'] = BaseFieldDefinition::create('integer')
+            ->setLabel(t('Hold State Target ID'))
+            ->setDescription(t('Legacy hold state reference (taxonomy term ID).'))
+            ->setSettings([
+                'unsigned' => TRUE,
+            ])
+            ->setRequired(FALSE)
+            ->setDisplayConfigurable('form', FALSE)
+            ->setDisplayConfigurable('view', FALSE);
+
+        // Company address legacy reference (address entity ID).
+        $fields['sentinel_company_address_target_id'] = BaseFieldDefinition::create('integer')
+            ->setLabel(t('Company Address Target ID'))
+            ->setDescription(t('Legacy company address entity reference ID.'))
+            ->setSettings([
+                'unsigned' => TRUE,
+            ])
+            ->setRequired(FALSE)
+            ->setDisplayConfigurable('form', FALSE)
+            ->setDisplayConfigurable('view', FALSE);
+
+        // Sample address legacy reference (address entity ID).
+        $fields['sentinel_sample_address_target_id'] = BaseFieldDefinition::create('integer')
+            ->setLabel(t('Sample Address Target ID'))
+            ->setDescription(t('Legacy sample address entity reference ID.'))
+            ->setSettings([
+                'unsigned' => TRUE,
+            ])
+            ->setRequired(FALSE)
+            ->setDisplayConfigurable('form', FALSE)
+            ->setDisplayConfigurable('view', FALSE);
+
         // Pass/Fail.
         $fields['pass_fail'] = BaseFieldDefinition::create('boolean')
             ->setLabel(t('Overall Pass/Fail'))

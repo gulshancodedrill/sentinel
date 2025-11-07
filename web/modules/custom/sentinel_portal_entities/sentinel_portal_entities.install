@@ -246,6 +246,66 @@ function sentinel_portal_entities_update_8007() {
 }
 
 /**
+ * Ensure newly added legacy address and hold state base fields exist.
+ */
+function sentinel_portal_entities_update_8008() {
+  $entity_type_id = 'sentinel_sample';
+
+  /** @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface $update_manager */
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  /** @var EntityFieldManagerInterface $field_manager */
+  $field_manager = \Drupal::service('entity_field.manager');
+  /** @var EntityTypeManagerInterface $entity_type_manager */
+  $entity_type_manager = \Drupal::entityTypeManager();
+
+  // Refresh the entity type definition before working with field storage.
+  $definition = $entity_type_manager->getDefinition($entity_type_id, FALSE);
+  if ($definition) {
+    $update_manager->updateEntityType($definition);
+  }
+
+  $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+
+  $created = [];
+  $updated = [];
+  $target_fields = [
+    'sentinel_sample_hold_state_target_id',
+    'sentinel_company_address_target_id',
+    'sentinel_sample_address_target_id',
+  ];
+
+  foreach ($target_fields as $field_name) {
+    if (!isset($definitions[$field_name])) {
+      continue;
+    }
+
+    $definition = $definitions[$field_name];
+
+    try {
+      $update_manager->installFieldStorageDefinition($field_name, $entity_type_id, 'sentinel_portal_entities', $definition);
+      $created[] = $field_name;
+      continue;
+    }
+    catch (\Exception $e) {
+      // Fall through to attempt update.
+    }
+
+    try {
+      $update_manager->updateFieldStorageDefinition($definition);
+      $updated[] = $field_name;
+    }
+    catch (\Exception $e) {
+      // Ignore if the field cannot be updated automatically.
+    }
+  }
+
+  return t('Ensured legacy sentinel_sample fields. Created: @created Updated: @updated', [
+    '@created' => $created ? implode(', ', $created) : 'none',
+    '@updated' => $updated ? implode(', ', $updated) : 'none',
+  ]);
+}
+
+/**
  * Add uuid column to sentinel_client table if it doesn't exist.
  */
 function sentinel_portal_entities_update_8003() {

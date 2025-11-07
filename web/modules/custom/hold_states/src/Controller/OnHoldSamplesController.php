@@ -38,24 +38,17 @@ class OnHoldSamplesController extends ControllerBase {
     // Base query
     $query = $database->select('sentinel_sample', 'ss')
       ->fields('ss', ['pid', 'pack_reference_number']);
+    $query->addField('ss', 'sentinel_sample_hold_state_target_id', 'hold_state_tid');
 
-    // Join with field_sample_hold_state if it exists
-    if ($database->schema()->tableExists('sentinel_sample__field_sample_hold_state')) {
-      $query->leftJoin('sentinel_sample__field_sample_hold_state', 'hs', 'ss.pid = hs.entity_id');
-      $query->addField('hs', 'field_sample_hold_state_target_id', 'hold_state_tid');
-      
-      // Filter: only samples with hold state
-      $query->isNotNull('hs.field_sample_hold_state_target_id');
+    $query->leftJoin('taxonomy_term_field_data', 'tt', 'tt.tid = ss.sentinel_sample_hold_state_target_id');
+    $query->addField('tt', 'name', 'hold_state_name');
 
-      // Filter by specific hold state if selected
-      if (!empty($hold_state_tid)) {
-        $query->condition('hs.field_sample_hold_state_target_id', $hold_state_tid);
-      }
-    }
-    else {
-      // Fallback to old on_hold column if field doesn't exist
-      $query->condition('ss.on_hold', 1);
-      $query->addExpression('NULL', 'hold_state_tid');
+    // Filter: only samples with hold state
+    $query->isNotNull('ss.sentinel_sample_hold_state_target_id');
+
+    // Filter by specific hold state if selected
+    if (!empty($hold_state_tid)) {
+      $query->condition('ss.sentinel_sample_hold_state_target_id', $hold_state_tid);
     }
 
     // Filter by pack reference if provided
@@ -70,13 +63,7 @@ class OnHoldSamplesController extends ControllerBase {
     $rows = [];
     foreach ($result as $row) {
       // Get hold state term name if available
-      $hold_state_name = '';
-      if (!empty($row->hold_state_tid)) {
-        $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->load($row->hold_state_tid);
-        if ($term) {
-          $hold_state_name = $term->getName();
-        }
-      }
+      $hold_state_name = $row->hold_state_name ?? '';
 
       $pack_link = Link::fromTextAndUrl(
         $row->pack_reference_number,
