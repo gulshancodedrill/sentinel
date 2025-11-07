@@ -5,6 +5,16 @@
  * Sentinel Portal Queue module.
  */
 
+use Drupal\Component\Utility\Html;
+use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Mail\MailFormatHelper;
+use Symfony\Component\Mailer\Mailer;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mailer\Transport;
+use Symfony\Component\Mailer\Transport\Dsn;
+use Symfony\Component\Mime\Address;
+use Symfony\Component\Mime\Email;
+
 /**
  * Implements hook_cron_queue_info().
  */
@@ -444,92 +454,360 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
  *   True if everything worked out.
  */
 function _sentinel_portal_queue_process_email($sample_entity, $type) {
-  if ($type == 'report') {
-    // Generate the PDF document.
-    $pdf_certificate_location = method_exists($sample_entity, 'GetPDF') ? 
-      $sample_entity->GetPDF() : 
-      FALSE;
+  if ($type !== 'report' || !is_object($sample_entity)) {
+    return FALSE;
+  }
 
-    if ($pdf_certificate_location !== FALSE) {
-      $installer_email = method_exists($sample_entity, 'get') ? 
-        $sample_entity->get('installer_email')->value : 
-        '';
-      $company_email = method_exists($sample_entity, 'get') ? 
-        $sample_entity->get('company_email')->value : 
-        '';
+  $pdf_info = sentinel_portal_queue_get_pdf_info($sample_entity);
+  if (!$pdf_info) {
+    \Drupal::logger('sentinel_portal_queue')->error('Unable to generate certificate PDF for sample @id', ['@id' => method_exists($sample_entity, 'id') ? $sample_entity->id() : 'unknown']);
+    return FALSE;
+  }
 
-      if (!empty($installer_email) || !empty($company_email)) {
-        $country = method_exists($sample_entity, 'getSampleCountry') ? 
-          $sample_entity->getSampleCountry() : 
-          'gb';
+  $email_payload = sentinel_portal_queue_build_email_payload($sample_entity);
+  if (!$email_payload) {
+    \Drupal::logger('sentinel_portal_queue')->error('Unable to build email payload for sample @id', ['@id' => method_exists($sample_entity, 'id') ? $sample_entity->id() : 'unknown']);
+    return FALSE;
+  }
 
-        $pack_reference = method_exists($sample_entity, 'get') ? 
-          $sample_entity->get('pack_reference_number')->value : 
-          'Unknown';
-        
-        $is_pass = method_exists($sample_entity, 'isPass') ? 
-          $sample_entity->isPass() : 
-          FALSE;
+  $sent = sentinel_portal_queue_send_email_with_attachment($email_payload, $pdf_info);
 
-        $system_address = method_exists($sample_entity, 'getSystemAddress') ? 
-          $sample_entity->getSystemAddress() : 
-          'Unknown';
+  if ($sent && function_exists('sentinel_systemcheck_custom_rule_events_invoke_sample_result_calculated')) {
+    sentinel_systemcheck_custom_rule_events_invoke_sample_result_calculated(
+      implode(',', $email_payload['recipients']),
+      $pdf_info['uri'],
+      $email_payload['subject'],
+      $email_payload['message_html'],
+      $email_payload['message_plain']
+    );
+  }
 
-        // Subject of emails
-        $subject = t('Sentinel System Check Report: @pack_reference_number - @pass_fail - @system_address', [
-          '@pass_fail' => $is_pass ? "PASS" : "FAIL",
-          '@pack_reference_number' => strip_tags($pack_reference),
-          '@system_address' => strip_tags($system_address)
-        ]);
+  return $sent;
+}
 
-        $message_html = '';
+/**
+ * Build the PDF attachment metadata for a sample.
+ */
+function sentinel_portal_queue_get_pdf_info($sample_entity) {
+  if (!method_exists($sample_entity, 'GetPDF')) {
+    return FALSE;
+  }
 
-        // Basic English message for now - can be expanded later
-        $message_html .= "<p>Dear Customer,</p>" . PHP_EOL;
-        $message_html .= "<p>Thank you for choosing the Sentinel SystemCheck pack.</p>" . PHP_EOL;
-        $message_html .= "<p>The attached report provides a report direct from the Sentinel Laboratory on the condition of the central heating water and the level of Sentinel X100 Inhibitor present in the sample you submitted. It also provides a brief analysis of the mains water.</p>" . PHP_EOL;
-        $message_html .= "<p>Based on the findings, Sentinel have provided recommendations to ensure the system water allows the central heating systems to operate at optimum efficiency with a minimum of scale and corrosion deposits.</p>" . PHP_EOL;
-        $message_html .= "<p>Further information on Sentinel products can be obtained through our website www.sentinelprotects.com.</p>" . PHP_EOL;
-        $message_html .= "<p>Regards,</p>" . PHP_EOL;
-        $message_html .= "<p>Sentinel Laboratory</p>" . PHP_EOL;
+  $uri = $sample_entity->GetPDF();
+  if (empty($uri)) {
+    return FALSE;
+  }
 
-        // Strip tags out of the HTML version to create a plain text version.
-        $message_plain = strip_tags($message_html);
+  $file_system = \Drupal::service('file_system');
+  $path = $file_system->realpath($uri);
+  if (!$path || !file_exists($path)) {
+    return FALSE;
+  }
 
-        // Correct any malformed email addresses.
-        $email_address = trim(str_replace(';', ',', $installer_email));
+  return [
+    'uri' => $uri,
+    'path' => $path,
+    'filename' => basename($path),
+  ];
+}
 
-        if ($email_address == '') {
-          // Use company email as an alternative.
-          $email_address = trim(str_replace(';', ',', $company_email));
-        }
-
-        if ($email_address == '') {
-          // No email addresses found, so reject this.
-          return FALSE;
-        }
-
-        // Send email using Drupal's mail system
-        $mail_manager = \Drupal::service('plugin.manager.mail');
-        $params = [
-          'subject' => $subject,
-          'message_html' => $message_html,
-          'message_plain' => $message_plain,
-          'attachments' => [$pdf_certificate_location],
-        ];
-
-        $result = $mail_manager->mail('sentinel_portal_queue', 'sentinel_portal_service_sample', $email_address, 'en', $params);
-        
-        return $result['result'] == TRUE;
-      }
-      else {
-        \Drupal::logger('sentinel_portal_queue')->error('Failed to send email for sample @id - no email addresses', ['@id' => $sample_entity->id()]);
-        return FALSE;
+/**
+ * Retrieve a scalar value from the sample entity.
+ */
+function sentinel_portal_queue_get_sample_value($sample_entity, string $field) {
+  if (method_exists($sample_entity, 'hasField') && $sample_entity->hasField($field)) {
+    $field_item = $sample_entity->get($field);
+    if (!$field_item->isEmpty()) {
+      $value = $field_item->value;
+      if ($value !== NULL && $value !== '') {
+        return $value;
       }
     }
   }
-  
-  return FALSE;
+
+  if (isset($sample_entity->$field) && $sample_entity->$field !== '') {
+    $value = $sample_entity->$field;
+    if ($value instanceof \Drupal\Core\Field\FieldItemListInterface) {
+      $item = $value->first();
+      if ($item && $item->getValue()) {
+        $scalar = reset($item->getValue());
+        if ($scalar !== NULL && $scalar !== '') {
+          return $scalar;
+        }
+      }
+      return NULL;
+    }
+
+    if (is_scalar($value)) {
+      return $value;
+    }
+  }
+
+  return NULL;
+}
+
+/**
+ * Build the subject, body and recipients for the send results email.
+ */
+function sentinel_portal_queue_build_email_payload($sample_entity) {
+  $installer_email = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_email');
+  $company_email = sentinel_portal_queue_get_sample_value($sample_entity, 'company_email');
+
+  $raw_recipients = $installer_email ?: $company_email;
+  if (empty($raw_recipients)) {
+    return FALSE;
+  }
+
+  $normalized = str_replace(';', ',', $raw_recipients);
+  $recipients = array_filter(array_map('trim', explode(',', $normalized)));
+  if (empty($recipients)) {
+    return FALSE;
+  }
+
+  $pack_reference = sentinel_portal_queue_get_sample_value($sample_entity, 'pack_reference_number') ?? 'Unknown';
+  $system_address = 'Unknown';
+  if (method_exists($sample_entity, 'getSystemAddress')) {
+    $system_address = $sample_entity->getSystemAddress();
+  }
+  elseif ($value = sentinel_portal_queue_get_sample_value($sample_entity, 'system_location')) {
+    $system_address = $value;
+  }
+
+  $country = method_exists($sample_entity, 'getSampleCountry') ? strtolower($sample_entity->getSampleCountry()) : 'gb';
+  $sample_type = method_exists($sample_entity, 'getSampleType') ? $sample_entity->getSampleType() : 'standard';
+  $is_pass = method_exists($sample_entity, 'isPass') ? $sample_entity->isPass() : ((int) sentinel_portal_queue_get_sample_value($sample_entity, 'pass_fail') === 1);
+  $pass_label = $is_pass ? 'PASS' : 'FAIL';
+
+  if ($sample_type === 'vaillant') {
+    $subject = sprintf('Sentinel Vaillant System Check Report: %s - %s - %s', strip_tags($pack_reference), $pass_label, strip_tags($system_address));
+  }
+  else {
+    $subject = sprintf('Sentinel System Check Report: %s - %s - %s', strip_tags($pack_reference), $pass_label, strip_tags($system_address));
+  }
+
+  $message_html = sentinel_portal_queue_build_message_html($sample_entity, $country, $is_pass, $sample_type);
+  $message_plain = MailFormatHelper::htmlToText($message_html);
+
+  return [
+    'recipients' => $recipients,
+    'subject' => $subject,
+    'message_html' => $message_html,
+    'message_plain' => $message_plain,
+  ];
+}
+
+/**
+ * Build the HTML body for the send results email.
+ */
+function sentinel_portal_queue_build_message_html($sample_entity, string $country, bool $is_pass, string $sample_type): string {
+  $company_name = sentinel_portal_queue_get_sample_value($sample_entity, 'company_name') ?? 'Customer';
+  $company_name = Html::escape($company_name);
+  $installer_name = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_name') ?? $company_name;
+  $installer_name = Html::escape($installer_name);
+
+  switch ($country) {
+    case 'it':
+      return '<p>Gentile cliente,</p>'
+        . "<p>Grazie per aver scelto il pacchetto di controllo dell'impianto Sentinel.</p>"
+        . "<p>Il rapporto allegato fornisce un report diretto dal Laboratorio Sentinel sulle condizioni dell'acqua dell'impianto di riscaldamento centrale e sul livello di Inibitore Sentinel X100 presente nel campione da lei inviato. Fornisce anche una breve analisi dell'acqua della rete idrica.</p>"
+        . '<p>Sulla base delle risultanze, Sentinel ha fornito raccomandazioni al fine di garantire che l&apos;acqua dell&apos;impianto consenta al sistema di riscaldamento centrale di funzionare a livelli ottimali di efficienza con un minimo di incrostazioni e depositi di corrosione.</p>'
+        . '<p>Ulteriori informazioni sui prodotti Sentinel sono disponibili sul sito www.sentinelprotects.com.</p>'
+        . '<p>Distinti saluti,</p>'
+        . '<p>Sentinel Laboratory</p>';
+
+    case 'de':
+      return '<p>Sehr geehrter Kunde,</p>'
+        . '<p>Vielen Dank, dass Sie sich für das Sentinel System Check Paket entschieden haben.</p>'
+        . '<p>Der beigefügte Bericht direkt aus dem Sentinel Labor informiert Sie über den Zustand des Zentralheizungswassers und die Menge Sentinel X100 Inhibitor, die in der von Ihnen eingeschickten Probe vorhanden ist. Er bietet auch eine kurze Analyse des Speisewassers.</p>'
+        . '<p>Aufgrund der Ergebnisse gibt Sentinel Empfehlungen, um sicherzustellen, dass die Zentralheizungssysteme mit optimaler Effizienz und einem Minimum an Kesselstein- und Korrosionsablagerungen betrieben werden können.</p>'
+        . '<p>Weitere Informationen über Sentinel Produkte finden Sie auf unserer Website www.sentinelprotects.com.</p>'
+        . '<p>Mit freundlichen Grüßen,</p>'
+        . '<p>Sentinel Laboratory</p>';
+
+    case 'fr':
+      return '<p>Cher client,</p>'
+        . '<p>Merci d&apos;avoir choisi le kit Sentinel System Check.</p>'
+        . '<p>Le rapport ci-joint provenant directement du laboratoire Sentinel vous renseigne sur l&apos;état de l&apos;eau du chauffage central et le niveau d&apos;inhibiteur Sentinel X100 présent dans l&apos;échantillon que vous nous avez transmis. Il contient aussi une analyse succincte de l&apos;eau courante.</p>'
+        . '<p>Sur la base des résultats, Sentinel fournit des recommandations afin d&apos;assurer que l&apos;eau du système permette au chauffage central de fonctionner à un niveau d&apos;efficacité optimal avec un minimum d&apos;incrustations et de dépôts de corrosion.</p>'
+        . '<p>Vous pouvez obtenir davantage d&apos;informations sur les produits Sentinel sur www.sentinelprotects.com.</p>'
+        . '<p>Cordialement,</p>'
+        . '<p>Sentinel Laboratory</p>';
+  }
+
+  // Default to English messages with special handling for Vaillant packs.
+  if ($sample_type === 'vaillant') {
+    if ($is_pass) {
+      return '<p>Dear ' . $company_name . ',</p>'
+        . '<p>Please find attached a report on your recently submitted sample.</p>'
+        . '<p>As you will see, it has been allocated a PASS designation and so no further action is needed.</p>'
+        . '<p>Regards,</p>'
+        . '<p>Sentinel Laboratory</p>';
+    }
+
+    $repeated = 0;
+    if (function_exists('sentinel_portal_sample_repeated_failed_test')) {
+      $repeated = sentinel_portal_sample_repeated_failed_test($sample_entity);
+    }
+
+    if ($repeated >= 2) {
+      return '<p>Dear ' . $installer_name . ',</p>'
+        . '<p>Please find attached a report on your recently submitted sample. This is the second time that a sample has been submitted from this particular system and it has again been allocated a FAIL designation. Additional action is necessary and a summary of our recommendations is given in the report. No further samples from this system can be analysed free of charge and you are requested to contact Vaillant for further instructions/training/advice.</p>'
+        . '<p>For further testing of this system, you should purchase a standard Sentinel System Check from a merchant. Please DO NOT submit this with the paperwork supplied with the System Check but print off the attached form to accompany the samples. Also please note that the freepost address for these samples MUST be:</p>'
+        . '<p>FREEPOST RSCS-SJHL-GHAU<br/>Scientifics Environmental Chemistry<br/>PO Box 100<br/>Bretby Business Park<br/>Burton-upon-Trent<br/>DE15 0XD</p>'
+        . '<p>Please ensure that the existing freepost label is covered.</p>'
+        . '<p>If further advice is required, please contact 01928 588330.</p>'
+        . '<p>Regards,</p>'
+        . '<p>Sentinel Laboratory</p>';
+    }
+
+    return '<p>Dear ' . $installer_name . ',</p>'
+      . '<p>Please find attached a report on your recently submitted sample.</p>'
+      . '<p>As you will see, it has been allocated a FAIL designation and additional action is necessary &ndash; a summary of our recommendations is given in the report.</p>'
+      . '<p>If further advice is required, please contact 01928 588330.</p>'
+      . '<p>Regards,</p>'
+      . '<p>Sentinel Laboratory</p>';
+  }
+
+  return '<p>Dear Customer,</p>'
+    . '<p>Thank you for choosing the Sentinel SystemCheck pack.</p>'
+    . '<p>The attached report provides a report direct from the Sentinel Laboratory on the condition of the central heating water and the level of Sentinel X100 Inhibitor present in the sample you submitted. It also provides a brief analysis of the mains water.</p>'
+    . '<p>Based on the findings, Sentinel have provided recommendations to ensure the system water allows the central heating systems to operate at optimum efficiency with a minimum of scale and corrosion deposits.</p>'
+    . '<p>Further information on Sentinel products can be obtained through our website www.sentinelprotects.com.</p>'
+    . '<p>Regards,</p>'
+    . '<p>Sentinel Laboratory</p>';
+}
+
+/**
+ * Send the email to the recipient list with the PDF attachment.
+ */
+function sentinel_portal_queue_send_email_with_attachment(array $email_payload, array $pdf_info): bool {
+  $mailer = sentinel_portal_queue_get_mailer();
+
+  $site_config = \Drupal::config('system.site');
+  $from_address = $site_config->get('mail') ?: 'noreply@sentinel.com';
+  $from_name = $site_config->get('name') ?: 'Sentinel';
+
+  $email = new Email();
+  $email->from(new Address($from_address, $from_name));
+
+  // Respect SMTP reroute configuration if present (e.g. during testing).
+  $reroute_address = '';
+  if (\Drupal::hasContainer()) {
+    try {
+      $reroute_address = \Drupal::config('smtp.settings')->get('smtp_reroute_address') ?? '';
+    }
+    catch (\Exception $e) {
+      $reroute_address = '';
+    }
+  }
+
+  if (!empty($reroute_address)) {
+    \Drupal::logger('sentinel_portal_queue')->info('Sendresults rerouted to @address.', ['@address' => $reroute_address]);
+    $email->addTo($reroute_address);
+  }
+  else {
+    \Drupal::logger('sentinel_portal_queue')->info('Sendresults recipients: @recipients', ['@recipients' => implode(', ', $email_payload['recipients'])]);
+    foreach ($email_payload['recipients'] as $recipient) {
+      $email->addTo($recipient);
+    }
+  }
+
+  $email->subject($email_payload['subject']);
+  $email->html($email_payload['message_html']);
+  $email->text($email_payload['message_plain'] ?: MailFormatHelper::htmlToText($email_payload['message_html']));
+
+  if (!empty($pdf_info['path']) && file_exists($pdf_info['path'])) {
+    $filename = $pdf_info['filename'] ?? basename($pdf_info['path']);
+    $email->attachFromPath($pdf_info['path'], $filename, 'application/pdf');
+  }
+
+  try {
+    $mailer->send($email);
+    \Drupal::logger('sentinel_portal_queue')->info('Sendresults email dispatched with subject @subject.', ['@subject' => $email_payload['subject']]);
+    return TRUE;
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('sentinel_portal_queue')->error('Failed to send sample certificate email: @message', ['@message' => $e->getMessage()]);
+    return FALSE;
+  }
+}
+
+/**
+ * Get a configured Symfony mailer instance.
+ */
+function sentinel_portal_queue_get_mailer(): MailerInterface {
+  static $mailer;
+
+  if ($mailer instanceof MailerInterface) {
+    return $mailer;
+  }
+
+  $transport = NULL;
+
+  try {
+    if (\Drupal::moduleHandler()->moduleExists('smtp')) {
+      $smtp_config = \Drupal::config('smtp.settings');
+      $host = $smtp_config->get('smtp_host');
+      if (!empty($host)) {
+        $user = $smtp_config->get('smtp_username') ?: NULL;
+        $password = $smtp_config->get('smtp_password') ?: NULL;
+        $port = $smtp_config->get('smtp_port');
+        $port = $port ? (int) $port : NULL;
+        $protocol = strtolower($smtp_config->get('smtp_protocol') ?? '');
+
+        $params = [];
+        $transport_name = 'smtp';
+        if ($protocol === 'ssl') {
+          $transport_name = 'smtps';
+        }
+        elseif ($protocol === 'tls') {
+          $params['encryption'] = 'tls';
+        }
+
+        if (!empty($user)) {
+          $params['auth_mode'] = 'login';
+        }
+
+        $dsn = new Dsn(
+          $transport_name,
+          $host,
+          $user,
+          $password,
+          $port,
+          $params
+        );
+
+        $transport_factory = new Transport(Transport::getDefaultFactories());
+        $transport = $transport_factory->fromDsnObject($dsn);
+      }
+    }
+
+    if (!$transport) {
+      $config = \Drupal::config('system.mail')->get('mailer_dsn') ?? [];
+      if (!empty($config['scheme'])) {
+        $dsn = new Dsn(
+          $config['scheme'],
+          $config['host'] ?? 'default',
+          $config['user'] ?? '',
+          $config['password'] ?? '',
+          isset($config['port']) && $config['port'] !== NULL ? (int) $config['port'] : NULL,
+          $config['options'] ?? []
+        );
+        $transport_factory = new Transport(Transport::getDefaultFactories());
+        $transport = $transport_factory->fromDsnObject($dsn);
+      }
+      else {
+        $transport = Transport::fromDsn('sendmail://default');
+      }
+    }
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('sentinel_portal_queue')->error('Mailer initialisation failure: @message', ['@message' => $e->getMessage()]);
+    $transport = Transport::fromDsn('sendmail://default');
+  }
+
+  $mailer = new Mailer($transport);
+  return $mailer;
 }
 
 /**

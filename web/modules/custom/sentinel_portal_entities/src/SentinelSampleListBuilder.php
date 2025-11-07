@@ -7,11 +7,16 @@ use Drupal\Core\Entity\EntityListBuilder;
 use Drupal\Core\Form\FormInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
+use Drupal\Core\Messenger\MessengerTrait;
+use Drupal\Core\Render\Markup;
+use Drupal\Core\Url;
 
 /**
  * Defines a class to build a listing of Sentinel Sample entities.
  */
 class SentinelSampleListBuilder extends EntityListBuilder implements FormInterface {
+
+  use MessengerTrait;
 
   /**
    * The current request.
@@ -160,6 +165,67 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       ];
     }
 
+    $form['operations'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Operations'),
+      '#open' => TRUE,
+      '#attributes' => ['class' => ['sentinel-sample-operations']],
+      '#weight' => -5,
+      '#tree' => TRUE,
+    ];
+
+    $form['operations']['action'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Action'),
+      '#title_display' => 'invisible',
+      '#options' => [
+        'email_report' => $this->t('Email Report'),
+        'email_vaillant_report' => $this->t('Email Vaillant Report'),
+      ],
+      '#empty_option' => $this->t('- Choose an operation -'),
+    ];
+
+    $form['operations']['execute'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Execute'),
+      '#submit' => ['::submitOperations'],
+      '#limit_validation_errors' => [['operations', 'action'], ['samples_table']],
+    ];
+
+    // Build the table of samples within the form so row selections can be submitted.
+    $form['samples_table'] = [
+      '#type' => 'tableselect',
+      '#header' => $this->buildHeader(),
+      '#empty' => $this->t('No samples found.'),
+      '#attributes' => [
+        'class' => ['sentinel-sample-list'],
+      ],
+      '#multiple' => TRUE,
+      '#sticky' => TRUE,
+      '#options' => [],
+    ];
+
+    $entity_ids = $this->getEntityIds();
+    if (!empty($entity_ids)) {
+      $entities = $this->getStorage()->loadMultiple($entity_ids);
+      foreach ($entities as $entity) {
+        $form['samples_table']['#options'][$entity->id()] = $this->buildRow($entity);
+      }
+    }
+
+    $form['pager'] = [
+      '#type' => 'pager',
+      '#weight' => 100,
+    ];
+
+    $form['#attached']['library'][] = 'core/drupal.tableselect';
+    $form['#attached']['library'][] = 'sentinel_portal_entities/sample-list-styling';
+    $form['#attached']['library'][] = 'sentinel_portal_entities/sample_list';
+    $form['#attached']['drupalSettings']['sentinelSampleList'] = [
+      'selectAllClass' => 'select-all',
+      'entitySelectClass' => 'entity-select',
+    ];
+
     return $form;
   }
 
@@ -225,6 +291,86 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
    */
   public function resetForm(array &$form, FormStateInterface $form_state) {
     $form_state->setRedirect('sentinel_portal.admin_sample');
+  }
+
+  /**
+   * Submit handler for bulk operations.
+   */
+  public function submitOperations(array &$form, FormStateInterface $form_state) {
+    $action = $form_state->getValue(['operations', 'action']);
+    if (empty($action)) {
+      $this->messenger()->addWarning($this->t('Please choose an operation.'));
+      return;
+    }
+
+    $table_values = $form_state->getValue('samples_table') ?? [];
+    $selected_ids = array_keys(array_filter($table_values));
+
+    if (empty($selected_ids)) {
+      $this->messenger()->addWarning($this->t('Please select at least one sample.'));
+      return;
+    }
+    
+    $storage = $this->getStorage();
+    $samples = $storage->loadMultiple($selected_ids);
+    //dd($samples);
+    $processed = 0;
+    $errors = 0;
+    $skipped = 0;
+
+    foreach ($samples as $sample) {
+      try {
+        if ($action === 'email_report') {
+          $result = function_exists('_sentinel_portal_queue_process_email') ? _sentinel_portal_queue_process_email($sample, 'report') : FALSE;
+          if ($result) {
+            $processed++;
+          }
+          else {
+            $errors++;
+          }
+        }
+        elseif ($action === 'email_vaillant_report') {
+          $sample_type = method_exists($sample, 'getSampleType') ? $sample->getSampleType() : ($sample->get('pack_type')->value ?? '');
+          if ($sample_type !== 'vaillant') {
+            $skipped++;
+            continue;
+          }
+
+          if (function_exists('sentinel_systemcheck_vaillant_xml_sentinel_sendresults')) {
+            $result = sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample);
+            if ($result) {
+              $processed++;
+            }
+            else {
+              $errors++;
+            }
+          }
+          else {
+            $errors++;
+          }
+        }
+      }
+      catch (\Throwable $e) {
+        $this->getLogger('sentinel_portal_entities')->error('Bulk operation failed for sample @id: @message', [
+          '@id' => $sample->id(),
+          '@message' => $e->getMessage(),
+        ]);
+        $errors++;
+      }
+    }
+
+    if ($processed > 0) {
+      $this->messenger()->addStatus($this->t('Operation executed for @count sample(s).', ['@count' => $processed]));
+    }
+    if ($errors > 0) {
+      $this->messenger()->addWarning($this->t('Unable to process @count sample(s).', ['@count' => $errors]));
+    }
+    if ($skipped > 0) {
+      $this->messenger()->addWarning($this->t('Skipped @count non-Vaillant sample(s).', ['@count' => $skipped]));
+    }
+
+    $current_query = \Drupal::request()->query->all();
+    $form_state->setRedirect('sentinel_portal.admin_sample', [], ['query' => $current_query]);
   }
 
   /**
@@ -379,16 +525,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
    * {@inheritdoc}
    */
   public function buildHeader() {
-    $header = [
-      'select' => [
-        'data' => [
-          '#type' => 'checkbox',
-          '#attributes' => [
-            'class' => ['select-all'],
-            'title' => $this->t('Select all rows'),
-          ],
-        ],
-      ],
+    return [
       'pack_reference_number' => $this->t('Pack Reference No'),
       'pass_fail' => $this->t('The Sample Result'),
       'pack_type' => $this->t('Pack Type'),
@@ -397,7 +534,6 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       'date_reported' => $this->t('Date reported'),
       'operations' => $this->t('Operations'),
     ];
-    return $header;
   }
 
   /**
@@ -467,23 +603,12 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $date_reported = $this->formatSampleDate($entity->hasField('date_reported') && !$entity->get('date_reported')->isEmpty() ? $entity->get('date_reported')->value : NULL);
 
     $row = [];
-    $row['select'] = [
-      'data' => [
-        '#type' => 'checkbox',
-        '#return_value' => $entity->id(),
-        '#attributes' => ['class' => ['entity-select']],
-      ],
-    ];
-    $row['pack_reference_number']['data'] = [
-      '#markup' => Link::createFromRoute(
-        $entity->get('pack_reference_number')->value ?: $entity->id(),
-        'entity.sentinel_sample.canonical',
-        ['sentinel_sample' => $entity->id()]
-      )->toString(),
-    ];
-    $row['pass_fail']['data'] = [
-      '#markup' => '<span class="sentinel-sample-result ' . $pass_fail_class . '">' . $pass_fail_display . '</span>',
-    ];
+    $row['pack_reference_number'] = Link::createFromRoute(
+      $entity->get('pack_reference_number')->value ?: $entity->id(),
+      'entity.sentinel_sample.canonical',
+      ['sentinel_sample' => $entity->id()]
+    )->toString();
+    $row['pass_fail'] = Markup::create('<span class="sentinel-sample-result ' . $pass_fail_class . '">' . $pass_fail_display . '</span>');
     $pack_type_value = '-';
     $pack_reference = $entity->get('pack_reference_number')->value;
     if (!empty($pack_reference)) {
@@ -495,14 +620,32 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     if ($pack_type_value === '-' && $entity->hasField('pack_type') && !$entity->get('pack_type')->isEmpty()) {
       $pack_type_value = strtoupper((string) $entity->get('pack_type')->value);
     }
-    $row['pack_type']['data'] = ['#markup' => $pack_type_value];
-    $row['client_email']['data'] = ['#markup' => $client_email];
-    $row['date_booked']['data'] = ['#markup' => $date_booked];
-    $row['date_reported']['data'] = ['#markup' => $date_reported];
+    $row['pack_type'] = $pack_type_value;
+    $row['client_email'] = $client_email;
+    $row['date_booked'] = $date_booked;
+    $row['date_reported'] = $date_reported;
     
     $operations = $this->buildOperations($entity);
     // Extract Edit and Delete links separately
     $ops_links = [];
+    $current_user = \Drupal::currentUser();
+    if ($current_user->hasPermission('sentinel portal send email report')) {
+      $ops_links[] = Link::fromTextAndUrl(
+        $this->t('Email Report'),
+        Url::fromRoute('sentinel_portal.sample_email', ['sentinel_sample' => $entity->id()])
+      )->toString();
+ 
+      if (\Drupal::moduleHandler()->moduleExists('sentinel_systemcheck_vaillant_xml')) {
+        $sample_type = method_exists($entity, 'getSampleType') ? $entity->getSampleType() : ($entity->hasField('pack_type') ? $entity->get('pack_type')->value : NULL);
+        if ($sample_type === 'vaillant') {
+          $ops_links[] = Link::fromTextAndUrl(
+            $this->t('Email Vaillant Report'),
+            Url::fromRoute('sentinel_systemcheck_vaillant_xml.email', ['sample_id' => $entity->id()])
+          )->toString();
+        }
+      }
+    }
+ 
     if (isset($operations['#links'])) {
       foreach ($operations['#links'] as $key => $link) {
         if ($key === 'edit') {
@@ -513,7 +656,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
         }
       }
     }
-    $row['operations']['data'] = ['#markup' => implode(' | ', $ops_links)];
+ 
+    $row['operations'] = Markup::create(implode(' | ', $ops_links));
     
     return $row;
   }
@@ -589,53 +733,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
    * {@inheritdoc}
    */
   public function render() {
-    $build = [];
-    
-    // Add the filter form
-    $build['form'] = \Drupal::formBuilder()->getForm($this);
-    
-    // Build the table - use children pattern for proper rendering
-    $build['table'] = [
-      '#type' => 'table',
-      '#header' => $this->buildHeader(),
-      '#empty' => $this->t('No samples found.'),
-      '#attributes' => [
-        'class' => ['sentinel-sample-list'],
-      ],
-    ];
-    
-    // Get entity IDs
-    $entity_ids = $this->getEntityIds();
-    
-    
-    if (!empty($entity_ids)) {
-      $entities = $this->getStorage()->loadMultiple($entity_ids);
-      
-      foreach ($entities as $entity) {
-        $row = $this->buildRow($entity);
-        // Add the row as children of the table
-        foreach ($row as $key => $cell) {
-          $build['table'][$entity->id()][$key] = $cell;
-        }
-      }
-    }
-    
-    // Add pager
-    $build['pager'] = [
-      '#type' => 'pager',
-      '#weight' => 100,
-    ];
-    
-    // Add JavaScript for select all functionality
-    $build['#attached']['library'][] = 'core/drupal.tableselect';
-    $build['#attached']['library'][] = 'sentinel_portal_entities/sample-list-styling';
-    $build['#attached']['drupalSettings']['sentinelSampleList'] = [
-      'selectAllClass' => 'select-all',
-      'entitySelectClass' => 'entity-select',
-    ];
-    $build['#attached']['library'][] = 'sentinel_portal_entities/sample_list';
-    
-    return $build;
+    return \Drupal::formBuilder()->getForm($this);
   }
 
 }
