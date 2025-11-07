@@ -83,13 +83,47 @@ class SentinelClient extends ContentEntityBase implements ContentEntityInterface
   }
 
   /**
-   * Get the UCR value.
+   * Get the UCR.
    *
-   * @return int|null
-   *   The UCR value.
+   * The number returned will always be the luhn algorithm number.
+   * This matches Drupal 7 behavior exactly.
+   *
+   * @return int
+   *   The generated ucr number with the luhn checksum.
    */
   public function getUcr() {
-    return $this->get('ucr')->value;
+    $ucr = $this->getRealUcr();
+    return $this->generateUcr($ucr);
+  }
+
+  /**
+   * Get the ucr from the sentinel_client entity.
+   *
+   * If the ucr property is not set then set it.
+   * This matches Drupal 7 behavior exactly.
+   *
+   * @return int
+   *   The ucr (without any checksum) number.
+   */
+  public function getRealUcr() {
+    $current_ucr = $this->get('ucr')->value;
+
+    if (!isset($current_ucr) || !$current_ucr) {
+      // Find the current max number.
+      $database = \Drupal::database();
+      $last_ucr = $database->query('SELECT MAX(ucr) AS last_ucr FROM {sentinel_client} LIMIT 1')->fetchField();
+
+      // Increment by one.
+      ++$last_ucr;
+
+      // Save this number back into the database.
+      $this->set('ucr', $last_ucr);
+      $this->save();
+
+      return $last_ucr;
+    }
+
+    return $current_ucr;
   }
 
   /**
