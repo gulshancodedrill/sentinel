@@ -29,6 +29,9 @@
 h3 {
     font-size: 1.2em;
 }
+h4 {
+    font-size: 1.1em;
+}
  h1, h2, h3, h4, h5, h6 {
      font-family: "Open Sans", "Helvetica Neue", Helvetica, sans-serif;
      font-weight: 300;
@@ -188,7 +191,7 @@ div#sidebar_first.sidebar {
  div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded {
      background-color: #F2F2F2;
  }
- div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded >a.nav-link {
+div#sidebar_first.sidebar nav ul.nav li.nav-item.active {
      background-color: #D8D8D8;
  }
 div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded.is-open > ul.menu,
@@ -280,6 +283,7 @@ input[type=text], input[type=email], input[type=password], select, textarea, sel
     box-shadow: rgba(0,0,0,0.1) 0 3px 3px inset;
     border-radius: 0.3em;
     font-family: "Open Sans","Helvetica Neue",Helvetica,sans-serif;
+    height: 34px;
 }
 .page-content__user-forms .user-login__links {
     text-align: left;
@@ -407,6 +411,129 @@ div#block-sentinelportal-theme-system-main {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     column-gap: 1em;
+}
+form.failures-search-form #failures-search-form__form-inputs {
+    display: block;
+    padding: 1em;
+    background-color: #F2F2F2;
+    margin: 1.5em 0 0;
+}
+form.failures-search-form h4 {
+    font-weight: 700;
+    margin: 0;
+}
+form.failures-search-form label {
+    margin: 0;
+}
+form.failures-search-form div#failures-search-form__form-inputs__container {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 0;
+}
+form.failures-search-form div#failures-search-form__form-inputs__container>div {
+    width: 100%;
+    max-width: 25%;
+    padding-left: 1rem;
+}
+form.failures-search-form div#failures-search-form__form-inputs__container>div#failures-search-form__date-range {
+    max-width: 50%;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 !important;
+}
+form.failures-search-form div#failures-search-form__form-inputs__container>div#failures-search-form__date-range>div {
+    max-width: 50%;
+    width: 100%;
+}
+form.failures-search-form div#failures-search-form__form-inputs__container>div#failures-search-form__date-range>div:last-child {
+  padding-left: 1rem;
+}
+form.failures-search-form div#failures-search-form__form-inputs__container button.button {
+    margin-top: 0 !important;
+}
+div#failures-search-form__graphs-and-data {
+    display: -webkit-flex;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-flex-direction: row;
+    -ms-flex-direction: row;
+    flex-direction: row;
+    -webkit-flex-wrap: wrap;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    -webkit-justify-content: space-between;
+    -ms-flex-pack: justify;
+    justify-content: space-between;
+    -webkit-align-items: stretch;
+    -ms-flex-align: stretch;
+    align-items: stretch;
+}
+div#failures-search-form__total-tests, 
+div#failures-search-form__success-rate,
+div#failures-search-form__donut-chart {
+    display: block;
+    padding: 1em;
+    background-color: #F2F2F2;
+}
+.failures-search-form h3.failures-search-form__section-title {
+    font-size: 1em;
+    font-weight: 700;
+}
+.failures-search-form h3.failures-search-form__section-title::after {
+    display: block;
+    width: 100%;
+    height: 0;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #D8D8D8;
+    content: "";
+}
+.failures-search-form span#failures-search-form__success-rate__figure {
+    margin: 0 auto;
+    font-size: 4em !important;
+    font-weight: 700;
+    text-align: center;
+    color: forestgreen;
+    display: block;
+}
+.failures-search-form .failures-search-form__total-tests__stats {
+    display: -webkit-flex;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-flex-direction: row;
+    -ms-flex-direction: row;
+    flex-direction: row;
+    -webkit-flex-wrap: nowrap;
+    -ms-flex-wrap: nowrap;
+    flex-wrap: nowrap;
+    -webkit-justify-content: space-between;
+    -ms-flex-pack: justify;
+    justify-content: space-between;
+    -webkit-align-items: center;
+    -ms-flex-align: center;
+    align-items: center;
+    margin-top: 0 !important;
+    overflow-x: auto;
+    -webkit-flex: 1 1 auto;
+    -ms-flex: 1 1 auto;
+    flex: 1 1 auto;
+}
+.failures-search-form .failures-search-form__total-tests__stat {
+    margin-top: 0;
+    font-size: 1.5em;
+    text-align: center;
+}
+.failures-search-form .failures-search-form__total-tests__stat + .failures-search-form__total-tests__stat {
+    margin-left: 1.5rem;
+    padding-left: 1.5rem;
+    border-left: 2px solid #D8D8D8;
+    margin-top: 0 !important;
+}
+.failures-search-form .failures-search-form__total-tests__figure {
+    font-size: 1.5em;
+    font-weight: 700;
+    display: block;
 }
  @media (min-width: 48em) {
   .layout-main-wrapper main#content {
