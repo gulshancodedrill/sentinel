@@ -14,7 +14,7 @@ sentinel_reports.export_stats:
     _controller: '\Drupal\sentinel_reports\Controller\ReportsController::exportStats'
     _title: 'Export your stats'
   requirements:
-    _permission: 'sentinel portal'
+    _role: 'authenticated'
   options:
     _admin_route: FALSE
 
@@ -24,7 +24,7 @@ sentinel_reports.download_stats:
     _controller: '\Drupal\sentinel_reports\Controller\ReportsController::downloadCsv'
     _title: 'Download your stats'
   requirements:
-    _permission: 'sentinel portal'
+    _role: 'authenticated'
   options:
     _admin_route: FALSE
     no_cache: TRUE

@@ -388,7 +388,7 @@ function _sentinel_reports_render_export_link($uuid_key) {
   
   $link = [
     '#type' => 'link',
-    '#title' => '<span>Download</span>',
+    '#title' => t('Download'),
     '#url' => $url,
     '#attributes' => [
       'target' => '_blank',
