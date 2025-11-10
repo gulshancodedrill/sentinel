@@ -4,6 +4,7 @@ namespace Drupal\sentinel_portal_sample\Form;
 
 use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\sentinel_portal_entities\Entity\SentinelClient;
@@ -1218,7 +1219,8 @@ class SentinelSampleSubmissionForm extends FormBase {
       $this->messenger()->addError($this->t('Unable to create sample: your client number was not found. Please contact the site administrator.'));
       return;
     }
-    $values = $form_state->getValues();
+    $original_values = $form_state->getValues();
+    $values = $original_values;
     $date_fields = ['date_sent', 'date_installed'];
     $normalized_dates = [];
     foreach ($date_fields as $date_field) {
@@ -1425,15 +1427,8 @@ class SentinelSampleSubmissionForm extends FormBase {
       }
       // Handle flattened values from nested fieldsets
       $this->mapFormValuesToEntity($sample, $values, $form);
-      // Handle address fields if sentinel_addresses module exists (matches D7)
-      if (\Drupal::moduleHandler()->moduleExists('sentinel_addresses')) {
-        if (isset($values['field_company_address'])) {
-          $sample->set('field_company_address', $values['field_company_address']);
-        }
-        if (isset($values['field_sentinel_sample_address'])) {
-          $sample->set('field_sentinel_sample_address', $values['field_sentinel_sample_address']);
-        }
-      }
+      $this->ensureAddressEntities($sample, $values, $original_values, $form);
+      $this->setLegacyAddressTargetIds($sample);
       $sample->save();
 
       $this->messenger()->addMessage($this->t('Your sample has been added.'));
@@ -1584,6 +1579,264 @@ class SentinelSampleSubmissionForm extends FormBase {
       $cursor = $cursor[$segment];
     }
     return $cursor;
+  }
+
+  /**
+   * Updates legacy address target ID fields on the sample entity.
+   */
+  protected function setLegacyAddressTargetIds(ContentEntityInterface $sample) {
+    $address_storage = \Drupal::entityTypeManager()->getStorage('address');
+
+    if ($sample->hasField('sentinel_company_address_target_id') && $sample->hasField('field_company_address')) {
+      $company_target_id = NULL;
+      $company_item = $sample->get('field_company_address')->first();
+      if ($company_item && !empty($company_item->target_id)) {
+        $company_address = $address_storage->load($company_item->target_id);
+        if ($company_address) {
+          $company_target_id = (int) $company_address->id();
+        }
+      }
+      if ($company_target_id !== NULL) {
+        $sample->set('sentinel_company_address_target_id', $company_target_id);
+      }
+    }
+
+    if ($sample->hasField('sentinel_sample_address_target_id') && $sample->hasField('field_sentinel_sample_address')) {
+      $sample_target_id = NULL;
+      $sample_item = $sample->get('field_sentinel_sample_address')->first();
+      if ($sample_item && !empty($sample_item->target_id)) {
+        $sample_address = $address_storage->load($sample_item->target_id);
+        if ($sample_address) {
+          $sample_target_id = (int) $sample_address->id();
+        }
+      }
+      if ($sample_target_id !== NULL) {
+        $sample->set('sentinel_sample_address_target_id', $sample_target_id);
+      }
+    }
+  }
+
+  /**
+   * Ensure company and sample address entities exist and are referenced.
+   */
+  protected function ensureAddressEntities(ContentEntityInterface $sample, array $values, array $original_values, array $form): void {
+    \Drupal::logger('sentinel_portal_sample')->debug('ensureAddressEntities invoked.');
+
+    $address_storage = \Drupal::entityTypeManager()->getStorage('address');
+
+    $company_selection = $values['company_address_selection']
+      ?? $this->getArrayPathValue($values, ['company_details', 'company_address', 'company_address_selection'])
+      ?? $this->getArrayPathValue($original_values, ['company_details', 'company_address', 'company_address_selection'])
+      ?? NULL;
+    $company_target_id = $this->parseAddressSelection($company_selection);
+
+    if ($company_target_id) {
+      $company_entity = $address_storage->load($company_target_id);
+      if (!$company_entity) {
+        $company_target_id = NULL;
+      }
+    }
+
+    if (!$company_target_id) {
+      $company_address_data = $this->buildCompanyAddressFieldValues($values, $original_values);
+      \Drupal::logger('sentinel_portal_sample')->info('Company address data: <pre>@data</pre>', ['@data' => print_r($company_address_data, TRUE)]);
+      if (!empty($company_address_data)) {
+        $company_entity = $address_storage->create([
+          'type' => 'company_address',
+          'field_address' => $company_address_data,
+        ]);
+        $company_entity->save();
+        $company_target_id = (int) $company_entity->id();
+      }
+    }
+
+    if ($sample->hasField('field_company_address')) {
+      if ($company_target_id) {
+        $sample->set('field_company_address', ['target_id' => $company_target_id]);
+      }
+      else {
+        $sample->set('field_company_address', NULL);
+      }
+    }
+
+    $sample->set('sentinel_company_address_target_id', $company_target_id ?: NULL);
+
+    $sample_selection = $values['sample_address_selection']
+      ?? $this->getArrayPathValue($values, ['system_details', 'address', 'sample_address_selection'])
+      ?? $this->getArrayPathValue($original_values, ['system_details', 'address', 'sample_address_selection'])
+      ?? NULL;
+    $sample_target_id = $this->parseAddressSelection($sample_selection);
+
+    if ($sample_target_id) {
+      $sample_entity = $address_storage->load($sample_target_id);
+      if (!$sample_entity) {
+        $sample_target_id = NULL;
+      }
+    }
+
+    if (!$sample_target_id) {
+      $sample_address_data = $this->buildSampleAddressFieldValues($values, $original_values);
+      \Drupal::logger('sentinel_portal_sample')->info('Sample address data: <pre>@data</pre>', ['@data' => print_r($sample_address_data, TRUE)]);
+      if (!empty($sample_address_data)) {
+        $sample_entity = $address_storage->create([
+          'type' => 'address',
+          'field_address' => $sample_address_data,
+        ]);
+        $sample_entity->save();
+        $sample_target_id = (int) $sample_entity->id();
+      }
+    }
+
+    if ($sample->hasField('field_sentinel_sample_address')) {
+      if ($sample_target_id) {
+        $sample->set('field_sentinel_sample_address', ['target_id' => $sample_target_id]);
+      }
+      else {
+        $sample->set('field_sentinel_sample_address', NULL);
+      }
+    }
+
+    $sample->set('sentinel_sample_address_target_id', $sample_target_id ?: NULL);
+  }
+
+  /**
+   * Get the referenced address ID for a field if present.
+   */
+  protected function getReferencedAddressId(ContentEntityInterface $sample, string $field_name): ?int {
+    if (!$sample->hasField($field_name)) {
+      return NULL;
+    }
+    $item = $sample->get($field_name)->first();
+    if ($item && !empty($item->target_id)) {
+      return (int) $item->target_id;
+    }
+    return NULL;
+  }
+
+  /**
+   * Parse an address selection value (dropdown or autocomplete) to an ID.
+   */
+  protected function parseAddressSelection($selection): ?int {
+    if (empty($selection)) {
+      return NULL;
+    }
+    if (is_numeric($selection)) {
+      return (int) $selection;
+    }
+    if (is_string($selection) && preg_match('/^\((\d+)\)/', trim($selection), $matches)) {
+      return (int) $matches[1];
+    }
+    return NULL;
+  }
+
+  /**
+   * Build address field values for the company address bundle.
+   */
+  protected function buildCompanyAddressFieldValues(array $values, array $original_values = []): array {
+    $company_section = $values['company_address']
+      ?? $this->getArrayPathValue($values, ['company_details', 'company_address'])
+      ?? $this->getArrayPathValue($original_values, ['company_details', 'company_address'])
+      ?? [];
+
+    $country = strtoupper(trim((string) ($company_section['company_country'] ?? '')));
+    if ($country === '') {
+      $country = 'GB';
+    }
+
+    $address_line1 = trim((string) ($company_section['company_address_1'] ?? ''));
+    $address_line2_parts = array_filter([
+      trim((string) ($company_section['company_property_number'] ?? '')),
+      trim((string) ($company_section['company_property_name'] ?? '')),
+      trim((string) ($company_section['company_address_2'] ?? '')),
+    ]);
+    $address_line2 = trim(implode(' ', $address_line2_parts));
+    $locality = trim((string) ($company_section['company_town_city'] ?? ''));
+    $postal_code = trim((string) ($company_section['company_postcode'] ?? ''));
+    $administrative_area = trim((string) ($company_section['company_county'] ?? ''));
+    $organization = trim((string) ($values['company'] ?? ($company_section['company'] ?? '')));
+
+    if ($address_line1 === '' && $address_line2 === '' && $locality === '' && $postal_code === '' && $organization === '') {
+      return [];
+    }
+
+    $data = [
+      'country_code' => $country,
+    ];
+    if ($address_line1 !== '') {
+      $data['address_line1'] = $address_line1;
+    }
+    if ($address_line2 !== '') {
+      $data['address_line2'] = $address_line2;
+    }
+    if ($locality !== '') {
+      $data['locality'] = $locality;
+    }
+    if ($administrative_area !== '') {
+      $data['administrative_area'] = $administrative_area;
+    }
+    if ($postal_code !== '') {
+      $data['postal_code'] = $postal_code;
+    }
+    if ($organization !== '') {
+      $data['organization'] = $organization;
+    }
+
+    return $data;
+  }
+
+  /**
+   * Build address field values for the sample address bundle.
+   */
+  protected function buildSampleAddressFieldValues(array $values, array $original_values = []): array {
+    $address_section = $values['address']['address_fields']
+      ?? $this->getArrayPathValue($values, ['system_details', 'address', 'address_fields'])
+      ?? $this->getArrayPathValue($original_values, ['system_details', 'address', 'address_fields'])
+      ?? [];
+
+    $country = strtoupper(trim((string) ($address_section['country'] ?? '')));
+    if ($country === '') {
+      $country = 'GB';
+    }
+
+    $address_line1 = trim((string) ($address_section['address_1'] ?? ($values['address_1'] ?? '')));
+    $address_line2_parts = array_filter([
+      trim((string) ($address_section['address_2'] ?? '')),
+      trim((string) ($address_section['property_name'] ?? ($values['property_name'] ?? ''))),
+      trim((string) ($address_section['property_number'] ?? ($values['property_number'] ?? ''))),
+    ]);
+    $address_line2 = trim(implode(' ', $address_line2_parts));
+    $locality = trim((string) ($address_section['town_city'] ?? ($values['town_city'] ?? '')));
+    $postal_code = trim((string) ($address_section['postcode'] ?? ($values['postcode'] ?? '')));
+    $administrative_area = trim((string) ($address_section['county'] ?? ($values['county'] ?? '')));
+    $organization = trim((string) ($values['landlord'] ?? ''));
+
+    if ($address_line1 === '' && $address_line2 === '' && $locality === '' && $postal_code === '' && $organization === '') {
+      return [];
+    }
+
+    $data = [
+      'country_code' => $country,
+    ];
+    if ($address_line1 !== '') {
+      $data['address_line1'] = $address_line1;
+    }
+    if ($address_line2 !== '') {
+      $data['address_line2'] = $address_line2;
+    }
+    if ($locality !== '') {
+      $data['locality'] = $locality;
+    }
+    if ($administrative_area !== '') {
+      $data['administrative_area'] = $administrative_area;
+    }
+    if ($postal_code !== '') {
+      $data['postal_code'] = $postal_code;
+    }
+    if ($organization !== '') {
+      $data['organization'] = $organization;
+    }
+
+    return $data;
   }
 
 }
