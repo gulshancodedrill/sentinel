@@ -3,6 +3,7 @@
 namespace Drupal\sentinel_portal_entities\Entity;
 
 use DateTime;
+use DateTimeZone;
 use Drupal\Core\Entity\ContentEntityBase;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityStorageInterface;
@@ -13,6 +14,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Site\Settings;
 use Drupal\file\Entity\File;
 use Drupal\file\FileInterface;
+use Drupal\datetime\Plugin\Field\FieldType\DateTimeItemInterface;
 
 /**
  * Defines the Sentinel Sample entity.
@@ -76,7 +78,6 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
         $normalized = $this->normalizeDatetimeValue($current_value);
         if ($normalized !== NULL) {
           $this->set($field_name, ['value' => $normalized]);
-          // Ensure the raw values array is normalized too.
           if (!isset($this->values[$field_name][0])) {
             $this->values[$field_name][0] = [];
           }
@@ -93,6 +94,19 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
         }
       }
     }
+
+    $now = new DateTime('now', new DateTimeZone(DateTimeItemInterface::STORAGE_TIMEZONE));
+    $formatted_now = $now->format(DateTimeItemInterface::DATETIME_STORAGE_FORMAT);
+
+    if ($this->isNew() && ($this->get('created')->isEmpty() || empty($this->get('created')->value))) {
+      $this->set('created', ['value' => $formatted_now]);
+    }
+
+    $this->set('changed', ['value' => $formatted_now]);
+
+    // Force raw value arrays to use normalized values to avoid partial years.
+    $this->values['created'] = [['value' => $this->get('created')->value ?? $formatted_now]];
+    $this->values['changed'] = [['value' => $this->get('changed')->value ?? $formatted_now]];
 
     parent::preSave($storage);
   }
@@ -124,6 +138,14 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
     catch (\Exception $e) {
       return NULL;
     }
+  }
+
+  /**
+   * Default value callback for datetime fields that need "now".
+   */
+  public static function getCurrentDateTimeDefault(): array {
+    $now = new DateTime('now', new DateTimeZone(DateTimeItemInterface::STORAGE_TIMEZONE));
+    return [$now->format(DateTimeItemInterface::DATETIME_STORAGE_FORMAT)];
   }
 
   /**
@@ -1591,6 +1613,7 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
             ->setDescription(t('The time that the entity was created.'))
             ->setSetting('datetime_type', 'datetime')
             ->setRequired(FALSE)
+            ->setDefaultValueCallback(static::class . '::getCurrentDateTimeDefault')
             ->setDisplayConfigurable('form', TRUE)
             ->setDisplayConfigurable('view', TRUE);
 
@@ -1599,6 +1622,7 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
             ->setDescription(t('The time that the entity was last edited.'))
             ->setSetting('datetime_type', 'datetime')
             ->setRequired(FALSE)
+            ->setDefaultValueCallback(static::class . '::getCurrentDateTimeDefault')
             ->setDisplayConfigurable('form', TRUE)
             ->setDisplayConfigurable('view', TRUE);
 

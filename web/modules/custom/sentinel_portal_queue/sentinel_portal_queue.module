@@ -561,8 +561,8 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
   $normalized = str_replace(';', ',', $raw_recipients);
   $recipients = array_filter(array_map('trim', explode(',', $normalized)));
   if (empty($recipients)) {
-    return FALSE;
-  }
+          return FALSE;
+        }
 
   $pack_reference = sentinel_portal_queue_get_sample_value($sample_entity, 'pack_reference_number') ?? 'Unknown';
   $system_address = 'Unknown';
@@ -590,9 +590,9 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
 
   return [
     'recipients' => $recipients,
-    'subject' => $subject,
-    'message_html' => $message_html,
-    'message_plain' => $message_plain,
+          'subject' => $subject,
+          'message_html' => $message_html,
+          'message_plain' => $message_plain,
   ];
 }
 
@@ -805,7 +805,7 @@ function sentinel_portal_queue_get_mailer(): MailerInterface {
     \Drupal::logger('sentinel_portal_queue')->error('Mailer initialisation failure: @message', ['@message' => $e->getMessage()]);
     $transport = Transport::fromDsn('sendmail://default');
   }
-
+  
   $mailer = new Mailer($transport);
   return $mailer;
 }
