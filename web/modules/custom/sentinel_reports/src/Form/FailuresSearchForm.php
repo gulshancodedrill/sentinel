@@ -103,6 +103,21 @@ class FailuresSearchForm extends FormBase {
       '#title' => $this->t('Location'),
     ];
 
+    // $form['actions'] = [
+    //   '#type' => 'actions',
+    // ];
+
+    $form['container']['apply_filters'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Apply filters'),
+      '#button_type' => 'primary',
+      '#ajax' => [
+        'callback' => '::failureAnalysisAjax',
+        'wrapper' => 'failures-search-form__graphs-and-data',
+        'method' => 'replace',
+        'effect' => 'fade',
+      ],
+    ];
     $form['container']['#suffix'] = '</div></div>';
 
     $form['stats'] = [
@@ -119,21 +134,7 @@ class FailuresSearchForm extends FormBase {
       '#suffix' => '</div>',
     ];
 
-    $form['actions'] = [
-      '#type' => 'actions',
-    ];
-
-    $form['actions']['apply_filters'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Apply filters'),
-      '#button_type' => 'primary',
-      '#ajax' => [
-        'callback' => '::failureAnalysisAjax',
-        'wrapper' => 'failures-search-form__graphs-and-data',
-        'method' => 'replace',
-        'effect' => 'fade',
-      ],
-    ];
+   
 
     // Attach libraries.
     $form['#attached']['library'][] = 'sentinel_reports/daterangepicker';
