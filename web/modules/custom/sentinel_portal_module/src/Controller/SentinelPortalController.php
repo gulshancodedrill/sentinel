@@ -3,11 +3,8 @@
 namespace Drupal\sentinel_portal_module\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\Core\Access\AccessResult;
-use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Link;
-use Drupal\Core\Routing\RouteProviderInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 
 /**
@@ -30,22 +27,40 @@ class SentinelPortalController extends ControllerBase {
       return new RedirectResponse($url->toString());
     }
     
-    if ($this->currentUser()->hasPermission('sentinel portal')) {
-      // Render the analytics block programmatically
+    // Render the analytics block programmatically. Some blocks implement their
+    // own access checks, so respect them if present.
+    $analytics_block = [];
+
+    try {
       $block_manager = \Drupal::service('plugin.manager.block');
       $block_plugin = $block_manager->createInstance('sentinel_portal_test_analytics');
-      $analytics_block = $block_plugin->build();
-      
-      return [
-        '#theme' => 'sentinel_portal_main_page',
-        '#user_branch' => NULL,
-        '#analytics_block' => $analytics_block,
-      ];
+
+      $block_access = TRUE;
+      if ($block_plugin && method_exists($block_plugin, 'access')) {
+        $access_result = $block_plugin->access($this->currentUser());
+        if ($access_result instanceof \Drupal\Core\Access\AccessResultInterface) {
+          $block_access = $access_result->isAllowed();
+        }
+        else {
+          $block_access = (bool) $access_result;
+        }
+      }
+
+      if ($block_plugin && $block_access) {
+        $analytics_block = $block_plugin->build();
+      }
     }
-    else {
-      // If the user doesn't have permission, show access denied
-      throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException();
+    catch (\Exception $e) {
+      $this->getLogger('sentinel_portal_module')->warning('Unable to build analytics block: @message', [
+        '@message' => $e->getMessage(),
+      ]);
     }
+
+    return [
+      '#theme' => 'sentinel_portal_main_page',
+      '#user_branch' => NULL,
+      '#analytics_block' => $analytics_block,
+    ];
   }
 
   /**
