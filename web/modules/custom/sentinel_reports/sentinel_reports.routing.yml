@@ -4,7 +4,7 @@ sentinel_reports.explore_stats:
     _form: '\Drupal\sentinel_reports\Form\FailuresSearchForm'
     _title: 'Explore your stats'
   requirements:
-    _permission: 'sentinel portal'
+    _role: 'authenticated'
   options:
     _admin_route: FALSE
 

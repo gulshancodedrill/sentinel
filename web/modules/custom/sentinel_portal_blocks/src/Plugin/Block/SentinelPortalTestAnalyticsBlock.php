@@ -86,11 +86,6 @@ class SentinelPortalTestAnalyticsBlock extends BlockBase implements ContainerFac
   public function build() {
     $build = [];
 
-    // Check if user has access to sentinel portal.
-    if (!$this->currentUser->hasPermission('sentinel portal')) {
-      return $build;
-    }
-
     $client = $this->loadClientForUser($this->currentUser);
     if (!$client instanceof SentinelClient) {
       return $build;
@@ -130,7 +125,8 @@ class SentinelPortalTestAnalyticsBlock extends BlockBase implements ContainerFac
    * {@inheritdoc}
    */
   protected function blockAccess(AccountInterface $account) {
-    return AccessResult::allowedIfHasPermission($account, 'sentinel portal');
+    return AccessResult::allowedIf($account->isAuthenticated())
+      ->cachePerUser();
   }
 
   /**
