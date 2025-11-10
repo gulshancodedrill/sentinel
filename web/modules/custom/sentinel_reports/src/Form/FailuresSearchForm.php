@@ -127,12 +127,12 @@ class FailuresSearchForm extends FormBase {
       '#suffix' => '</div>',
     ];
 
-    $form['export_link'] = [
-      '#type' => 'markup',
-      '#markup' => $analysis['export_link'],
-      '#prefix' => '<div id="failures-search-form__graphs-and-data_exportlink">',
-      '#suffix' => '</div>',
-    ];
+    // $form['export_link'] = [
+    //   '#type' => 'markup',
+    //   '#markup' => $analysis['export_link'],
+    //   '#prefix' => '<div id="failures-search-form__graphs-and-data_exportlink">',
+    //   '#suffix' => '</div>',
+    // ];
 
    
 
@@ -187,11 +187,11 @@ class FailuresSearchForm extends FormBase {
     $form_state->set('analysis_output', $html);
 
     // Replace the stats container with new content.
-    $stats_html = '<div id="failures-search-form__graphs-and-data">' . $html['content'] . '</div>';
+    $stats_html = '<div id="failures-search-form__graphs-and-data-outer">' . $html['content'] . '</div>';
     $response->addCommand(new ReplaceCommand('#failures-search-form__graphs-and-data', $stats_html));
     
     // Replace the export link container.
-    $export_html = '<div id="failures-search-form__graphs-and-data_exportlink">' . ($html['export_link'] ?? '') . '</div>';
+    $export_html = '<div id="failures-search-form__graphs-and-data_exportlink_inner">' . ($html['export_link'] ?? '') . '</div>';
     $response->addCommand(new ReplaceCommand('#failures-search-form__graphs-and-data_exportlink', $export_html));
 
     // Attach drupalSettings and libraries for the chart.
