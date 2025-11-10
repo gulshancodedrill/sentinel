@@ -27,17 +27,16 @@
         });
         if (!link || !submenu) { return; }
 
-        // Start collapsed.
-        item.classList.remove('is-open');
+        // Start collapsed unless active.
+        var hasActiveChild = submenu.querySelector('.is-active');
+        var isActiveLink = link.classList.contains('is-active') || link.classList.contains('active');
 
-        // Toggle on click.
-        link.addEventListener('click', function (e) {
-          // If submenu exists, toggle open/close instead of navigating.
-          if (submenu) {
-            e.preventDefault();
-            item.classList.toggle('is-open');
-          }
-        }, { passive: false });
+        if (item.classList.contains('is-active-trail') || hasActiveChild || isActiveLink || item.classList.contains('active')) {
+          item.classList.add('is-open');
+        }
+        else {
+          item.classList.remove('is-open');
+        }
       });
     }
   };

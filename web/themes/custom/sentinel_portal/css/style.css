@@ -180,6 +180,7 @@ div#sidebar_first.sidebar {
  div#sidebar_first.sidebar nav ul.nav li.nav-item ul.menu {
      padding: 0;
      list-style: none;
+    display: none;
  }
  div#sidebar_first.sidebar nav ul.nav li.nav-item ul.menu a.nav-link {
      padding-left: 2em;
@@ -190,6 +191,10 @@ div#sidebar_first.sidebar {
  div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded >a.nav-link {
      background-color: #D8D8D8;
  }
+div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded.is-open > ul.menu,
+div#sidebar_first.sidebar nav ul.nav li.nav-item.menu-item--expanded.is-active-trail > ul.menu {
+    display: block;
+}
  .portal-welcome {
      padding-left: 1rem;
      margin-top: 1.5em;
