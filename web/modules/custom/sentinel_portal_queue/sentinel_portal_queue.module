@@ -71,7 +71,26 @@ function sentinel_portal_queue_run_action($queue_item_data) {
 function sentinel_portal_queue_create_item($sample, $action, $expire = FALSE) {
   $queue = \Drupal::queue('sentinel_queue');
   $payload = new \stdClass();
-  $payload->pid = $sample->pid ?? (method_exists($sample, 'id') ? $sample->id() : NULL);
+
+  $payload->pid = NULL;
+  if ($sample instanceof \Drupal\Core\Entity\EntityInterface) {
+    $identifier = $sample->id();
+    if (!$identifier && $sample->hasField('pid')) {
+      $identifier = $sample->get('pid')->value;
+    }
+    $payload->pid = $identifier;
+  }
+  elseif (is_object($sample) && isset($sample->pid)) {
+    $payload->pid = is_array($sample->pid) && isset($sample->pid['value']) ? $sample->pid['value'] : $sample->pid;
+  }
+  elseif (is_array($sample) && isset($sample['pid'])) {
+    $payload->pid = $sample['pid'];
+  }
+
+  if ($payload->pid !== NULL) {
+    $payload->pid = (string) $payload->pid;
+  }
+
   $payload->action = $action;
   $payload->created = \Drupal::time()->getCurrentTime();
   if ($expire !== FALSE) {
