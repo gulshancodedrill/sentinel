@@ -117,6 +117,11 @@
 
 {% block content %}
         <div id="main" class="{{ container }}">
+          {% if page.highlighted %}
+            <div class="highlighted-wrapper">
+              {{ page.highlighted }}
+            </div>
+          {% endif %}
           {{ page.breadcrumb }}
           <div class="row row-offcanvas row-offcanvas-left clearfix">
               <main{{ content_attributes }}>

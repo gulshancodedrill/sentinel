@@ -73,6 +73,10 @@ class SentinelPortalController extends ControllerBase {
     $output = [];
 
     $output[] = [
+      '#markup' => '<h1>' . $this->t('Admin Area') . '</h1>',
+    ];
+
+    $output[] = [
       '#markup' => $this->t('Welcome to the Sentinel Portal admin area.'),
     ];
 
@@ -125,9 +129,9 @@ class SentinelPortalController extends ControllerBase {
       if ($this->moduleHandler()->moduleExists('sentinel_portal_queue')) {
         try {
           $route_provider = \Drupal::service('router.route_provider');
-          $route_provider->getRouteByName('sentinel_portal.queue.admin');
+          $route_provider->getRouteByName('sentinel_portal_queue.admin');
           $output[] = [
-            '#markup' => '<p>' . Link::createFromRoute($this->t('Sentinel Queue'), 'sentinel_portal.queue.admin')->toString() . '</p>',
+            '#markup' => '<p>' . Link::createFromRoute($this->t('Sentinel Queue'), 'sentinel_portal_queue.admin')->toString() . '</p>',
           ];
         } catch (\Exception $e) {
           $output[] = [
@@ -146,9 +150,9 @@ class SentinelPortalController extends ControllerBase {
 
       try {
         $route_provider = \Drupal::service('router.route_provider');
-        $route_provider->getRouteByName('sentinel_portal.ucr_test');
+        $route_provider->getRouteByName('sentinel_portal.client_ucr_test');
         $output[] = [
-          '#markup' => '<p>' . Link::createFromRoute($this->t('Simple tool to check and generate UCR numbers'), 'sentinel_portal.ucr_test')->toString() . '</p>',
+          '#markup' => '<p>' . Link::createFromRoute($this->t('Simple tool to check and generate UCR numbers'), 'sentinel_portal.client_ucr_test')->toString() . '</p>',
         ];
       } catch (\Exception $e) {
         $output[] = [

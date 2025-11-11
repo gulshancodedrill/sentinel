@@ -1,3 +1,22 @@
+/* Ensure status messages render in flow near top rather than fixed footer. */
+.highlighted-wrapper .messages,
+.highlighted-wrapper .messages.status-message,
+.highlighted-wrapper .status-message {
+  position: static !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  width: auto;
+  margin: 0 0 1.5rem 0;
+  z-index: 1;
+}
+
+.notice-details-table td,
+.notice-details-table th,
+.notice-details-table td a,
+.notice-details-table th a {
+  color: #000;
+}
 /**
  * @file
  * Subtheme specific CSS.

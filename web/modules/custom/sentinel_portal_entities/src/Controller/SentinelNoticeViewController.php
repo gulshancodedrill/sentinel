@@ -37,7 +37,7 @@ class SentinelNoticeViewController extends ControllerBase {
     }
     
     $created_timestamp = $sentinel_notice->get('created')->value;
-    $created_date = $created_timestamp ? \Drupal::service('date.formatter')->format((int) $created_timestamp, 'custom', 'Y-m-d H:i:s') : '';
+    $created_date = $created_timestamp ? \Drupal::service('date.formatter')->format((int) $created_timestamp, 'custom', 'd/m/Y') : '';
     
     $user_id = $sentinel_notice->get('uid')->target_id;
     $user = \Drupal\user\Entity\User::load($user_id);
