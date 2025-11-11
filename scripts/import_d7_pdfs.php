@@ -12,7 +12,8 @@ use Drupal\Core\Logger\RfcLogLevel;
 use Drupal\file\Entity\File;
 
 // Configuration.
-$limit = 10;
+// Set to 0 to process all pending samples without limiting the batch size.
+$limit = 0;
 $source_base = '/var/www/html/sentinel11/files-private111';
 $source_directories = [
   'new-pdf-certificates',
@@ -35,12 +36,15 @@ $or = $query->orConditionGroup()
   ->condition('fileid', 0)
   ->isNull('fileid');
 
-$rows = $query
+$query
   ->condition($or)
-  ->orderBy('updated', 'DESC')
-  ->range(0, $limit)
-  ->execute()
-  ->fetchAll();
+  ->orderBy('updated', 'DESC');
+
+if (!empty($limit)) {
+  $query->range(0, $limit);
+}
+
+$rows = $query->execute()->fetchAll();
 
 if (empty($rows)) {
   print "No sentinel_sample rows require PDF import.\n";

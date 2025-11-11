@@ -1,0 +1,8 @@
+services:
+  condition_entity_import.commands:
+    class: Drupal\condition_entity_import\Commands\ConditionEntityImportCommands
+    arguments:
+      - '@queue'
+    tags:
+      - { name: drush.command }
+

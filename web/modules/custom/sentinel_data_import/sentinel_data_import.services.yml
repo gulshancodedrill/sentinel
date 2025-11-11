@@ -1,0 +1,12 @@
+services:
+  sentinel_data_import.file_managed_importer:
+    class: Drupal\sentinel_data_import\FileManagedImporter
+    arguments:
+      - '@file.repository'
+      - '@file_system'
+      - '@logger.factory'
+      - '@entity_type.manager'
+      - '@file.usage'
+      - '@config.factory'
+    tags:
+
