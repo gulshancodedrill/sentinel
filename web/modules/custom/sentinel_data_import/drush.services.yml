@@ -1,0 +1,12 @@
+services:
+  sentinel_data_import.commands:
+    class: Drupal\sentinel_data_import\Commands\SentinelDataImportCommands
+    arguments:
+      - '@queue'
+      - '@file_system'
+      - '@config.factory'
+      - '@sentinel_data_import.file_managed_importer'
+      - '@extension.list.module'
+    tags:
+      - { name: drush.command }
+

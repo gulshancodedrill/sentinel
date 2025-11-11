@@ -1,0 +1,5 @@
+private_source_base: '/var/www/html/sentinel11/files-private'
+public_source_base: '/var/www/html/drupal7-project/docroot/sites/default/files'
+queue_name: 'sentinel_data_import.file_managed'
+default_csv_path: 'csv/file_managed_d7.csv'
+

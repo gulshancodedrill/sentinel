@@ -1,0 +1,21 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Data Import module file.
+ */
+
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+
+/**
+ * Implements hook_service_provider().
+ */
+function sentinel_data_import_service_provider() {
+  // Ensure the logger channel exists by accessing it at least once.
+  if (\Drupal::hasService('logger.channel_factory')) {
+    /** @var \Drupal\Core\Logger\LoggerChannelFactoryInterface $factory */
+    $factory = \Drupal::service('logger.channel_factory');
+    $factory->get('sentinel_data_import');
+  }
+}
+

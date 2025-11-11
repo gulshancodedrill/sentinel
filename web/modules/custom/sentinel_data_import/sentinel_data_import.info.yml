@@ -1,0 +1,8 @@
+name: 'Sentinel Data Import'
+type: module
+description: 'Provides tools and queue workers to import legacy file data from Drupal 7.'
+package: 'Sentinel'
+core_version_requirement: ^11
+dependencies:
+  - drupal:file
+
