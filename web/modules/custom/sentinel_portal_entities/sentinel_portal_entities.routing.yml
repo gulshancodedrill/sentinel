@@ -6,7 +6,20 @@ sentinel_portal.client_ucr_test:
   requirements:
     _permission: 'sentinel portal administration'
   options:
-    _admin_route: TRUE
+    _admin_route: FALSE
+
+sentinel_portal.notice_view:
+  path: '/portal/notices/{sentinel_notice}'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelNoticeViewController::view'
+    _title: 'Notice'
+  requirements:
+    _permission: 'access content'
+  options:
+    _admin_route: FALSE
+    parameters:
+      sentinel_notice:
+        type: entity:sentinel_notice
 
 entity.sentinel_notice.canonical:
   path: '/portal/admin/notice/{sentinel_notice}'
