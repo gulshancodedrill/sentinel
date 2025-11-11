@@ -59,6 +59,11 @@ use Drupal\datetime\Plugin\Field\FieldType\DateTimeItemInterface;
 class SentinelSample extends ContentEntityBase implements ContentEntityInterface {
 
   /**
+   * Unified storage format for datetime values.
+   */
+  protected const STORAGE_FORMAT = 'Y-m-d H:i:s';
+
+  /**
    * {@inheritdoc}
    */
   public function preSave(EntityStorageInterface $storage) {
@@ -96,7 +101,7 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
     }
 
     $now = new DateTime('now', new DateTimeZone(DateTimeItemInterface::STORAGE_TIMEZONE));
-    $formatted_now = $now->format(DateTimeItemInterface::DATETIME_STORAGE_FORMAT);
+    $formatted_now = $now->format(self::STORAGE_FORMAT);
 
     if ($this->isNew() && ($this->get('created')->isEmpty() || empty($this->get('created')->value))) {
       $this->set('created', ['value' => $formatted_now]);
@@ -127,13 +132,13 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
 
     // Year-only values get normalised to Jan 1st of that year.
     if (preg_match('/^\d{4}$/', trim($value))) {
-      return trim($value) . '-01-01T00:00:00';
+      return trim($value) . '-01-01 00:00:00';
     }
 
     // Attempt to parse any other value via DateTime.
     try {
       $date = new DateTime($value);
-      return $date->format('Y-m-d\TH:i:s');
+      return $date->format(self::STORAGE_FORMAT);
     }
     catch (\Exception $e) {
       return NULL;
@@ -145,7 +150,7 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
    */
   public static function getCurrentDateTimeDefault(): array {
     $now = new DateTime('now', new DateTimeZone(DateTimeItemInterface::STORAGE_TIMEZONE));
-    return [$now->format(DateTimeItemInterface::DATETIME_STORAGE_FORMAT)];
+    return [$now->format(self::STORAGE_FORMAT)];
   }
 
   /**

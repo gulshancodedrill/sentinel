@@ -306,6 +306,59 @@ function sentinel_portal_entities_update_8008() {
 }
 
 /**
+ * Ensure sentinel_sample created/changed columns store full datetime strings.
+ */
+function sentinel_portal_entities_update_8009() {
+  $connection = \Drupal::database();
+  $results = [];
+
+  foreach (['created', 'changed'] as $column) {
+    // Convert bare year values like "2025" to "2025-01-01 00:00:00".
+    $year_updates = $connection->update('sentinel_sample')
+      ->expression($column, "CONCAT({$column}, '-01-01 00:00:00')")
+      ->condition($column, '^[0-9]{4}$', 'REGEXP')
+      ->execute();
+    if ($year_updates) {
+      $results[] = t('Converted @count @column year-only values to full datetimes.', [
+        '@count' => $year_updates,
+        '@column' => $column,
+      ]);
+    }
+
+    // Replace "T" separator with a space for any ISO strings already stored.
+    $space_updates = $connection->update('sentinel_sample')
+      ->expression($column, "REPLACE({$column}, 'T', ' ')")
+      ->condition($column, '%T%', 'LIKE')
+      ->execute();
+    if ($space_updates) {
+      $results[] = t('Reformatted @count @column values to use a space separator.', [
+        '@count' => $space_updates,
+        '@column' => $column,
+      ]);
+    }
+  }
+
+  // Ensure Drupal's cached "last installed" definitions match the new datetime
+  // storage for the created/changed base fields.
+  $repository = \Drupal::service('entity.last_installed_schema.repository');
+  $field_manager = \Drupal::service('entity_field.manager');
+  $current_definitions = $field_manager->getFieldStorageDefinitions('sentinel_sample');
+  $repository->setLastInstalledFieldStorageDefinitions('sentinel_sample', $current_definitions);
+  $results[] = t('Refreshed stored sentinel_sample field storage definitions.');
+
+  // Drop any stale schema cache entries so the new definition is rebuilt using
+  // the updated field configuration above.
+  $schema_cache = \Drupal::keyValue('entity.storage_schema.sql');
+  foreach (['sentinel_sample.created', 'sentinel_sample.changed'] as $cache_key) {
+    $schema_cache->delete($cache_key);
+  }
+
+  return t('Normalized sentinel_sample created/changed columns. @details', [
+    '@details' => $results ? implode(' ', $results) : t('No changes were necessary.'),
+  ]);
+}
+
+/**
  * Add uuid column to sentinel_client table if it doesn't exist.
  */
 function sentinel_portal_entities_update_8003() {

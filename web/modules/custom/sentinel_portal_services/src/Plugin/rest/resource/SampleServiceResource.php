@@ -2,6 +2,7 @@
 
 namespace Drupal\sentinel_portal_services\Plugin\rest\resource;
 
+use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\rest\ResourceResponse;
 use Drupal\sentinel_portal_entities\Exception\SentinelSampleValidationException;
@@ -64,9 +65,18 @@ class SampleServiceResource extends ResourceBase {
       $entity_type_manager = \Drupal::entityTypeManager();
       $storage = $entity_type_manager->getStorage('sentinel_client');
       $client = $storage->create([]);
-      
-      if (method_exists($client, 'validateUcr') && !$client->validateUcr($ucr)) {
-        throw new BadRequestHttpException('UCR is not valid');
+
+      if (method_exists($client, 'validateUcr')) {
+        $ucr_int = (int) $ucr;
+        if (!$client->validateUcr($ucr_int)) {
+          $generated_ucr = $client->generateUcr($ucr_int);
+          if ($client->validateUcr($generated_ucr)) {
+            $ucr = $generated_ucr;
+          }
+          else {
+            throw new BadRequestHttpException('UCR is not valid');
+          }
+        }
       }
     }
 
@@ -158,9 +168,18 @@ class SampleServiceResource extends ResourceBase {
     $entity_type_manager = \Drupal::entityTypeManager();
     $storage = $entity_type_manager->getStorage('sentinel_client');
     $client = $storage->create([]);
-    
-    if (method_exists($client, 'validateUcr') && !$client->validateUcr($data['ucr'])) {
-      throw new BadRequestHttpException('ucr is not valid');
+
+    if (method_exists($client, 'validateUcr')) {
+      $provided_ucr = (int) $data['ucr'];
+      if (!$client->validateUcr($provided_ucr)) {
+        $generated_ucr = $client->generateUcr($provided_ucr);
+        if ($client->validateUcr($generated_ucr)) {
+          $data['ucr'] = $generated_ucr;
+        }
+        else {
+          throw new BadRequestHttpException('ucr is not valid');
+        }
+      }
     }
 
     // Process and validate the incoming data
@@ -272,7 +291,9 @@ class SampleServiceResource extends ResourceBase {
           $sample_entity->set($field_name, $value);
         }
       }
-      
+
+      $this->ensureAddressEntities($sample_entity, $sample);
+
       $sample_entity->save();
 
       $sample_update = TRUE;
@@ -316,6 +337,9 @@ class SampleServiceResource extends ResourceBase {
           $sample_entity->set($field_name, $value);
         }
       }
+
+      $this->ensureAddressEntities($sample_entity, $sample);
+
       $sample_entity->save();
 
       $sample_update = FALSE;
@@ -395,16 +419,345 @@ class SampleServiceResource extends ResourceBase {
   }
 
   /**
-   * Normalize response data to match Drupal 7 format.
-   *
-   * Converts Drupal 11's nested field arrays into simple key-value pairs
-   * and returns them in the exact same order as Drupal 7.
-   *
-   * @param array $data
-   *   The raw entity data array.
-   *
-   * @return array
-   *   The normalized data array in D7 field order.
+   * Ensure company and sample address entities exist and are referenced.
+   */
+  protected function ensureAddressEntities(ContentEntityInterface $sample_entity, array $data): void {
+    try {
+      $entity_type_manager = \Drupal::entityTypeManager();
+      $address_storage = $entity_type_manager->getStorage('address');
+
+      // Company address.
+      $company_target_id = $this->getExistingAddressId($sample_entity, 'field_company_address', 'sentinel_company_address_target_id');
+      $company_entity = NULL;
+      $existing_company_values = [];
+      if ($company_target_id) {
+        $company_entity = $address_storage->load($company_target_id);
+        if (!$company_entity) {
+          $company_target_id = NULL;
+        }
+        else {
+          $existing_company_values = $this->extractAddressFieldValues($company_entity);
+        }
+      }
+
+      $company_address_data = $this->buildCompanyAddressFieldValues($data, $existing_company_values);
+
+      if (!empty($company_address_data)) {
+        if ($company_entity) {
+          $company_entity->set('field_address', [$company_address_data]);
+          $company_entity->save();
+        }
+        else {
+          $company_entity = $address_storage->create([
+            'type' => 'company_address',
+            'field_address' => [$company_address_data],
+          ]);
+          $company_entity->save();
+        }
+
+        $company_target_id = (int) $company_entity->id();
+
+        if ($sample_entity->hasField('field_company_address')) {
+          $sample_entity->set('field_company_address', ['target_id' => $company_target_id]);
+        }
+        if ($sample_entity->hasField('sentinel_company_address_target_id')) {
+          $sample_entity->set('sentinel_company_address_target_id', $company_target_id);
+        }
+      }
+
+      // Sample address.
+      $sample_target_id = $this->getExistingAddressId($sample_entity, 'field_sentinel_sample_address', 'sentinel_sample_address_target_id');
+      $sample_entity_ref = NULL;
+      $existing_sample_values = [];
+      if ($sample_target_id) {
+        $sample_entity_ref = $address_storage->load($sample_target_id);
+        if (!$sample_entity_ref) {
+          $sample_target_id = NULL;
+        }
+        else {
+          $existing_sample_values = $this->extractAddressFieldValues($sample_entity_ref);
+        }
+      }
+
+      $sample_address_data = $this->buildSampleAddressFieldValues($data, $existing_sample_values);
+
+      if (!empty($sample_address_data)) {
+        if ($sample_entity_ref) {
+          $sample_entity_ref->set('field_address', [$sample_address_data]);
+          $sample_entity_ref->save();
+        }
+        else {
+          $sample_entity_ref = $address_storage->create([
+            'type' => 'address',
+            'field_address' => [$sample_address_data],
+          ]);
+          $sample_entity_ref->save();
+        }
+
+        $sample_target_id = (int) $sample_entity_ref->id();
+
+        if ($sample_entity->hasField('field_sentinel_sample_address')) {
+          $sample_entity->set('field_sentinel_sample_address', ['target_id' => $sample_target_id]);
+        }
+        if ($sample_entity->hasField('sentinel_sample_address_target_id')) {
+          $sample_entity->set('sentinel_sample_address_target_id', $sample_target_id);
+        }
+      }
+    }
+    catch (\Throwable $throwable) {
+      \Drupal::logger('sentinel_portal_services')->error('Failed ensuring API sample addresses: @message', [
+        '@message' => $throwable->getMessage(),
+      ]);
+      throw $throwable;
+    }
+  }
+
+  /**
+   * Build address field values for the company address bundle.
+   */
+  protected function buildCompanyAddressFieldValues(array $data, array $existing_values = [], bool $allow_fallback = TRUE): array {
+    $values = $existing_values;
+
+    $country = strtoupper(trim((string) ($data['company_country'] ?? '')));
+    if ($country !== '') {
+      $values['country_code'] = $country;
+    }
+    elseif (array_key_exists('company_country', $data)) {
+      unset($values['country_code']);
+    }
+
+    $address_line1 = trim((string) ($data['company_address1'] ?? $data['company_address_1'] ?? ''));
+    if ($address_line1 === '' && $existing_values === []) {
+      $address_line1 = trim((string) ($data['company_property_name'] ?? $data['company_property_number'] ?? ''));
+    }
+    if ($address_line1 !== '') {
+      $values['address_line1'] = $address_line1;
+    }
+    elseif (array_key_exists('company_address1', $data) || array_key_exists('company_address_1', $data)) {
+      unset($values['address_line1']);
+    }
+
+    $additional_line = trim((string) ($data['company_address2'] ?? $data['company_address_2'] ?? ''));
+    $organization = trim((string) (
+      $data['company'] ??
+      $data['company_name'] ??
+      ''
+    ));
+    if ($organization !== '') {
+      $values['organization'] = $organization;
+    }
+    elseif (array_key_exists('company', $data) || array_key_exists('company_name', $data)) {
+      unset($values['organization']);
+    }
+
+    $property_name = trim((string) ($data['company_property_name'] ?? ''));
+    $property_number = trim((string) ($data['company_property_number'] ?? ''));
+
+    $address_line2_parts = [];
+    if ($property_name !== '') {
+      $address_line2_parts[] = $property_name;
+    }
+    if ($property_number !== '') {
+      $address_line2_parts[] = $property_number;
+    }
+    if ($additional_line !== '') {
+      $address_line2_parts[] = $additional_line;
+    }
+    $address_line2 = trim(implode(' ', $address_line2_parts));
+    if ($address_line2 !== '') {
+      $values['address_line2'] = $address_line2;
+    }
+    elseif (
+      array_key_exists('company_address2', $data) ||
+      array_key_exists('company_address_2', $data) ||
+      array_key_exists('company_property_name', $data) ||
+      array_key_exists('company_property_number', $data)
+    ) {
+      unset($values['address_line2']);
+    }
+
+    $locality = trim((string) ($data['company_town'] ?? $data['company_town_city'] ?? $data['company_city'] ?? ''));
+    if ($locality !== '') {
+      $values['locality'] = $locality;
+    }
+    elseif (array_key_exists('company_town', $data) || array_key_exists('company_town_city', $data) || array_key_exists('company_city', $data)) {
+      unset($values['locality']);
+    }
+
+    $postal_code = trim((string) ($data['company_postcode'] ?? ''));
+    if ($postal_code !== '') {
+      $values['postal_code'] = $postal_code;
+    }
+    elseif (array_key_exists('company_postcode', $data)) {
+      unset($values['postal_code']);
+    }
+
+    $administrative_area = trim((string) ($data['company_county'] ?? ''));
+    if ($administrative_area !== '') {
+      $values['administrative_area'] = $administrative_area;
+    }
+    elseif (array_key_exists('company_county', $data)) {
+      unset($values['administrative_area']);
+    }
+
+    if ($address_line1 === '' && $address_line2 === '' && $locality === '' && $postal_code === '' && $organization === '') {
+      if ($allow_fallback) {
+        $fallback = $this->buildSampleAddressFieldValues($data);
+        if (!empty($fallback)) {
+          if ($organization !== '') {
+            $fallback['organization'] = $organization;
+          }
+          return $fallback;
+        }
+      }
+      return $values;
+    }
+
+    if (!isset($values['country_code']) || $values['country_code'] === '') {
+      if (!empty($values)) {
+        $values['country_code'] = 'GB';
+      }
+    }
+
+    return $values;
+  }
+
+  /**
+   * Build address field values for the sample address bundle.
+   */
+  protected function buildSampleAddressFieldValues(array $data, array $existing_values = []): array {
+    $values = $existing_values;
+
+    $country = strtoupper(trim((string) ($data['country'] ?? $data['sample_country'] ?? '')));
+    if ($country !== '') {
+      $values['country_code'] = $country;
+    }
+    elseif (array_key_exists('country', $data) || array_key_exists('sample_country', $data)) {
+      unset($values['country_code']);
+    }
+
+    $address_line1 = trim((string) (
+      $data['address_1'] ??
+      $data['sample_address_1'] ??
+      $data['street'] ??
+      ''
+    ));
+    if ($address_line1 !== '') {
+      $values['address_line1'] = $address_line1;
+    }
+    elseif (
+      array_key_exists('address_1', $data) ||
+      array_key_exists('sample_address_1', $data) ||
+      array_key_exists('street', $data)
+    ) {
+      unset($values['address_line1']);
+    }
+
+    $address_line2_parts = array_filter([
+      trim((string) ($data['address_2'] ?? $data['sample_address_2'] ?? '')),
+      trim((string) ($data['property_name'] ?? '')),
+      trim((string) ($data['property_number'] ?? '')),
+    ]);
+    $address_line2 = trim(implode(' ', $address_line2_parts));
+    if ($address_line2 !== '') {
+      $values['address_line2'] = $address_line2;
+    }
+    elseif (
+      array_key_exists('address_2', $data) ||
+      array_key_exists('sample_address_2', $data) ||
+      array_key_exists('property_name', $data) ||
+      array_key_exists('property_number', $data)
+    ) {
+      unset($values['address_line2']);
+    }
+
+    $locality = trim((string) (
+      $data['town_city'] ??
+      $data['city'] ??
+      ''
+    ));
+    if ($locality !== '') {
+      $values['locality'] = $locality;
+    }
+    elseif (array_key_exists('town_city', $data) || array_key_exists('city', $data)) {
+      unset($values['locality']);
+    }
+
+    $postal_code = trim((string) ($data['postcode'] ?? $data['postal_code'] ?? ''));
+    if ($postal_code !== '') {
+      $values['postal_code'] = $postal_code;
+    }
+    elseif (array_key_exists('postcode', $data) || array_key_exists('postal_code', $data)) {
+      unset($values['postal_code']);
+    }
+
+    $administrative_area = trim((string) ($data['county'] ?? $data['region'] ?? ''));
+    if ($administrative_area !== '') {
+      $values['administrative_area'] = $administrative_area;
+    }
+    elseif (array_key_exists('county', $data) || array_key_exists('region', $data)) {
+      unset($values['administrative_area']);
+    }
+
+    $organization = trim((string) ($data['landlord'] ?? ''));
+    if ($organization !== '') {
+      $values['organization'] = $organization;
+    }
+    elseif (array_key_exists('landlord', $data)) {
+      unset($values['organization']);
+    }
+
+    if (!isset($values['country_code']) || $values['country_code'] === '') {
+      if (!empty($values)) {
+        $values['country_code'] = 'GB';
+      }
+    }
+
+    return $values;
+  }
+
+  protected function extractAddressFieldValues(?ContentEntityInterface $address_entity): array {
+    if (!$address_entity || !$address_entity->hasField('field_address')) {
+      return [];
+    }
+
+    $item = $address_entity->get('field_address')->first();
+    if (!$item) {
+      return [];
+    }
+
+    $values = $item->getValue();
+    foreach ($values as $key => $value) {
+      if (is_string($value)) {
+        $values[$key] = trim($value);
+      }
+    }
+
+    return $values;
+  }
+
+  protected function getExistingAddressId(ContentEntityInterface $sample_entity, string $reference_field, string $legacy_field): ?int {
+    if ($sample_entity->hasField($reference_field)) {
+      $item = $sample_entity->get($reference_field)->first();
+      if ($item && !empty($item->target_id)) {
+        return (int) $item->target_id;
+      }
+    }
+
+    if ($sample_entity->hasField($legacy_field)) {
+      $legacy_value = $sample_entity->get($legacy_field)->value;
+      if (!empty($legacy_value)) {
+        return (int) $legacy_value;
+      }
+    }
+
+    return NULL;
+  }
+ 
+   /**
+    * Normalize response data to match Drupal 7 format.
+    *
+    * Converts Drupal 11's nested field arrays into simple key-value pairs
    */
   protected function normalizeResponseData(array $data) {
     // First, extract and normalize all values
