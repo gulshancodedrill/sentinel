@@ -89,7 +89,9 @@ function sentinel_addresses_form_sentinel_portal_sample_submission_form_alter(&$
  */
 function sentinel_addresses_entity_update(\Drupal\Core\Entity\EntityInterface $entity) {
   // Check if entity is sentinel_sample and has address fields.
-  if ($entity->getEntityTypeId() == 'sentinel_sample' && $entity->hasField('field_company_address') || $entity->hasField('field_sentinel_sample_address')) {
+  if ($entity->getEntityTypeId() == 'sentinel_sample'
+    && method_exists($entity, 'hasField')
+    && ($entity->hasField('field_company_address') || $entity->hasField('field_sentinel_sample_address'))) {
     // Track address updates for queue processing if needed.
     // This can trigger address formatting updates.
   }
