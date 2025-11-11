@@ -115,7 +115,7 @@ class AddressNoteForm extends FormBase {
       if (isset($notes[$note_delta])) {
         $note = $notes[$note_delta]->entity;
         if ($note) {
-          $form['note_fieldset']['note_type']['#default_value'] = $note->get('field_address_note_type')->target_id ?? NULL;
+          $form['note_fieldset']['note_type']['#default_value'] = $note->get('field_field_address_note_type')->target_id ?? NULL;
           $form['note_fieldset']['note_details']['#default_value'] = $note->get('field_address_note_details')->value ?? '';
           if ($note->hasField('field_address_note_date') && !$note->get('field_address_note_date')->isEmpty()) {
             $date_value = $note->get('field_address_note_date')->value;
@@ -123,6 +123,9 @@ class AddressNoteForm extends FormBase {
               $date = new \DateTime($date_value);
               $form['note_fieldset']['note_date']['#default_value'] = $date->format('Y-m-d');
             }
+          }
+          if ($note->hasField('field_field_address_note_type') && !$note->get('field_field_address_note_type')->isEmpty()) {
+            $form['note_fieldset']['note_type']['#default_value'] = $note->get('field_field_address_note_type')->target_id;
           }
           $form['note_fieldset']['note_delta'] = [
             '#type' => 'value',
@@ -135,7 +138,7 @@ class AddressNoteForm extends FormBase {
 
     $form['note_fieldset']['submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Add Note'),
+      '#value' => !is_null($note_delta) ? $this->t('Update Note') : $this->t('Add Note'),
       '#weight' => 100,
     ];
 
@@ -161,10 +164,6 @@ class AddressNoteForm extends FormBase {
       return;
     }
 
-    // Convert date to timestamp.
-    $date_obj = new \DateTime($date . ' 00:00:00');
-    $timestamp = $date_obj->getTimestamp();
-
     if (!is_null($note_delta)) {
       // Update existing note.
       $notes = $address->get('field_address_note');
@@ -172,8 +171,8 @@ class AddressNoteForm extends FormBase {
         $note = $notes[$note_delta]->entity;
         if ($note) {
           $note->set('field_address_note_details', $details);
-          $note->set('field_address_note_date', $timestamp);
-          $note->set('field_address_note_type', $type);
+          $note->set('field_address_note_date', ['value' => $date]);
+          $note->set('field_field_address_note_type', ['target_id' => $type]);
           $note->save();
         }
       }
@@ -181,10 +180,10 @@ class AddressNoteForm extends FormBase {
       // Create new note (using Paragraphs).
       $paragraph_storage = $this->entityTypeManager->getStorage('paragraph');
       $note = $paragraph_storage->create([
-        'type' => 'address_note',
+        'type' => 'field_address_note',
         'field_address_note_details' => $details,
-        'field_address_note_date' => $timestamp,
-        'field_address_note_type' => $type,
+        'field_address_note_date' => ['value' => $date],
+        'field_field_address_note_type' => ['target_id' => $type],
       ]);
       $note->save();
 
@@ -195,7 +194,7 @@ class AddressNoteForm extends FormBase {
     $address->save();
 
     $this->messenger()->addStatus($this->t('Address note saved.'));
-    $form_state->setRedirect('entity.address.canonical', ['address' => $entity_id]);
+    $form_state->setRedirect('sentinel_addresses.address_view_legacy', ['address' => $entity_id]);
   }
 
 }

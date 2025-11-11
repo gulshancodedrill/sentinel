@@ -1780,16 +1780,24 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
   protected function getFieldStringValue(string $field_name): ?string {
     if ($this->hasField($field_name)) {
       $field = $this->get($field_name);
-      if (!$field->isEmpty()) {
-        $value = $field->value;
+      $item = $field->first();
+      if ($item) {
+        $value = $item->getString();
         if ($value !== NULL && $value !== '') {
           return $value;
+        }
+        if ($value === '0' || $value === 0) {
+          return '0';
         }
       }
     }
 
     if (property_exists($this, $field_name) && isset($this->{$field_name}) && $this->{$field_name} !== '') {
       return $this->{$field_name};
+    }
+
+    if (property_exists($this, $field_name) && isset($this->{$field_name}) && ($this->{$field_name} === '0' || $this->{$field_name} === 0)) {
+      return '0';
     }
 
     return NULL;
@@ -1843,6 +1851,14 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
   public function isFail(): bool {
     $value = $this->getFieldStringValue('pass_fail');
     return $value !== NULL && (int) $value === 0;
+  }
+
+  /**
+   * Determine if the sample is still pending results.
+   */
+  public function isPending(): bool {
+    $value = $this->getFieldStringValue('pass_fail');
+    return $value === NULL || $value === '';
   }
 
   /**
