@@ -49,6 +49,9 @@ class SentinelSampleHtmlRouteProvider extends AdminHtmlRouteProvider {
   protected function getCanonicalRoute(EntityTypeInterface $entity_type) {
     $route = parent::getCanonicalRoute($entity_type);
     if ($route) {
+      $route->setDefault('_controller', '\Drupal\sentinel_portal_entities\Controller\SentinelSampleViewController::view');
+      $route->setDefault('_title_callback', '\Drupal\sentinel_portal_entities\Controller\SentinelSampleViewController::title');
+      $route->setRequirement('_custom_access', '\Drupal\sentinel_portal_entities\Controller\SentinelSampleAccess::access');
       $route->setOption('_admin_route', FALSE);
     }
     return $route;

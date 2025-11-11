@@ -278,7 +278,11 @@ class SentinelSampleValidation {
     // Check if sentinel_addresses module is active
     $module_handler = \Drupal::moduleHandler();
     if ($module_handler->moduleExists('sentinel_addresses') && isset($data['form_id'])) {
-      if (empty($data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0]['sub_premise'])) {
+      $sub_premise = $data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0]['sub_premise'] ?? NULL;
+      if ($sub_premise === NULL || trim((string) $sub_premise) === '') {
+        $sub_premise = $data['property_number'] ?? '';
+      }
+      if (trim((string) $sub_premise) === '') {
         $errors['property_number'] = self::formatErrorMessage('property_number', 'field is empty.');
       }
       // if (empty($data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0]['thoroughfare'])) {

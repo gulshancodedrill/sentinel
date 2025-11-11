@@ -191,9 +191,8 @@ function get_company_addresses_for_cids($cids, $address_id = FALSE) {
   ]);
   
   // Join with sentinel_sample.
-  $query->join('address__field_address', 'aa', 'aa.field_address_value = address.field_address_value');
   $query->join('sentinel_sample__field_company_address', 'sca', 'sca.field_company_address_target_id = address.entity_id');
-  $query->join('sentinel_sample', 'sample', 'sample.id = sca.entity_id');
+  $query->join('sentinel_sample', 'sample', 'sample.pid = sca.entity_id');
   
   // Join with sentinel_client.
   if (\Drupal::moduleHandler()->moduleExists('sentinel_portal_entities')) {
@@ -201,7 +200,7 @@ function get_company_addresses_for_cids($cids, $address_id = FALSE) {
     // This is a simplified version.
   }
   
-  $query->condition('address.bundle', 'company_address', '=');
+  $query->condition('address.bundle', 'company_address');
   
   if ($address_id !== FALSE) {
     $query->condition('address.entity_id', (int) $address_id, '=');
@@ -263,7 +262,7 @@ function get_sentinel_sample_addresses_for_cids($string, $address_id = FALSE) {
   ]);
   
   $query->join('sentinel_sample__field_sentinel_sample_address', 'ssa', 'ssa.field_sentinel_sample_address_target_id = address.entity_id');
-  $query->join('sentinel_sample', 'sample', 'sample.id = ssa.entity_id');
+  $query->join('sentinel_sample', 'sample', 'sample.pid = ssa.entity_id');
   
   // Add search conditions.
   if (!empty($string)) {

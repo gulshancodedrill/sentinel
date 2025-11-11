@@ -6,12 +6,30 @@ sentinel_addresses.autocomplete:
   requirements:
     _permission: 'sentinel portal sample submit'
 
+sentinel_addresses.address_view:
+  path: '/address/{address}'
+  defaults:
+    _controller: '\Drupal\sentinel_addresses\Controller\AddressController::view'
+    _title: 'View Address'
+  requirements:
+    _permission: 'sentinel portal'
+    address: '\d+'
+
+sentinel_addresses.address_view_legacy:
+  path: '/address/address/{address}'
+  defaults:
+    _controller: '\Drupal\sentinel_addresses\Controller\AddressController::view'
+    _title: 'View Address'
+  requirements:
+    _permission: 'sentinel portal'
+    address: '\d+'
+
 sentinel_addresses.edit_note:
-  path: '/address/address/{address_id}/note/{note_delta}'
+  path: '/address/{address}/note/{note_delta}'
   defaults:
     _controller: '\Drupal\sentinel_addresses\Controller\AddressController::editNote'
     _title: 'Edit Address Note'
   requirements:
     _permission: 'sentinel portal sample submit'
-    address_id: \d+
-    note_delta: \d+
+    address: '\d+'
+    note_delta: '\d+'
