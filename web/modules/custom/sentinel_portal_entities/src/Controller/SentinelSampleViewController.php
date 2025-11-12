@@ -54,11 +54,17 @@ class SentinelSampleViewController extends ControllerBase {
       ];
     }
 
+    $address_section = $this->buildAddressSection($sentinel_sample);
+    if ($address_section !== NULL) {
+      $address_section['#weight'] = 1;
+      $build['address'] = $address_section;
+    }
+
     $help_text = $this->buildHelpText($sentinel_sample);
     if ($help_text !== NULL) {
       $build['help_top'] = [
         '#markup' => $help_text,
-        '#weight' => 1,
+        '#weight' => 2,
       ];
     }
 
@@ -66,7 +72,7 @@ class SentinelSampleViewController extends ControllerBase {
     if ($pending_reasons !== NULL) {
       $build['pending_reasons'] = [
         '#markup' => $pending_reasons,
-        '#weight' => 2,
+        '#weight' => 3,
       ];
     }
 
@@ -75,13 +81,13 @@ class SentinelSampleViewController extends ControllerBase {
       '#header' => [],
       '#rows' => $this->buildFieldRows($sentinel_sample, $fields),
       '#attributes' => ['class' => ['table-bordered', 'table-hover']],
-      '#weight' => 3,
+      '#weight' => 4,
     ];
 
     if ($help_text !== NULL) {
       $build['help_bottom'] = [
         '#markup' => $help_text,
-        '#weight' => 4,
+        '#weight' => 5,
       ];
     }
 
@@ -392,6 +398,92 @@ class SentinelSampleViewController extends ControllerBase {
     }
 
     return ['#plain_text' => (string) $value];
+  }
+
+  /**
+   * Build the address summary section for the sample view.
+   */
+  protected function buildAddressSection(SentinelSample $sample): ?array {
+    $address_id = NULL;
+    if ($sample->hasField('field_sentinel_sample_address') && !$sample->get('field_sentinel_sample_address')->isEmpty()) {
+      $address_id = (int) $sample->get('field_sentinel_sample_address')->target_id;
+    }
+
+    if (!$address_id && $sample->hasField('sentinel_sample_address_target_id') && !$sample->get('sentinel_sample_address_target_id')->isEmpty()) {
+      $address_id = (int) $sample->get('sentinel_sample_address_target_id')->value;
+    }
+
+    if (!$address_id) {
+      return NULL;
+    }
+
+    $entity_type_manager = \Drupal::entityTypeManager();
+    if (!$entity_type_manager->hasDefinition('address')) {
+      return NULL;
+    }
+
+    $address = $entity_type_manager->getStorage('address')->load($address_id);
+    if (!$address) {
+      return NULL;
+    }
+
+    $country_list = \Drupal::service('country_manager')->getList();
+    $lines = [];
+
+    if ($address->hasField('field_address') && !$address->get('field_address')->isEmpty()) {
+      $address_item = $address->get('field_address')->first();
+      if ($address_item) {
+        $lines = array_filter([
+          $address_item->address_line1 ?? '',
+          $address_item->address_line2 ?? '',
+          $address_item->locality ?? '',
+          $address_item->administrative_area ?? '',
+          $address_item->postal_code ?? '',
+        ]);
+
+        if (!empty($address_item->country_code)) {
+          $lines[] = $country_list[$address_item->country_code] ?? $address_item->country_code;
+        }
+      }
+    }
+
+    if (!$lines) {
+      foreach (['field_address_address_line1', 'field_address_address_line2', 'field_address_locality', 'field_address_administrative_area', 'field_address_postal_code'] as $field_name) {
+        if ($address->hasField($field_name) && !$address->get($field_name)->isEmpty()) {
+          $lines[] = $address->get($field_name)->value ?? '';
+        }
+      }
+
+      if ($address->hasField('field_address_country_code') && !$address->get('field_address_country_code')->isEmpty()) {
+        $country_code = $address->get('field_address_country_code')->value;
+        if ($country_code) {
+          $lines[] = $country_list[$country_code] ?? $country_code;
+        }
+      }
+    }
+
+    if (!$lines) {
+      return NULL;
+    }
+
+    $items = [];
+    foreach ($lines as $line) {
+      if ($line === '') {
+        continue;
+      }
+      $items[] = ['#plain_text' => $line];
+    }
+
+    $url = $address->hasLinkTemplate('canonical') ? $address->toUrl('canonical') : Url::fromUri('internal:/address/address/' . $address_id);
+    $items[] = Link::fromTextAndUrl($this->t('View address details'), $url)->toRenderable();
+
+    return [
+      '#theme' => 'item_list',
+      '#title' => $this->t('Address'),
+      '#items' => $items,
+      '#attributes' => ['class' => ['sentinel-sample-address']],
+      '#wrapper_attributes' => ['class' => ['sentinel-sample-address-wrapper']],
+    ];
   }
 
   /**

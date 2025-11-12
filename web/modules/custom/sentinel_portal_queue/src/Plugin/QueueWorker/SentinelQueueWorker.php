@@ -3,7 +3,6 @@
 namespace Drupal\sentinel_portal_queue\Plugin\QueueWorker;
 
 use Drupal\Core\Queue\QueueWorkerBase;
-use Drupal\Core\Queue\QueueInterface;
 
 /**
  * Queue worker for processing sentinel queue items.
@@ -20,9 +19,12 @@ class SentinelQueueWorker extends QueueWorkerBase {
    * {@inheritdoc}
    */
   public function processItem($data) {
-    // This is handled by the hook_cron_queue_info callback
-    // The actual processing is done in sentinel_portal_queue_run_action()
-    return TRUE;
+    if (function_exists('sentinel_portal_queue_run_action')) {
+      sentinel_portal_queue_run_action($data);
+    }
+    else {
+      \Drupal::logger('sentinel_portal_queue')->error('sentinel_portal_queue_run_action() not found while processing queue item.');
+    }
   }
 
 }
