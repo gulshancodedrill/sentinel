@@ -8,5 +8,14 @@ services:
       - '@entity_type.manager'
       - '@file.usage'
       - '@config.factory'
-    tags:
-
+  sentinel_data_import.test_entity_importer:
+    class: Drupal\sentinel_data_import\TestEntityImporter
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@datetime.time'
+  sentinel_data_import.address_importer:
+    class: Drupal\sentinel_data_import\AddressImporter
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
