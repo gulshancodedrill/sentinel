@@ -356,28 +356,59 @@ function sentinel_systemcheck_certificate_calculate_excess_cloride_result($mains
  *   The original sample entity.
  */
 function _calculate_sentinel_sample_result($result_object, $sentinel_sample) {
-  // Let's assume the sample passes.
-  $sentinel_sample->pass_fail = 1;
+  $existing_pass_fail = NULL;
+  if (is_object($sentinel_sample) && method_exists($sentinel_sample, 'hasField') && $sentinel_sample->hasField('pass_fail')) {
+    $existing_pass_fail = _get_field_value($sentinel_sample, 'pass_fail');
+  }
+
+  if ($existing_pass_fail !== NULL) {
+    $sentinel_sample->pass_fail = (int) $existing_pass_fail;
+  }
+  else {
+    $sentinel_sample->pass_fail = 1;
+  }
+
   $total_fail = FALSE;
   $mappings = sentinel_systemcheck_certificate_get_properties_pass_fail_mappings();
 
   foreach ($result_object as $key => $property) {
-    if (isset($property->name)) {
-      // Handle both FieldItemList objects and scalar values.
-      $name_value = is_object($property->name) && method_exists($property->name, '__toString') ? (string) $property->name : $property->name;
-      $status = is_string($name_value) ? strtolower($name_value) : '';
+    $status = '';
 
-      if ($status == 'fail') {
-        $total_fail = TRUE;
-        if (method_exists($sentinel_sample, 'isLegacy') && $sentinel_sample->isLegacy() == FALSE) {
-          $sentinel_sample->{$mappings[$key]} = 0;
+    if (is_object($property)) {
+      if (method_exists($property, 'getName')) {
+        $status = strtolower(trim($property->getName()));
+      }
+      elseif (isset($property->name)) {
+        $name_value = $property->name;
+        if (is_object($name_value) && method_exists($name_value, '__toString')) {
+          $status = strtolower(trim((string) $name_value));
+        }
+        elseif (is_string($name_value)) {
+          $status = strtolower(trim($name_value));
+        }
+        elseif (is_array($name_value) && isset($name_value['value'])) {
+          $status = strtolower(trim($name_value['value']));
         }
       }
+    }
+    elseif (is_string($property)) {
+      $status = strtolower(trim($property));
+    }
 
-      if ($status == 'pass' || $status == 'warning') {
-        if (method_exists($sentinel_sample, 'isLegacy') && $sentinel_sample->isLegacy() == FALSE) {
-          $sentinel_sample->{$mappings[$key]} = 1;
-        }
+    if ($status === '') {
+      continue;
+    }
+
+    if ($status === 'fail') {
+      $total_fail = TRUE;
+      if (method_exists($sentinel_sample, 'isLegacy') && $sentinel_sample->isLegacy() == FALSE && isset($mappings[$key])) {
+        $sentinel_sample->{$mappings[$key]} = 0;
+      }
+    }
+
+    if ($status === 'pass' || $status === 'warning') {
+      if (method_exists($sentinel_sample, 'isLegacy') && $sentinel_sample->isLegacy() == FALSE && isset($mappings[$key])) {
+        $sentinel_sample->{$mappings[$key]} = 1;
       }
     }
   }
@@ -511,8 +542,21 @@ function _get_injector_file($name) {
   $dir = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
   $dir .= '/includes';
 
-  if (!\Drupal::service('file_system')->prepareDirectory($dir, FileSystemInterface::CREATE_DIRECTORY)) {
-    \Drupal::service('file_system')->mkdir($dir);
+  $file_system = \Drupal::service('file_system');
+
+  // Ensure the directory exists and is writable; avoid redundant mkdir() calls.
+  if (!$file_system->prepareDirectory($dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
+    if (!is_dir($dir)) {
+      try {
+        $file_system->mkdir($dir, NULL, TRUE);
+      }
+      catch (\Exception $e) {
+        \Drupal::logger('sentinel_systemcheck_certificate')->error('Failed to create certificate includes directory @dir: @message', [
+          '@dir' => $dir,
+          '@message' => $e->getMessage(),
+        ]);
+      }
+    }
   }
 
   $file_path = $dir . '/' . $name;

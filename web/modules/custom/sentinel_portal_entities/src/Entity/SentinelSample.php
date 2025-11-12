@@ -1966,6 +1966,9 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
 
     $html = $this->buildPdfHtml();
     if ($html === NULL) {
+      \Drupal::logger('sentinel_portal_entities')->warning('Sample @id: PDF HTML build returned NULL.', [
+        '@id' => $this->id(),
+      ]);
       return FALSE;
     }
 
@@ -1991,6 +1994,11 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
       $file_repository = \Drupal::service('file.repository');
       $file = $file_repository->writeData($pdf_data, $uri, FileSystemInterface::EXISTS_REPLACE);
       if ($file instanceof FileInterface) {
+        \Drupal::logger('sentinel_portal_entities')->info('Sample @id: PDF written to @uri (fid @fid).', [
+          '@id' => $this->id(),
+          '@uri' => $uri,
+          '@fid' => $file->id(),
+        ]);
         $file->setPermanent();
         $file->save();
 
@@ -2009,6 +2017,12 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
         $this->set('filename', $file->getFilename());
         
         return $file;
+      }
+      else {
+        \Drupal::logger('sentinel_portal_entities')->warning('Sample @id: writeData() returned unexpected value when saving PDF to @uri.', [
+          '@id' => $this->id(),
+          '@uri' => $uri,
+        ]);
       }
     }
     catch (\Exception $e) {
@@ -2147,7 +2161,21 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
    */
   protected function ensureDirectory(string $uri): void {
     $file_system = \Drupal::service('file_system');
-    $file_system->prepareDirectory($uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    $result = $file_system->prepareDirectory($uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    $realpath = $file_system->realpath($uri) ?: 'unresolved';
+
+    if (!$result) {
+      \Drupal::logger('sentinel_portal_entities')->warning('Unable to prepare directory @uri (resolved path: @real).', [
+        '@uri' => $uri,
+        '@real' => $realpath,
+      ]);
+    }
+    else {
+      \Drupal::logger('sentinel_portal_entities')->info('Prepared directory @uri (resolved path: @real).', [
+        '@uri' => $uri,
+        '@real' => $realpath,
+      ]);
+    }
   }
 
   /**
