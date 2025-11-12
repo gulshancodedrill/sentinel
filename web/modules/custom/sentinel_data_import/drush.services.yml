@@ -7,6 +7,8 @@ services:
       - '@config.factory'
       - '@sentinel_data_import.file_managed_importer'
       - '@extension.list.module'
+      - '@sentinel_data_import.test_entity_importer'
+      - '@sentinel_data_import.address_importer'
     tags:
       - { name: drush.command }
 
