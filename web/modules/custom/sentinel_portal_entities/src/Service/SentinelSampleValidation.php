@@ -76,6 +76,23 @@ class SentinelSampleValidation {
 
     $sample_type = self::getPackType($sample);
 
+    // Normalize incoming pass/fail values to integers.
+    $sample = array_map(static function ($value) {
+      if (is_string($value)) {
+        $trimmed = trim($value);
+        if (strcasecmp($trimmed, 'P') === 0) {
+          return self::PASS_VALUE;
+        }
+        if (strcasecmp($trimmed, 'F') === 0) {
+          return self::FAIL_VALUE;
+        }
+        if ($trimmed === '1' || $trimmed === '0') {
+          return (int) $trimmed;
+        }
+      }
+      return $value;
+    }, $sample);
+
     $company_email = isset($sample['company_email']) ? trim($sample['company_email']) : '';
     if ($company_email === '' || !filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
       $errors['company_email'] = self::formatErrorMessage('company_email', 'has an invalid email address.');
@@ -147,6 +164,16 @@ class SentinelSampleValidation {
 
     return $errors;
   }
+
+  /**
+   * Integer representation for fail pass/fail values.
+   */
+  public const FAIL_VALUE = 0;
+
+  /**
+   * Integer representation for pass pass/fail values.
+   */
+  public const PASS_VALUE = 1;
 
   /**
    * Validate a sample based on the type of sample that it is.
