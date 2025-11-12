@@ -3,7 +3,7 @@ sentinel_portal.portal:
   defaults:
     _controller: '\Drupal\sentinel_portal_module\Controller\SentinelPortalController::mainPage'
   requirements:
-    _role: 'authenticated'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 
@@ -12,7 +12,7 @@ sentinel_portal.admin:
   defaults:
     _controller: '\Drupal\sentinel_portal_module\Controller\SentinelPortalController::adminPage'
   requirements:
-    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalAdminAccess'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 
@@ -22,7 +22,7 @@ sentinel_portal.config:
     _form: '\Drupal\sentinel_portal_module\Form\SentinelPortalConfigForm'
     _title: 'Portal Config'
   requirements:
-    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalConfigAccess'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 
@@ -32,6 +32,6 @@ sentinel_portal.test_pdf_logic:
     _controller: '\Drupal\sentinel_portal_module\Controller\TestPdfLogicController::page'
     _title: 'Test PDF logic'
   requirements:
-    _permission: 'access content'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE

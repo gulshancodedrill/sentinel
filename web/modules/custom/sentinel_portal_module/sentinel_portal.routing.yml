@@ -3,7 +3,7 @@ sentinel_portal.portal:
   defaults:
     _controller: '\Drupal\sentinel_portal_module\Controller\SentinelPortalController::mainPage'
   requirements:
-    _role: 'authenticated'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 
@@ -12,7 +12,7 @@ sentinel_portal.admin:
   defaults:
     _controller: '\Drupal\sentinel_portal_module\Controller\SentinelPortalController::adminPage'
   requirements:
-    _permission: 'sentinel portal administration'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: TRUE
 
@@ -21,6 +21,6 @@ sentinel_portal.config:
   defaults:
     _form: '\Drupal\sentinel_portal_module\Form\SentinelPortalConfigForm'
   requirements:
-    _permission: 'sentinel portal administration'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: TRUE

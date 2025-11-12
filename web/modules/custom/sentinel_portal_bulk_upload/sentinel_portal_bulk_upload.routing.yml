@@ -4,7 +4,7 @@ sentinel_portal_bulk_upload.upload:
     _form: '\Drupal\sentinel_portal_bulk_upload\Form\BulkUploadForm'
     _title: 'Sample Bulk Upload'
   requirements:
-    _permission: 'sentinel portal bulk upload'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 
