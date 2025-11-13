@@ -19,10 +19,10 @@ class NoticeController extends ControllerBase {
   public function listPage() {
     $current_user = \Drupal::currentUser();
     $user_id = $current_user->id();
-
+  
     $output = [];
-
-    // Query notices for current user
+  
+    // Query notices for current user.
     $query = \Drupal::entityTypeManager()
       ->getStorage('sentinel_notice')
       ->getQuery()
@@ -30,45 +30,46 @@ class NoticeController extends ControllerBase {
       ->condition('uid', $user_id)
       ->sort('created', 'DESC')
       ->pager(25);
-
+  
     $notice_ids = $query->execute();
-
+  
     if (empty($notice_ids)) {
       $output[] = [
-        '#markup' => '<div class="alert alert-warning">' . $this->t('No notices found') . '</div>',
+        '#markup' => '<div class="alert alert-warning">' . $this->t('No notices found.') . '</div>',
       ];
     }
     else {
       $headers = [
         $this->t('Title'),
         $this->t('Created'),
-        $this->t('Read'),
+        $this->t('Status'),
       ];
-
+  
       $rows = [];
       $notices = \Drupal::entityTypeManager()
         ->getStorage('sentinel_notice')
         ->loadMultiple($notice_ids);
-
+  
       foreach ($notices as $notice) {
-        $notice_read = $notice->get('notice_read')->value;
-        $created = $notice->get('created')->value;
+        $notice_read = (bool) $notice->get('notice_read')->value;
+        $created = (int) $notice->get('created')->value;
         $created_formatted = date('d/m/Y H:i:s', $created);
-
         $class = $notice_read ? 'notice-read' : 'notice-unread';
-
+  
+        // Create the link and convert to safe HTML string.
         $title_link = Link::createFromRoute(
           $notice->get('title')->value,
           'sentinel_portal_notice.notice_view',
           ['sentinel_notice' => $notice->id()]
         );
-
+        $title_markup = $title_link->toString(); // ✅ safe HTML string
+  
         if ($notice_read) {
           $rows[] = [
             'data' => [
-              $title_link->toRenderable(),
-              $created_formatted,
-              $this->t('Read'),
+              ['data' => ['#markup' => $title_markup]],
+              ['data' => ['#markup' => $created_formatted]],
+              ['data' => ['#markup' => $this->t('Read')]],
             ],
             'class' => [$class],
           ];
@@ -76,29 +77,29 @@ class NoticeController extends ControllerBase {
         else {
           $rows[] = [
             'data' => [
-              ['data' => ['#markup' => '<strong>' . $title_link->toString() . '</strong>']],
+              ['data' => ['#markup' => '<strong>' . $title_markup . '</strong>']],
               ['data' => ['#markup' => '<strong>' . $created_formatted . '</strong>']],
-              $this->t('Unread'),
+              ['data' => ['#markup' => $this->t('Unread')]],
             ],
             'class' => [$class],
           ];
         }
       }
-
+  
       $output[] = [
         '#type' => 'table',
         '#header' => $headers,
         '#rows' => $rows,
         '#attributes' => [
-          'class' => ['table-bordered', 'table-hover'],
+          'class' => ['table', 'table-bordered', 'table-hover'],
         ],
       ];
-
+  
       $output[] = [
         '#type' => 'pager',
       ];
     }
-
+  
     return $output;
   }
 
@@ -149,36 +150,52 @@ class NoticeController extends ControllerBase {
     $output = [];
 
     $output['title'] = [
-      '#markup' => '<h2>' . $notice->get('title')->value . '</h2>',
+      '#type' => 'inline_template',
+      '#template' => '<h2>{{ title }}</h2>',
+      '#context' => ['title' => $notice->get('title')->value],
     ];
 
     $output['notice'] = [
-      '#markup' => '<div class="notice-content">' . nl2br($notice->get('notice')->value) . '</div>',
+      '#type' => 'inline_template',
+      '#template' => '<div class=\"notice-content\">{{ body|raw }}</div>',
+      '#context' => ['body' => nl2br($notice->get('notice')->value)],
     ];
 
     $output['created'] = [
-      '#markup' => '<p><small>' . $this->t('Created: @date', [
-        '@date' => date('d/m/Y H:i:s', $notice->get('created')->value)
-      ]) . '</small></p>',
+      '#type' => 'inline_template',
+      '#template' => '<p><small>{{ created }}</small></p>',
+      '#context' => [
+        'created' => $this->t('Created: @date', [
+          '@date' => date('d/m/Y H:i:s', $notice->get('created')->value),
+        ]),
+      ],
     ];
 
     // Add delete link if user has permission
     if ($current_user->hasPermission('sentinel portal notice')) {
       $output['delete'] = [
-        '#markup' => '<p>' . Link::createFromRoute(
-          $this->t('Delete'),
-          'sentinel_portal_notice.notice_delete',
-          ['sentinel_notice' => $notice->id()],
-          ['attributes' => ['class' => ['btn', 'btn-danger']]]
-        )->toString() . '</p>',
+        '#type' => 'inline_template',
+        '#template' => '<p>{{ link }}</p>',
+        '#context' => [
+          'link' => Link::createFromRoute(
+            $this->t('Delete'),
+            'sentinel_portal_notice.notice_delete',
+            ['sentinel_notice' => $notice->id()],
+            ['attributes' => ['class' => ['btn', 'btn-danger']]]
+          )->toString(),
+        ],
       ];
     }
 
     $output['back'] = [
-      '#markup' => '<p>' . Link::createFromRoute(
-        $this->t('← Back to notices'),
-        'sentinel_portal_notice.notices'
-      )->toString() . '</p>',
+      '#type' => 'inline_template',
+      '#template' => '<p>{{ link }}</p>',
+      '#context' => [
+        'link' => Link::createFromRoute(
+          $this->t('← Back to notices'),
+          'sentinel_portal_notice.notices'
+        )->toString(),
+      ],
     ];
 
     return $output;

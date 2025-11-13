@@ -12,7 +12,7 @@
 
 {% block content %}
   <div class="certificate-standalone-wrapper">
-    <main{{ content_attributes.addClass('certificate-standalone') }}>
+    <main{{ content_attributes.addClass('certificate-standalone').|render }}>
       <section class="section">
         <a href="#main-content" id="main-content" tabindex="-1"></a>
         {{ page.content }}
