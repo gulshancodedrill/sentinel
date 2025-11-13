@@ -1,0 +1,119 @@
+uuid: 785eaede-ea83-4a06-880c-5f1d160f92f2
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.taxonomy_term.hold_state_values.field_hold_state_email_contents
+    - field.field.taxonomy_term.hold_state_values.field_hold_state_email_disposal
+    - field.field.taxonomy_term.hold_state_values.field_hold_state_email_issue_rec
+    - field.field.taxonomy_term.hold_state_values.field_hold_state_email_specs
+    - field.field.taxonomy_term.hold_state_values.field_hold_state_email_to
+    - field.field.taxonomy_term.hold_state_values.field_hold_state_issue_with
+    - taxonomy.vocabulary.hold_state_values
+  module:
+    - feeds
+    - taxonomy
+    - text
+id: hold_states
+label: 'Hold states'
+description: ''
+help: ''
+import_period: -1
+fetcher: upload
+fetcher_configuration:
+  allowed_extensions: 'txt csv tsv xml opml'
+  directory: 'private://feeds'
+parser: csv
+parser_configuration:
+  delimiter: ','
+  no_headers: false
+  line_limit: 100
+processor: 'entity:taxonomy_term'
+processor_configuration:
+  langcode: en
+  insert_new: 1
+  update_existing: 2
+  update_non_existent: _keep
+  expire: 3600
+  owner_feed_author: false
+  owner_id: 0
+  authorize: true
+  skip_hash_check: false
+  revision: false
+  values:
+    vid: hold_state_values
+custom_sources:
+  system_designation:
+    label: 'SYSTEM DESIGNATION (FOR DROPDOWN USE)'
+    value: 'SYSTEM DESIGNATION (FOR DROPDOWN USE)'
+    machine_name: system_designation
+  email_to:
+    label: 'EMAIL TO'
+    value: 'EMAIL TO'
+    machine_name: email_to
+  issue_with:
+    label: 'ISSUE WITH'
+    value: 'ISSUE WITH'
+    machine_name: issue_with
+  email_intro:
+    label: 'EMAIL INTRO'
+    value: 'EMAIL INTRO'
+    machine_name: email_intro
+  email_issue_specifics:
+    label: 'EMAIL ISSUE SPECIFICS'
+    value: 'EMAIL ISSUE SPECIFICS'
+    machine_name: email_issue_specifics
+  email_rectifying_action:
+    label: 'EMAIL RECTIFYING ACTION'
+    value: 'EMAIL RECTIFYING ACTION'
+    machine_name: email_rectifying_action
+  email_disposal_warning:
+    label: 'EMAIL DISPOSAL WARNING'
+    value: 'EMAIL DISPOSAL WARNING'
+    machine_name: email_disposal_warning
+mappings:
+  -
+    target: name
+    map:
+      value: system_designation
+    unique:
+      value: true
+  -
+    target: field_hold_state_email_to
+    map:
+      value: email_to
+    settings:
+      language: null
+  -
+    target: field_hold_state_issue_with
+    map:
+      value: issue_with
+    settings:
+      language: null
+  -
+    target: field_hold_state_email_contents
+    map:
+      value: email_intro
+    settings:
+      language: null
+      format: full_html
+  -
+    target: field_hold_state_email_specs
+    map:
+      value: email_issue_specifics
+    settings:
+      language: null
+  -
+    target: field_hold_state_email_issue_rec
+    map:
+      value: email_rectifying_action
+    settings:
+      language: null
+  -
+    target: field_hold_state_email_disposal
+    map:
+      value: email_disposal_warning
+    settings:
+      language: null
+      format: full_html
+

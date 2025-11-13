@@ -121,3 +121,4 @@ function normalizeText($value) {
   return trim(preg_replace('/\s+/', ' ', $value));
 }
 
+

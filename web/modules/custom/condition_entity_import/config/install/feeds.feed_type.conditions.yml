@@ -1,0 +1,119 @@
+uuid: 597c5a2a-dd01-4f9e-9d38-ceb3d27f305b
+langcode: en
+status: true
+dependencies:
+  config:
+    - eck.eck_type.condition_entity.condition_entity
+    - field.field.condition_entity.condition_entity.field_condition_event_element
+    - field.field.condition_entity.condition_entity.field_condition_event_number
+    - field.field.condition_entity.condition_entity.field_condition_event_result
+    - field.field.condition_entity.condition_entity.field_condition_event_string
+    - field.field.condition_entity.condition_entity.field_event_individual_comment
+    - field.field.condition_entity.condition_entity.field_individual_recommend
+    - field.field.condition_entity.condition_entity.field_number_of_white_spaces
+  module:
+    - eck
+    - feeds
+    - taxonomy
+id: conditions
+label: 'Conditions'
+description: ''
+help: ''
+import_period: -1
+fetcher: upload
+fetcher_configuration:
+  allowed_extensions: csv
+  directory: 'private://feeds'
+parser: csv
+parser_configuration:
+  delimiter: ','
+  no_headers: false
+  line_limit: 100
+processor: 'entity:condition_entity'
+processor_configuration:
+  langcode: en
+  insert_new: 1
+  update_existing: 0
+  update_non_existent: _keep
+  expire: 3600
+  owner_feed_author: false
+  owner_id: 0
+  authorize: true
+  skip_hash_check: false
+  revision: false
+  values:
+    type: condition_entity
+custom_sources:
+  event_element:
+    label: 'Event element'
+    value: 'Event element'
+    machine_name: event_element
+  event_number:
+    label: 'Event Number'
+    value: 'Event Number'
+    machine_name: event_number
+  event_string:
+    label: 'Event String'
+    value: 'Event String'
+    machine_name: event_string
+  event_individual_comment:
+    label: 'Event Individual Comment'
+    value: 'Event Individual Comment'
+    machine_name: event_individual_comment
+  event_individual_recommendation:
+    label: 'Event Individual Recommendation'
+    value: 'Event Individual Recommendation'
+    machine_name: event_individual_recommendation
+  condition_event_result:
+    label: 'Condition Event Result'
+    value: 'Condition Event Result'
+    machine_name: condition_event_result
+  number_of_white_spaces:
+    label: 'Number of white spaces'
+    value: 'Number of white spaces'
+    machine_name: number_of_white_spaces
+mappings:
+  -
+    target: field_condition_event_element
+    map:
+      value: event_element
+    settings:
+      language: null
+  -
+    target: field_condition_event_number
+    map:
+      value: event_number
+    settings:
+      language: null
+  -
+    target: field_condition_event_string
+    map:
+      value: event_string
+    settings:
+      language: null
+  -
+    target: field_event_individual_comment
+    map:
+      value: event_individual_comment
+    settings:
+      language: null
+  -
+    target: field_individual_recommend
+    map:
+      value: event_individual_recommendation
+    settings:
+      language: null
+  -
+    target: field_condition_event_result
+    map:
+      target_id: condition_event_result
+    settings:
+      reference_by: name
+      autocreate: 0
+  -
+    target: field_number_of_white_spaces
+    map:
+      value: number_of_white_spaces
+    settings:
+      language: null
+

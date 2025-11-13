@@ -8,6 +8,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\sentinel_data_import\AddressImporter;
 use Drupal\sentinel_data_import\FileManagedImporter;
+use Drupal\sentinel_data_import\SentinelSampleImporter;
 use Drupal\sentinel_data_import\TestEntityImporter;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -28,6 +29,7 @@ class SentinelDataImportCommands extends DrushCommands {
     protected ModuleExtensionList $moduleExtensionList,
     protected TestEntityImporter $testEntityImporter,
     protected AddressImporter $addressImporter,
+    protected SentinelSampleImporter $sentinelSampleImporter,
   ) {
     parent::__construct();
   }
@@ -44,7 +46,102 @@ class SentinelDataImportCommands extends DrushCommands {
       $container->get('extension.list.module'),
       $container->get('sentinel_data_import.test_entity_importer'),
       $container->get('sentinel_data_import.address_importer'),
+      $container->get('sentinel_data_import.sentinel_sample_importer'),
     );
+  }
+
+  /**
+   * Enqueue sentinel sample entities from a CSV export.
+   *
+   * @param string $csv_path
+   *   Absolute path to the CSV (use "default" for module CSV).
+   * @param array $options
+   *   CLI options.
+   *
+   * @command sentinel-data-import:enqueue-samples
+   *
+   * @option start
+   *   Zero-based row index to start from (default 0).
+   * @option limit
+   *   Maximum rows to enqueue (0 = no limit).
+   *
+   * @validate-module-enabled sentinel_data_import
+   */
+  public function enqueueSamples(string $csv_path, array $options = ['start' => 0, 'limit' => 0]): void {
+    $csv_path = trim($csv_path);
+    $queue = $this->queueFactory->get('sentinel_data_import.sentinel_sample');
+
+    if ($csv_path === '' || $csv_path === 'default') {
+      $module_path = $this->moduleExtensionList->getPath('sentinel_data_import');
+      $csv_path = DRUPAL_ROOT . '/' . trim($module_path . '/csv/sentinel_samples_d7.csv', '/');
+    }
+    elseif ($csv_path[0] !== '/') {
+      $csv_path = DRUPAL_ROOT . '/' . ltrim($csv_path, '/');
+    }
+
+    $csv_path = $this->fileSystem->realpath($csv_path) ?: $csv_path;
+    if (!is_readable($csv_path)) {
+      throw new \RuntimeException(sprintf('CSV file not readable: %s', $csv_path));
+    }
+
+    $start = (int) ($options['start'] ?? 0);
+    $limit = (int) ($options['limit'] ?? 0);
+
+    $file = new \SplFileObject($csv_path);
+    $file->setFlags(\SplFileObject::READ_CSV | \SplFileObject::SKIP_EMPTY);
+
+    $headers = $file->fgetcsv();
+    if ($headers === FALSE) {
+      throw new \RuntimeException('Unable to read CSV header.');
+    }
+    $headers = array_map('trim', $headers);
+
+    $required_headers = ['pid', 'pack_reference_number'];
+    $missing_headers = array_diff($required_headers, $headers);
+    if (!empty($missing_headers)) {
+      throw new \RuntimeException(sprintf('CSV missing required columns: %s', implode(', ', $missing_headers)));
+    }
+
+    $processed = 0;
+    $enqueued = 0;
+    $skipped = 0;
+
+    foreach ($file as $row_index => $row) {
+      if ($row === [NULL] || $row === FALSE) {
+        continue;
+      }
+      if ($row_index - 1 < $start) {
+        continue;
+      }
+      if ($limit > 0 && $enqueued >= $limit) {
+        break;
+      }
+
+      $record = [];
+      foreach ($headers as $position => $column) {
+        if ($column === '') {
+          continue;
+        }
+        $raw = $row[$position] ?? '';
+        $record[$column] = $this->normalizeCsvValue(is_string($raw) ? $raw : (string) $raw);
+      }
+
+      $pid = isset($record['pid']) ? (int) $record['pid'] : 0;
+      if ($pid <= 0) {
+        $skipped++;
+        continue;
+      }
+
+      $queue->createItem($record);
+      $processed++;
+      $enqueued++;
+    }
+
+    $this->logger()->success(dt('Processed @processed rows, enqueued @enqueued sentinel samples (skipped @skipped).', [
+      '@processed' => $processed,
+      '@enqueued' => $enqueued,
+      '@skipped' => $skipped,
+    ]));
   }
 
   /**
@@ -129,7 +226,7 @@ class SentinelDataImportCommands extends DrushCommands {
           continue;
         }
         $raw = $row[$position] ?? '';
-        $record[$column] = $this->normalizeAddressValue(is_string($raw) ? $raw : (string) $raw);
+        $record[$column] = $this->normalizeCsvValue(is_string($raw) ? $raw : (string) $raw);
       }
 
       $id = isset($record['id']) ? (int) $record['id'] : 0;
@@ -475,8 +572,9 @@ class SentinelDataImportCommands extends DrushCommands {
   /**
    * Normalize whitespace in CSV values.
    */
-  protected function normalizeAddressValue(string $value): string {
+  protected function normalizeCsvValue(string $value): string {
     $value = str_replace(["\r\n", "\n", "\r"], ' ', $value);
+    $value = str_replace(';', ', ', $value);
     return trim(preg_replace('/\s+/', ' ', $value));
   }
 

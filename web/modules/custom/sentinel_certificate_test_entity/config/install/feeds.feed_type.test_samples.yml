@@ -1,0 +1,596 @@
+uuid: 2062dc86-ba26-4d4b-82bb-cf48c18d9aae
+langcode: en
+status: true
+dependencies:
+  config:
+    - eck.eck_type.test_entity.condition_entity
+    - field.field.test_entity.condition_entity.field_aluminium_pass_fail
+    - field.field.test_entity.condition_entity.field_aluminium_result
+    - field.field.test_entity.condition_entity.field_appearance_pass_fail
+    - field.field.test_entity.condition_entity.field_appearance_result
+    - field.field.test_entity.condition_entity.field_boron_result
+    - field.field.test_entity.condition_entity.field_boiler_id
+    - field.field.test_entity.condition_entity.field_boiler_type
+    - field.field.test_entity.condition_entity.field_calcium_pass_fail
+    - field.field.test_entity.condition_entity.field_company_address1
+    - field.field.test_entity.condition_entity.field_company_address2
+    - field.field.test_entity.condition_entity.field_company_county
+    - field.field.test_entity.condition_entity.field_company_name
+    - field.field.test_entity.condition_entity.field_company_postcode
+    - field.field.test_entity.condition_entity.field_company_town
+    - field.field.test_entity.condition_entity.field_cond_pass_fail
+    - field.field.test_entity.condition_entity.field_copper_pass_fail
+    - field.field.test_entity.condition_entity.field_copper_result
+    - field.field.test_entity.condition_entity.field_county
+    - field.field.test_entity.condition_entity.field_customer_id
+    - field.field.test_entity.condition_entity.field_date_reported
+    - field.field.test_entity.condition_entity.field_installer_name
+    - field.field.test_entity.condition_entity.field_iron_pass_fail
+    - field.field.test_entity.condition_entity.field_iron_result
+    - field.field.test_entity.condition_entity.field_mains_calcium_result
+    - field.field.test_entity.condition_entity.field_mains_cl_result
+    - field.field.test_entity.condition_entity.field_mains_cond_result
+    - field.field.test_entity.condition_entity.field_main_conductivity_result
+    - field.field.test_entity.condition_entity.field_molybdenum_result
+    - field.field.test_entity.condition_entity.field_pack_reference_number
+    - field.field.test_entity.condition_entity.field_pass_fail
+    - field.field.test_entity.condition_entity.field_ph_pass_fail
+    - field.field.test_entity.condition_entity.field_ph_result
+    - field.field.test_entity.condition_entity.field_postcode
+    - field.field.test_entity.condition_entity.field_project_id
+    - field.field.test_entity.condition_entity.field_property_number
+    - field.field.test_entity.condition_entity.field_sentinel_x100_pass_fail
+    - field.field.test_entity.condition_entity.field_sentinel_x100_result
+    - field.field.test_entity.condition_entity.field_site_address
+    - field.field.test_entity.condition_entity.field_street
+    - field.field.test_entity.condition_entity.field_sys_calcium_result
+    - field.field.test_entity.condition_entity.field_sys_cl_result
+    - field.field.test_entity.condition_entity.field_sys_cond_result
+    - field.field.test_entity.condition_entity.field_system_6_months
+    - field.field.test_entity.condition_entity.field_system_age
+    - field.field.test_entity.condition_entity.field_system_chloride_result
+    - field.field.test_entity.condition_entity.field_system_conductivity_result
+    - field.field.test_entity.condition_entity.field_test_appearance_result
+    - field.field.test_entity.condition_entity.field_test_boron_result
+    - field.field.test_entity.condition_entity.field_test_boiler_type
+    - field.field.test_entity.condition_entity.field_test_copper_result
+    - field.field.test_entity.condition_entity.field_test_dissolved_aluminium
+    - field.field.test_entity.condition_entity.field_test_dissolved_iron_result
+    - field.field.test_entity.condition_entity.field_test_main_calcium_result
+    - field.field.test_entity.condition_entity.field_test_mains_chloride_result
+    - field.field.test_entity.condition_entity.field_test_molybdenum_result
+    - field.field.test_entity.condition_entity.field_test_pack_reference_number
+    - field.field.test_entity.condition_entity.field_test_ph_level
+    - field.field.test_entity.condition_entity.field_test_system_6_months
+    - field.field.test_entity.condition_entity.field_test_system_calcium_result
+    - field.field.test_entity.condition_entity.field_town_city
+  module:
+    - eck
+    - feeds
+id: test_samples
+label: 'Test samples'
+description: ''
+help: ''
+import_period: -1
+fetcher: upload
+fetcher_configuration:
+  allowed_extensions: csv
+  directory: 'private://feeds'
+parser: csv
+parser_configuration:
+  delimiter: ','
+  no_headers: false
+  line_limit: 100
+processor: 'entity:test_entity'
+processor_configuration:
+  langcode: en
+  insert_new: 1
+  update_existing: 0
+  update_non_existent: _keep
+  expire: 3600
+  owner_feed_author: false
+  owner_id: 0
+  authorize: true
+  skip_hash_check: false
+  revision: false
+  values:
+    type: condition_entity
+custom_sources:
+  uid:
+    label: uid
+    value: uid
+    machine_name: uid
+  created:
+    label: created
+    value: created
+    machine_name: created
+  changed:
+    label: changed
+    value: changed
+    machine_name: changed
+  appearance_result:
+    label: appearance_result
+    value: appearance_result
+    machine_name: appearance_result
+  ph_result:
+    label: ph_result
+    value: ph_result
+    machine_name: ph_result
+  boron_result:
+    label: boron_result
+    value: boron_result
+    machine_name: boron_result
+  boiler_type:
+    label: boiler_type
+    value: boiler_type
+    machine_name: boiler_type
+  molybdenum_result:
+    label: molybdenum_result
+    value: molybdenum_result
+    machine_name: molybdenum_result
+  sys_cond_result:
+    label: sys_cond_result
+    value: sys_cond_result
+    machine_name: sys_cond_result
+  mains_cond_result:
+    label: mains_cond_result
+    value: mains_cond_result
+    machine_name: mains_cond_result
+  mains_calcium_result:
+    label: mains_calcium_result
+    value: mains_calcium_result
+    machine_name: mains_calcium_result
+  sys_calcium_result:
+    label: sys_calcium_result
+    value: sys_calcium_result
+    machine_name: sys_calcium_result
+  sys_cl_result:
+    label: sys_cl_result
+    value: sys_cl_result
+    machine_name: sys_cl_result
+  iron_result:
+    label: iron_result
+    value: iron_result
+    machine_name: iron_result
+  copper_result:
+    label: copper_result
+    value: copper_result
+    machine_name: copper_result
+  aluminium_result:
+    label: aluminium_result
+    value: aluminium_result
+    machine_name: aluminium_result
+  appearance_pass_fail:
+    label: appearance_pass_fail
+    value: appearance_pass_fail
+    machine_name: appearance_pass_fail
+  cond_pass_fail:
+    label: cond_pass_fail
+    value: cond_pass_fail
+    machine_name: cond_pass_fail
+  cl_pass_fail:
+    label: cl_pass_fail
+    value: cl_pass_fail
+    machine_name: cl_pass_fail
+  iron_pass_fail:
+    label: iron_pass_fail
+    value: iron_pass_fail
+    machine_name: iron_pass_fail
+  copper_pass_fail:
+    label: copper_pass_fail
+    value: copper_pass_fail
+    machine_name: copper_pass_fail
+  aluminium_pass_fail:
+    label: aluminium_pass_fail
+    value: aluminium_pass_fail
+    machine_name: aluminium_pass_fail
+  calcium_pass_fail:
+    label: calcium_pass_fail
+    value: calcium_pass_fail
+    machine_name: calcium_pass_fail
+  sentinel_x100_pass_fail:
+    label: sentinel_x100_pass_fail
+    value: sentinel_x100_pass_fail
+    machine_name: sentinel_x100_pass_fail
+  sentinel_x100_result:
+    label: sentinel_x100_result
+    value: sentinel_x100_result
+    machine_name: sentinel_x100_result
+  ph_pass_fail:
+    label: ph_pass_fail
+    value: ph_pass_fail
+    machine_name: ph_pass_fail
+  installer_name:
+    label: installer_name
+    value: installer_name
+    machine_name: installer_name
+  company_name:
+    label: company_name
+    value: company_name
+    machine_name: company_name
+  company_address1:
+    label: company_address1
+    value: company_address1
+    machine_name: company_address1
+  company_address2:
+    label: company_address2
+    value: company_address2
+    machine_name: company_address2
+  company_town:
+    label: company_town
+    value: company_town
+    machine_name: company_town
+  company_county:
+    label: company_county
+    value: company_county
+    machine_name: company_county
+  company_postcode:
+    label: company_postcode
+    value: company_postcode
+    machine_name: company_postcode
+  property_number:
+    label: property_number
+    value: property_number
+    machine_name: property_number
+  street:
+    label: street
+    value: street
+    machine_name: street
+  town_city:
+    label: town_city
+    value: town_city
+    machine_name: town_city
+  county:
+    label: county
+    value: county
+    machine_name: county
+  postcode:
+    label: postcode
+    value: postcode
+    machine_name: postcode
+  system_6_months:
+    label: system_6_months
+    value: system_6_months
+    machine_name: system_6_months
+  pack_reference_number:
+    label: pack_reference_number
+    value: pack_reference_number
+    machine_name: pack_reference_number
+  project_id:
+    label: project_id
+    value: project_id
+    machine_name: project_id
+  boiler_id:
+    label: boiler_id
+    value: boiler_id
+    machine_name: boiler_id
+  system_age:
+    label: system_age
+    value: system_age
+    machine_name: system_age
+  site_address:
+    label: site_address
+    value: site_address
+    machine_name: site_address
+  customer_id:
+    label: customer_id
+    value: customer_id
+    machine_name: customer_id
+  date_reported:
+    label: date_reported
+    value: date_reported
+    machine_name: date_reported
+  mains_cl_result:
+    label: mains_cl_result
+    value: mains_cl_result
+    machine_name: mains_cl_result
+  pass_fail:
+    label: pass_fail
+    value: pass_fail
+    machine_name: pass_fail
+mappings:
+  -
+    target: uid
+    map:
+      value: uid
+  -
+    target: created
+    map:
+      value: created
+  -
+    target: changed
+    map:
+      value: changed
+  -
+    target: field_appearance_result
+    map:
+      value: appearance_result
+  -
+    target: field_test_appearance_result
+    map:
+      value: appearance_result
+  -
+    target: field_appearance_pass_fail
+    map:
+      value: appearance_pass_fail
+  -
+    target: field_ph_result
+    map:
+      value: ph_result
+  -
+    target: field_test_ph_level
+    map:
+      value: ph_result
+  -
+    target: field_ph_pass_fail
+    map:
+      value: ph_pass_fail
+  -
+    target: field_boron_result
+    map:
+      value: boron_result
+  -
+    target: field_test_boron_result
+    map:
+      value: boron_result
+  -
+    target: field_boiler_type
+    map:
+      value: boiler_type
+    settings:
+      language: null
+  -
+    target: field_test_boiler_type
+    map:
+      value: boiler_type
+    settings:
+      language: null
+  -
+    target: field_molybdenum_result
+    map:
+      value: molybdenum_result
+  -
+    target: field_test_molybdenum_result
+    map:
+      value: molybdenum_result
+  -
+    target: field_sys_cond_result
+    map:
+      value: sys_cond_result
+  -
+    target: field_system_conductivity_result
+    map:
+      value: sys_cond_result
+  -
+    target: field_mains_cond_result
+    map:
+      value: mains_cond_result
+  -
+    target: field_main_conductivity_result
+    map:
+      value: mains_cond_result
+  -
+    target: field_mains_calcium_result
+    map:
+      value: mains_calcium_result
+  -
+    target: field_test_main_calcium_result
+    map:
+      value: mains_calcium_result
+  -
+    target: field_sys_calcium_result
+    map:
+      value: sys_calcium_result
+  -
+    target: field_test_system_calcium_result
+    map:
+      value: sys_calcium_result
+  -
+    target: field_sys_cl_result
+    map:
+      value: sys_cl_result
+  -
+    target: field_system_chloride_result
+    map:
+      value: sys_cl_result
+  -
+    target: field_iron_result
+    map:
+      value: iron_result
+  -
+    target: field_test_dissolved_iron_result
+    map:
+      value: iron_result
+  -
+    target: field_iron_pass_fail
+    map:
+      value: iron_pass_fail
+  -
+    target: field_copper_result
+    map:
+      value: copper_result
+  -
+    target: field_test_copper_result
+    map:
+      value: copper_result
+  -
+    target: field_copper_pass_fail
+    map:
+      value: copper_pass_fail
+  -
+    target: field_aluminium_result
+    map:
+      value: aluminium_result
+  -
+    target: field_test_dissolved_aluminium
+    map:
+      value: aluminium_result
+  -
+    target: field_aluminium_pass_fail
+    map:
+      value: aluminium_pass_fail
+  -
+    target: field_cond_pass_fail
+    map:
+      value: cond_pass_fail
+  -
+    target: field_cl_pass_fail
+    map:
+      value: cl_pass_fail
+  -
+    target: field_calcium_pass_fail
+    map:
+      value: calcium_pass_fail
+  -
+    target: field_sentinel_x100_pass_fail
+    map:
+      value: sentinel_x100_pass_fail
+  -
+    target: field_sentinel_x100_result
+    map:
+      value: sentinel_x100_result
+  -
+    target: field_installer_name
+    map:
+      value: installer_name
+    settings:
+      language: null
+  -
+    target: field_company_name
+    map:
+      value: company_name
+    settings:
+      language: null
+  -
+    target: field_company_address1
+    map:
+      value: company_address1
+    settings:
+      language: null
+  -
+    target: field_company_address2
+    map:
+      value: company_address2
+    settings:
+      language: null
+  -
+    target: field_company_town
+    map:
+      value: company_town
+    settings:
+      language: null
+  -
+    target: field_company_county
+    map:
+      value: company_county
+    settings:
+      language: null
+  -
+    target: field_company_postcode
+    map:
+      value: company_postcode
+    settings:
+      language: null
+  -
+    target: field_property_number
+    map:
+      value: property_number
+    settings:
+      language: null
+  -
+    target: field_street
+    map:
+      value: street
+    settings:
+      language: null
+  -
+    target: field_town_city
+    map:
+      value: town_city
+    settings:
+      language: null
+  -
+    target: field_county
+    map:
+      value: county
+    settings:
+      language: null
+  -
+    target: field_postcode
+    map:
+      value: postcode
+    settings:
+      language: null
+  -
+    target: field_system_6_months
+    map:
+      value: system_6_months
+    settings:
+      language: null
+  -
+    target: field_test_system_6_months
+    map:
+      value: system_6_months
+    settings:
+      language: null
+  -
+    target: field_pack_reference_number
+    map:
+      value: pack_reference_number
+    settings:
+      language: null
+  -
+    target: field_test_pack_reference_number
+    map:
+      value: pack_reference_number
+    settings:
+      language: null
+  -
+    target: field_project_id
+    map:
+      value: project_id
+    settings:
+      language: null
+  -
+    target: field_boiler_id
+    map:
+      value: boiler_id
+    settings:
+      language: null
+  -
+    target: field_system_age
+    map:
+      value: system_age
+    settings:
+      language: null
+  -
+    target: field_site_address
+    map:
+      value: site_address
+    settings:
+      language: null
+  -
+    target: field_customer_id
+    map:
+      value: customer_id
+    settings:
+      language: null
+  -
+    target: field_date_reported
+    map:
+      value: date_reported
+    settings:
+      language: null
+  -
+    target: field_mains_cl_result
+    map:
+      value: mains_cl_result
+  -
+    target: field_test_mains_chloride_result
+    map:
+      value: mains_cl_result
+  -
+    target: field_pass_fail
+    map:
+      value: pass_fail
+

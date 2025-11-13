@@ -16,8 +16,9 @@
 #}
 
 {# Use absolute paths for DomPDF image rendering #}
-{% set img_path = img_path_abs %}
-{% set module_img_path = module_img_path_abs %}
+{% set is_pdf = pdf is defined and pdf %}
+{% set img_path = is_pdf ? img_path_abs : img_path_web %}
+{% set module_img_path = is_pdf ? module_img_path_abs : module_img_path_web %}
 
 {# Get pass/fail value #}
 {% set pass_fail_value = field_values.pass_fail|default(1) %}
@@ -86,6 +87,7 @@
 {% endmacro %}
 
 {% import _self as helper %}
+{% set sample_id = sample_id|default('')|trim %}
 
 <div class="responsive-overflow">
   <div class="pdf-report">
@@ -96,7 +98,7 @@
         <tr>
           <td style="vertical-align: top;">
             <img class="pdf-report__logo-image" src="{{ module_img_path }}/logo.png" alt="{{ 'Sentinel'|t }}" />
-            <span class="pdf-report__logo-caption"><strong>System</strong>Check</span>
+            <span class="pdf-report__logo-caption 11"><strong>System</strong>Check</span>
           </td>
           <td align="right" style="vertical-align: top;">
             {{ system_check_result|raw }}
@@ -429,9 +431,9 @@
   </div>
 </div>
 
-{% if pdf is not defined or not pdf %}
+{% if (pdf is not defined or not pdf) and sample_id %}
   <p>
-    <a href="{{ path('sentinel_systemcheck_certificate.view_pdf', {'sample_id': original_sample_entity.id}) }}">
+    <a href="{{ path('sentinel_systemcheck_certificate.view_pdf', {'sample_id': sample_id}) }}">
       {{ 'Download as pdf'|t }}
     </a>
   </p>
