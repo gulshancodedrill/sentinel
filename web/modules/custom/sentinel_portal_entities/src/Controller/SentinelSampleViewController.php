@@ -102,36 +102,49 @@ class SentinelSampleViewController extends ControllerBase {
    // dd($sample->isPass());
     $links = [];
     $module_handler = $this->moduleHandler();
+    $sample_id = (string) $sample->id();
+    if ($sample_id === '' && $sample->hasField('pid') && !$sample->get('pid')->isEmpty()) {
+      $sample_id = (string) $sample->get('pid')->value;
+    }
+    if ($sample_id === '') {
+      return NULL;
+    }
 
     $is_pass = $sample->isPass();
     $is_fail = $sample->isFail();
     $is_pending = $sample->isPending();
 
     if (!$is_pending) {
-      $links[] = Link::fromTextAndUrl(
-        $this->t('View report in browser'),
-        Url::fromRoute(
-          'sentinel_systemcheck_certificate.view_result',
-          ['sample_id' => $sample->id()],
-          ['attributes' => ['class' => ['link-download', 'mbtn', 'mbtn-6', 'mbtn-6c']]]
-        )
-      )->toString();
-
       $pdf_uri = $this->getExistingPdfUri($sample);
+      $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
       if ($pdf_uri) {
-        $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
-        $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
+
         $links[] = Link::fromTextAndUrl(
-          $this->t('Download PDF'),
+          $this->t('View report in browser'),
           Url::fromUri($pdf_url, ['attributes' => ['class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf']]])
         )->toString();
-      }
+
+        }
+
+     
+        if ($pdf_uri) {
+          $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
+          $links[] = Link::fromTextAndUrl(
+            $this->t('Download PDF'),
+            Url::fromUri($pdf_url, [
+              'attributes' => [
+                'class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf'],
+                'download' => '', // 👈 This adds the download attribute
+              ],
+            ])
+          )->toString();
+        }
    
       $links[] = Link::fromTextAndUrl(
         $this->t('Email Report'),
         Url::fromRoute(
           'sentinel_portal.sample_email',
-          ['sentinel_sample' => $sample->id()],
+          ['sentinel_sample' => $sample_id],
           ['attributes' => ['class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf']]]
         )
       )->toString();
@@ -141,7 +154,7 @@ class SentinelSampleViewController extends ControllerBase {
           $this->t('Email Vaillant Report'),
           Url::fromRoute(
             'sentinel_systemcheck_vaillant_xml.email',
-            ['sample_id' => $sample->id()],
+            ['sample_id' => $sample_id],
             ['attributes' => ['class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf']]]
           )
         )->toString();
@@ -152,7 +165,7 @@ class SentinelSampleViewController extends ControllerBase {
           $this->t('Send Vaillant Report'),
           Url::fromRoute(
             'sentinel_systemcheck_vaillant_api.submit',
-            ['sample_id' => $sample->id()],
+            ['sample_id' => $sample_id],
             ['attributes' => ['class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf']]]
           )
         )->toString();
@@ -165,7 +178,7 @@ class SentinelSampleViewController extends ControllerBase {
           $this->t('Revisions'),
           Url::fromRoute(
             'entity.sentinel_sample.version_history',
-            ['sentinel_sample' => $sample->id()],
+            ['sentinel_sample' => $sample_id],
             ['attributes' => ['class' => ['link-download', 'mbtn', 'mbtn-6', 'mbtn-6c']]]
           )
         )->toString();
@@ -195,9 +208,17 @@ class SentinelSampleViewController extends ControllerBase {
    * Build the help text that appears above and below the table.
    */
   protected function buildHelpText(SentinelSample $sample): ?string {
+    $sample_id = (string) $sample->id();
+    if ($sample_id === '' && $sample->hasField('pid') && !$sample->get('pid')->isEmpty()) {
+      $sample_id = (string) $sample->get('pid')->value;
+    }
+    if ($sample_id === '') {
+      return NULL;
+    }
+
     $edit_link = Link::fromTextAndUrl(
       $this->t('Edit this pack'),
-      Url::fromRoute('entity.sentinel_sample.edit_form', ['sentinel_sample' => $sample->id()])
+      Url::fromRoute('entity.sentinel_sample.edit_form', ['sentinel_sample' => $sample_id])
     )->toString();
 
     $actions = [$edit_link];
@@ -205,7 +226,7 @@ class SentinelSampleViewController extends ControllerBase {
     if (!$sample->isPending() && $this->currentUser()->hasPermission('sentinel portal regenerate any certificate')) {
       $actions[] = Link::fromTextAndUrl(
         $this->t('Regenerate PDF file'),
-        Url::fromRoute('sentinel_systemcheck_certificate.regenerate_pdf', ['sample_id' => $sample->id()])
+        Url::fromRoute('sentinel_systemcheck_certificate.regenerate_pdf', ['sample_id' => $sample_id])
       )->toString();
     }
 
@@ -474,7 +495,7 @@ class SentinelSampleViewController extends ControllerBase {
       $items[] = ['#plain_text' => $line];
     }
 
-    $url = $address->hasLinkTemplate('canonical') ? $address->toUrl('canonical') : Url::fromUri('internal:/address/address/' . $address_id);
+    $url = Url::fromUri('internal:/address/address/' . $address_id);
     $items[] = Link::fromTextAndUrl($this->t('View address details'), $url)->toRenderable();
 
     return [
@@ -506,10 +527,6 @@ class SentinelSampleViewController extends ControllerBase {
       $address = NULL;
       if (\Drupal::entityTypeManager()->hasDefinition('address')) {
         $address = \Drupal::entityTypeManager()->getStorage('address')->load($address_id);
-      }
-
-      if ($address && $address->hasLinkTemplate('canonical')) {
-        return Link::fromTextAndUrl($value, $address->toUrl('canonical'));
       }
 
       return Link::fromTextAndUrl($value, Url::fromUri('internal:/address/address/' . $address_id));

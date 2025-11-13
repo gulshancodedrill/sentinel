@@ -2,6 +2,7 @@
 
 namespace Drupal\sentinel_systemcheck_certificate\Controller;
 
+use DateTime;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Url;
 use Drupal\Core\Link;
@@ -10,6 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
+use Drupal\file\Entity\File;
 
 /**
  * Controller for certificate-related pages.
@@ -26,6 +28,74 @@ class CertificateController extends ControllerBase {
    *   The render array.
    */
   public function viewResult($sample_id) {
+    $sample = NULL;
+    if (\Drupal::entityTypeManager()->hasDefinition('sentinel_sample')) {
+      $sample = \Drupal::entityTypeManager()->getStorage('sentinel_sample')->load($sample_id);
+    }
+
+    if ($sample instanceof SentinelSample) {
+      $pdf_uri = $this->resolveExistingPdfUri($sample);
+      if ($pdf_uri) {
+        $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
+        $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
+        return new RedirectResponse($pdf_url);
+      }
+
+  /**
+   * Find existing PDF file for a sample if one was pre-generated.
+   */
+  protected function resolveExistingPdfUri(SentinelSample $sample): ?string {
+    $file_system = \Drupal::service('file_system');
+
+    if ($sample->hasField('fileid') && !$sample->get('fileid')->isEmpty()) {
+      $file_id = (int) $sample->get('fileid')->value;
+      if ($file_id) {
+        $file = File::load($file_id);
+        if ($file instanceof File) {
+          $real_path = $file_system->realpath($file->getFileUri());
+          if ($real_path && file_exists($real_path)) {
+            return $file->getFileUri();
+          }
+        }
+      }
+    }
+
+    $filename = NULL;
+    if ($sample->hasField('filename') && !$sample->get('filename')->isEmpty()) {
+      $filename = $sample->get('filename')->value;
+    }
+
+    if (empty($filename)) {
+      return NULL;
+    }
+
+    $directory = 'private://new-pdf-certificates/other/';
+    if ($sample->hasField('created') && !$sample->get('created')->isEmpty()) {
+      try {
+        $date = new DateTime($sample->get('created')->value);
+        $directory = 'private://new-pdf-certificates/' . $date->format('m-Y') . '/';
+      }
+      catch (\Exception $e) {
+        // Ignore and use fallback directory.
+      }
+    }
+
+    $locations = [
+      $directory . $filename,
+      'private://legacy-pdf-certificates/' . $filename,
+    ];
+
+    foreach ($locations as $uri) {
+      $real_path = $file_system->realpath($uri);
+      if ($real_path && file_exists($real_path)) {
+        return $uri;
+      }
+    }
+
+    return NULL;
+  }
+    }
+
     $content = _get_result_content($sample_id, 'sentinel_sample');
     return [
       '#theme' => 'sentinel_certificate',

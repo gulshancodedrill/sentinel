@@ -1,15 +1,10 @@
 <div class="sentinel-portal-main">
-  <h1>{{ 'Portal'|t }}</h1>
-  
   {% if analytics_block %}
-  <div class="portal-analytics">
-    {{ analytics_block }}
-  </div>
+    <div class="portal-analytics">
+      <h1 class="portal-title">{{ 'Portal'|t }}</h1>
+      {{ analytics_block }}
+    </div>
+  {% else %}
+    <h1>{{ 'Portal'|t }}</h1>
   {% endif %}
-  
-  {#<div class="portal-welcome">
-    <p>
-      {{ 'Welcome to the Sentinel Portal. Submit SystemCheck pack information, edit incomplete or \'pending\' packs and view reports for completed analyses.'|t }}
-    </p>
-  </div>#}
 </div>

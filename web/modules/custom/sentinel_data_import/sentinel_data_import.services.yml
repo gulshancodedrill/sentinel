@@ -19,3 +19,9 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@logger.factory'
+  sentinel_data_import.sentinel_sample_importer:
+    class: Drupal\sentinel_data_import\SentinelSampleImporter
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@datetime.time'

@@ -690,7 +690,18 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
     throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException();
   }
 
+  $sample_id = '';
+  $original_id = (string) $sentinel_sample_id;
   if (!empty($sentinel_sample_entity)) {
+    $sample_id = (string) $sentinel_sample_entity->id();
+    if ($sample_id === '' && $sentinel_sample_entity->hasField('pid') && !$sentinel_sample_entity->get('pid')->isEmpty()) {
+      $sample_id = (string) $sentinel_sample_entity->get('pid')->value;
+    }
+
+    if ($sample_id === '' && $original_id !== '') {
+      $sample_id = $original_id;
+    }
+
     // Ensure we have the x100 result sorted out.
     if (method_exists($sentinel_sample_entity, 'calculateX100')) {
       $sentinel_sample_entity->calculateX100();
@@ -735,6 +746,8 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
   $root = \Drupal::root();
   $img_path_abs = $root . '/' . $theme_path . '/img/pdfs';
   $module_img_path_abs = $root . '/' . $module_path . '/images';
+  $module_img_path_web = \Drupal\Core\Url::fromUri('base:' . $module_path . '/images')->toString();
+  $img_path_web = \Drupal\Core\Url::fromUri('base:' . $theme_path . '/img/pdfs')->toString();
 
   // Collect field values for template
   $field_values = [
@@ -759,6 +772,7 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
   return [
     'sentinel_sample_result' => $sentinel_sample_result,
     'original_sample_entity' => $sentinel_sample_entity,
+    'sample_id' => $sample_id,
     'formatted_results' => $formatted_results,
     'company_address' => $company_address,
     'site_address' => $site_address,
@@ -767,6 +781,8 @@ function _get_result_content($sentinel_sample_id, $sample_type = 'sentinel_sampl
     'theme_path' => $theme_path,
     'img_path_abs' => $img_path_abs,
     'module_img_path_abs' => $module_img_path_abs,
+    'img_path_web' => $img_path_web,
+    'module_img_path_web' => $module_img_path_web,
     'field_values' => $field_values,
     'calcium_values' => $calcium_values,
   ];
