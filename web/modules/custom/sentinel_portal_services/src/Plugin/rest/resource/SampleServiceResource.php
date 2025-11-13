@@ -216,19 +216,28 @@ class SampleServiceResource extends ResourceBase {
 
       // Validate pass/fail fields
       if (stripos($field_name, 'pass_fail') !== FALSE) {
-        $data_item = strtolower($data_item);
-        if ($data_item == 'f') {
-          $data_item = 0;
-        }
-        elseif ($data_item == 'p') {
-          $data_item = 1;
-        }
-        elseif ($data_item == '') {
+        if ($data_item === '' || $data_item === NULL) {
           $data_item = NULL;
         }
         else {
-          $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid pass/fail value.');
-          continue;
+          switch (strtoupper((string) $data_item)) {
+            case 'P':
+              $data_item = SentinelSampleValidation::PASS_VALUE;
+              break;
+
+            case 'F':
+              $data_item = SentinelSampleValidation::FAIL_VALUE;
+              break;
+
+            case '1':
+            case '0':
+              $data_item = (int) $data_item;
+              break;
+
+            default:
+              $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid pass/fail value.');
+              continue 2;
+          }
         }
       }
 

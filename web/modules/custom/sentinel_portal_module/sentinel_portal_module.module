@@ -6,6 +6,7 @@
  */
 
 use Drupal\sentinel_portal_module\SentinelPortalModule;
+use Symfony\Component\Routing\RouteCollection;
 
 /**
  * Implements hook_theme().
@@ -19,4 +20,22 @@ function sentinel_portal_module_theme($existing, $type, $theme, $path) {
  */
 function sentinel_portal_module_preprocess_block(&$variables) {
   SentinelPortalModule::preprocessBlock($variables);
+}
+
+function sentinel_portal_module_route_alter(RouteCollection $collection) {
+  $role_map = SentinelPortalModule::getPortalRoleMap();
+
+  foreach ($collection->all() as $route) {
+    $path = SentinelPortalModule::normalizePath($route->getPath());
+
+    foreach ($role_map as $base_path => $allowed_roles) {
+      if (SentinelPortalModule::pathMatches($path, $base_path)) {
+        $requirements = $route->getRequirements();
+        $requirements['_custom_access'] = '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess';
+        unset($requirements['_permission'], $requirements['_role']);
+        $route->setRequirements($requirements);
+        break;
+      }
+    }
+  }
 }

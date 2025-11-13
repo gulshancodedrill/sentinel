@@ -14,7 +14,7 @@ sentinel_portal_sample.submit:
   defaults:
     _form: '\Drupal\sentinel_portal_sample\Form\SentinelSampleSubmissionForm'
   requirements:
-    _role: 'authenticated'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 

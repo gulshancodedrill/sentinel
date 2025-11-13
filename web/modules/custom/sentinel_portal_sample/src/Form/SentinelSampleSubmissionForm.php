@@ -1063,6 +1063,23 @@ class SentinelSampleSubmissionForm extends FormBase {
       }
     }
     
+    // Ensure property number propagates even if the form values are flattened.
+    $property_number_value = $form_state->getValue([
+      'system_details',
+      'address',
+      'address_fields',
+      'property_number',
+    ]);
+    if ($property_number_value === NULL) {
+      $property_number_value = $form_state->getValue('property_number');
+    }
+    if (is_string($property_number_value)) {
+      $property_number_value = trim($property_number_value);
+    }
+    if ($property_number_value !== NULL && $property_number_value !== '') {
+      $validation_data['property_number'] = $property_number_value;
+    }
+
     // Map company address fields to validation format
     if (isset($form_values['company_address']) && is_array($form_values['company_address'])) {
       if (isset($form_values['company_address']['company_address_1'])) {
@@ -1132,6 +1149,16 @@ class SentinelSampleSubmissionForm extends FormBase {
         }
         if (isset($validation_data['postcode'])) {
           $legacy_address['postal_code'] = $validation_data['postcode'];
+        }
+      }
+    }
+
+    if (!empty($validation_data['property_number'])) {
+      $module_handler = \Drupal::moduleHandler();
+      if ($module_handler->moduleExists('sentinel_addresses')) {
+        $legacy_address =& $validation_data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0];
+        if (empty($legacy_address['sub_premise'])) {
+          $legacy_address['sub_premise'] = $validation_data['property_number'];
         }
       }
     }

@@ -4,7 +4,7 @@ sentinel_portal.client_ucr_test:
     _form: '\Drupal\sentinel_portal_entities\Form\SentinelClientUcrForm'
     _title: 'Portal Client UCR'
   requirements:
-    _permission: 'sentinel portal administration'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 
@@ -27,7 +27,7 @@ entity.sentinel_notice.canonical:
     _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelNoticeViewController::view'
     _title: 'Notices'
   requirements:
-    _permission: 'access content'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
     parameters:
@@ -41,7 +41,7 @@ sentinel_portal.admin_sample:
     entity_type: 'sentinel_sample'
     _title: 'Sentinel Samples'
   requirements:
-    _permission: 'administer sentinel_sample'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
 
@@ -51,7 +51,7 @@ sentinel_portal.sample_email:
     _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleEmailController::sendEmail'
     _title: 'Sample Email'
   requirements:
-    _permission: 'sentinel portal send email report'
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
     parameters:
