@@ -391,7 +391,7 @@ function _sentinel_portal_queue_process_sendresults($queue, $item) {
       // Something failed in the send email function.
       \Drupal::logger('sentinel_portal_queue')->info('Failed to send entity mail! @id', ['@id' => $item->pid]);
       if (isset($item->item_id)) {
-        sentinel_portal_queue_increment_failed($item->item_id);
+      sentinel_portal_queue_increment_failed($item->item_id);
       }
       else {
         sentinel_portal_queue_increment_failed_by_payload($item);
@@ -406,8 +406,8 @@ function _sentinel_portal_queue_process_sendresults($queue, $item) {
 
       // As we have sent the email we can delete the item from the queue.
       if (isset($item->item_id)) {
-        $queue->deleteItem($item);
-        sentinel_portal_queue_delete_record($item->item_id);
+      $queue->deleteItem($item);
+      sentinel_portal_queue_delete_record($item->item_id);
       }
       else {
         sentinel_portal_queue_delete_record_by_payload($item);
@@ -446,8 +446,8 @@ function _sentinel_portal_queue_invoke_send_results_hook($queue, $item) {
 
     // As we have sent the email we can delete the item from the queue.
     if (isset($item->item_id)) {
-      $queue->deleteItem($item);
-      sentinel_portal_queue_delete_record($item->item_id);
+    $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     }
     else {
       sentinel_portal_queue_delete_record_by_payload($item);
@@ -470,7 +470,7 @@ function _sentinel_portal_queue_invoke_send_results_hook($queue, $item) {
  *   True if everything worked, otherwise false.
  */
 function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
-  $config = \Drupal::config('sentinel_portal_module.settings');
+  $config = \Drupal::config('sentinel_portal.settings');
   $error_email = $config->get('new_pack_email') ?? 'admin@example.com';
 
   \Drupal::logger('sentinel_portal_queue')->info('Invalid pack processing started for PID @pid.', [
@@ -483,8 +483,8 @@ function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
   if (!$sentinel_sample) {
     \Drupal::logger('sentinel_portal_queue')->error('Sample not found for PID @pid', ['@pid' => $item->pid]);
     if (isset($item->item_id)) {
-      $queue->deleteItem($item);
-      sentinel_portal_queue_delete_record($item->item_id);
+    $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     }
     else {
       sentinel_portal_queue_delete_record_by_payload($item);
@@ -505,8 +505,8 @@ function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
     // The validation errors were fixed since this queue item was created.
     // Delete the items from the queue and return.
     if (isset($item->item_id)) {
-      $queue->deleteItem($item);
-      sentinel_portal_queue_delete_record($item->item_id);
+    $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     }
     else {
       sentinel_portal_queue_delete_record_by_payload($item);
@@ -546,8 +546,8 @@ function _sentinel_portal_queue_process_invalid_pack($queue, $item) {
 
   // Delete the item here.
   if (isset($item->item_id)) {
-    $queue->deleteItem($item);
-    sentinel_portal_queue_delete_record($item->item_id);
+  $queue->deleteItem($item);
+  sentinel_portal_queue_delete_record($item->item_id);
   }
   else {
     sentinel_portal_queue_delete_record_by_payload($item);
@@ -578,8 +578,8 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
   if (!$sentinel_sample) {
     \Drupal::logger('sentinel_portal_queue')->error('Sample not found for PID @pid', ['@pid' => $item->pid]);
     if (isset($item->item_id)) {
-      $queue->deleteItem($item);
-      sentinel_portal_queue_delete_record($item->item_id);
+    $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     }
     else {
       sentinel_portal_queue_delete_record_by_payload($item);
@@ -593,8 +593,8 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
   if ($is_pass == FALSE && $is_fail == FALSE) {
     // Sample has already been reported on. Delete it from the queue and return.
     if (isset($item->item_id)) {
-      $queue->deleteItem($item);
-      sentinel_portal_queue_delete_record($item->item_id);
+    $queue->deleteItem($item);
+    sentinel_portal_queue_delete_record($item->item_id);
     }
     else {
       sentinel_portal_queue_delete_record_by_payload($item);
@@ -615,8 +615,8 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
 
   // Delete the item from the queue.
   if (isset($item->item_id)) {
-    $queue->deleteItem($item);
-    sentinel_portal_queue_delete_record($item->item_id);
+  $queue->deleteItem($item);
+  sentinel_portal_queue_delete_record($item->item_id);
   }
   else {
     sentinel_portal_queue_delete_record_by_payload($item);

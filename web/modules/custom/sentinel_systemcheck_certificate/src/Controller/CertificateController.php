@@ -40,6 +40,14 @@ class CertificateController extends ControllerBase {
         $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
         return new RedirectResponse($pdf_url);
       }
+    }
+
+    $content = _get_result_content($sample_id, 'sentinel_sample');
+    return [
+      '#theme' => 'sentinel_certificate',
+      '#content' => $content,
+    ];
+  }
 
   /**
    * Find existing PDF file for a sample if one was pre-generated.
@@ -93,14 +101,6 @@ class CertificateController extends ControllerBase {
     }
 
     return NULL;
-  }
-    }
-
-    $content = _get_result_content($sample_id, 'sentinel_sample');
-    return [
-      '#theme' => 'sentinel_certificate',
-      '#content' => $content,
-    ];
   }
 
   /**
