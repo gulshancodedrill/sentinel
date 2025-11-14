@@ -3,8 +3,10 @@
 namespace Drupal\sentinel_portal_module;
 
 use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Symfony\Component\Routing\Route;
 
 /**
  * Sentinel Portal module hooks and utilities.
@@ -65,19 +67,25 @@ class SentinelPortalModule {
   /**
    * Access callback that enforces role-based portal access rules.
    */
-  public static function portalRoleAccess(AccountInterface $account): AccessResult {
+  public static function portalRoleAccess(AccountInterface $account, Route $route = NULL, RouteMatchInterface $route_match = NULL): AccessResult {
     $result = AccessResult::forbidden()->addCacheContexts(['user.roles']);
 
     if ($account->isAnonymous()) {
       return $result;
     }
 
-    $route = \Drupal::routeMatch()->getRouteObject();
-    if (!$route) {
+    $route_to_check = $route;
+    if (!$route_to_check && $route_match instanceof RouteMatchInterface) {
+      $route_to_check = $route_match->getRouteObject();
+    }
+    if (!$route_to_check) {
+      $route_to_check = \Drupal::routeMatch()->getRouteObject();
+    }
+    if (!$route_to_check) {
       return $result;
     }
 
-    $route_path = self::normalizePath($route->getPath());
+    $route_path = self::normalizePath($route_to_check->getPath());
     if (self::isAllowedPath($account, $route_path)) {
       return AccessResult::allowed()->addCacheContexts(['user.roles']);
     }
