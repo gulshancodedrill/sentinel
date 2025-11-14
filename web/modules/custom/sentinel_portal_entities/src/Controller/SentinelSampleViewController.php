@@ -116,8 +116,9 @@ class SentinelSampleViewController extends ControllerBase {
 
     if (!$is_pending) {
       $pdf_uri = $this->getExistingPdfUri($sample);
-      $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
+      $pdf_url = NULL;
       if ($pdf_uri) {
+        $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
 
         $links[] = Link::fromTextAndUrl(
           $this->t('View report in browser'),
@@ -127,7 +128,7 @@ class SentinelSampleViewController extends ControllerBase {
         }
 
      
-        if ($pdf_uri) {
+        if ($pdf_url) {
           $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
           $links[] = Link::fromTextAndUrl(
             $this->t('Download PDF'),
