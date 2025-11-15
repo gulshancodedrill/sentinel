@@ -47,12 +47,12 @@ function sentinel_portal_entities_views_query_alter(ViewExecutable $view, QueryP
   $current_user = \Drupal::currentUser();
 
   // Restrict results to the logged-in user's client unless they have admin access.
-  //if ($current_user->isAuthenticated() && !$current_user->hasPermission('administer sentinel_sample')) {
+  if ($current_user->isAuthenticated() && !$current_user->hasPermission('administer sentinel_sample')) {
     $uid = (int) $current_user->id();
     if ($uid > 0) {
       $query->addWhere(0, "$client_alias.uid", $uid, '=');
     }
-  //}
+  }
 }
 
 /**
