@@ -86,10 +86,17 @@ class ReportsController extends ControllerBase {
     }
     
     // Apply filters.
-    $current_user = \Drupal::currentUser();
-    if (!$current_user->hasPermission('sentinel view all sentinel_sample') && !empty($data['cids'])) {
+    if (!empty($data['cids'])) {
       $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
       $query->condition('sc.cid', $data['cids'], 'IN');
+    }
+    elseif (!empty($data['pids'])) {
+      $pid_values = array_values(array_filter(array_map('intval', explode('+', (string) $data['pids']))));
+      if (empty($pid_values)) {
+        $context['finished'] = 1;
+        return;
+      }
+      $query->condition('ss.pid', $pid_values, 'IN');
     }
     
     if (!empty($data['date_from']) && !empty($data['date_to'])) {

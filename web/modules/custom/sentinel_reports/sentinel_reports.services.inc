@@ -223,23 +223,22 @@ function _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $in
  *   The result info of passes and fails.
  */
 function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $installer_name = '') {
+  if (empty($cids)) {
+    return [];
+  }
+
   $database = \Drupal::database();
   
   // Set group_concat_max_len.
-  // MariaDB does not allow parameter binding for SET statements, so use literal.
-  $database->query('SET SESSION group_concat_max_len = 4294967295');
+  $database->query('SET SESSION group_concat_max_len = 18446744073709551615');
 
   // First, get the counts.
   $query = $database->select('sentinel_sample', 'ss');
   $query->addExpression('COUNT(CASE WHEN ss.pass_fail = 1 THEN 1 END)', 'total_passed');
   $query->addExpression('COUNT(CASE WHEN ss.pass_fail = 0 THEN 1 END)', 'total_failed');
 
-  // If the user does not have permission to view all the stats then restrict.
-  $current_user = \Drupal::currentUser();
-  if (!$current_user->hasPermission('sentinel view all sentinel_sample')) {
-    $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
-    $query->condition('sc.cid', $cids, 'IN');
-  }
+  $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
+  $query->condition('sc.cid', $cids, 'IN');
 
   if (!empty($date_range)) {
     // Add time to dates to properly compare with datetime field.
@@ -264,10 +263,8 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
   $pids_query = $database->select('sentinel_sample', 'ss');
   $pids_query->fields('ss', ['pid']);
   
-  if (!$current_user->hasPermission('sentinel view all sentinel_sample')) {
-    $pids_query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
-    $pids_query->condition('sc.cid', $cids, 'IN');
-  }
+  $pids_query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
+  $pids_query->condition('sc.cid', $cids, 'IN');
   
   if (!empty($date_range)) {
     $pids_query->condition('ss.date_reported', [$date_from, $date_to], 'BETWEEN');

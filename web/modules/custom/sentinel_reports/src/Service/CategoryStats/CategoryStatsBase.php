@@ -129,7 +129,7 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
       $arguments['location'] = '%' . $this->database->escapeLike($location) . '%';
     }
 
-    if (!$this->currentUserCanViewAllSamples()) {
+    if (!empty($cids)) {
       $arguments['cids[]'] = $cids;
     }
 
@@ -144,19 +144,12 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
   }
 
   /**
-   * Helper to determine if the current user can see all samples.
-   */
-  protected function currentUserCanViewAllSamples(): bool {
-    return \Drupal::currentUser()->hasPermission('sentinel view all sentinel_sample');
-  }
-
-  /**
    * Additional SQL conditions based on user access and filters.
    */
   protected function getClientIdOrInstallerNameOrLocationConditions(): string {
     $conditions = '';
 
-    if (!$this->currentUserCanViewAllSamples()) {
+    if (!empty($this->cids)) {
       $conditions .= ' AND (sc.cid IN (:cids[]))';
     }
 
