@@ -31,30 +31,30 @@ class SentinelPortalController extends ControllerBase {
     // own access checks, so respect them if present.
     $analytics_block = [];
 
-    try {
-      $block_manager = \Drupal::service('plugin.manager.block');
-      $block_plugin = $block_manager->createInstance('sentinel_portal_test_analytics');
+    // try {
+    //   $block_manager = \Drupal::service('plugin.manager.block');
+    //   $block_plugin = $block_manager->createInstance('sentinel_portal_test_analytics');
 
-      $block_access = TRUE;
-      if ($block_plugin && method_exists($block_plugin, 'access')) {
-        $access_result = $block_plugin->access($this->currentUser());
-        if ($access_result instanceof \Drupal\Core\Access\AccessResultInterface) {
-          $block_access = $access_result->isAllowed();
-        }
-        else {
-          $block_access = (bool) $access_result;
-        }
-      }
+    //   $block_access = TRUE;
+    //   if ($block_plugin && method_exists($block_plugin, 'access')) {
+    //     $access_result = $block_plugin->access($this->currentUser());
+    //     if ($access_result instanceof \Drupal\Core\Access\AccessResultInterface) {
+    //       $block_access = $access_result->isAllowed();
+    //     }
+    //     else {
+    //       $block_access = (bool) $access_result;
+    //     }
+    //   }
 
-      if ($block_plugin && $block_access) {
-        $analytics_block = $block_plugin->build();
-      }
-    }
-    catch (\Exception $e) {
-      $this->getLogger('sentinel_portal_module')->warning('Unable to build analytics block: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-    }
+    //   if ($block_plugin && $block_access) {
+    //     $analytics_block = $block_plugin->build();
+    //   }
+    // }
+    // catch (\Exception $e) {
+    //   $this->getLogger('sentinel_portal_module')->warning('Unable to build analytics block: @message', [
+    //     '@message' => $e->getMessage(),
+    //   ]);
+    // }
 
     return [
       '#theme' => 'sentinel_portal_main_page',
