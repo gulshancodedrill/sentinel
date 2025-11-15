@@ -2,7 +2,7 @@ sentinel_reports.explore_stats:
   path: '/portal/explore-your-stats'
   defaults:
     _form: '\Drupal\sentinel_reports\Form\FailuresSearchForm'
-    _title: 'Explore your stats'
+    _title: 'Portal'
   requirements:
     _role: 'authenticated'
   options:
@@ -12,7 +12,7 @@ sentinel_reports.export_stats:
   path: '/portal/export-your-stats/{key_name}'
   defaults:
     _controller: '\Drupal\sentinel_reports\Controller\ReportsController::exportStats'
-    _title: 'Export your stats'
+    _title: 'Portal'
   requirements:
     _role: 'authenticated'
   options:
