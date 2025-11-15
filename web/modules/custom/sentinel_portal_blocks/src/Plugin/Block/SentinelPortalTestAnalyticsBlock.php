@@ -101,10 +101,11 @@ class SentinelPortalTestAnalyticsBlock extends BlockBase implements ContainerFac
       return $build;
     }
 
-    $passed = $this->countSamplesByStatus($client_ids, 'passed');
-    $failed = $this->countSamplesByStatus($client_ids, 'failed');
-    $pending = $this->countSamplesByStatus($client_ids, 'pending');
-    $total = $passed + $failed + $pending;
+    $counts = $this->getSampleStatusCounts($client_ids);
+    $passed = $counts['passed'] ?? 0;
+    $failed = $counts['failed'] ?? 0;
+    $pending = $counts['pending'] ?? 0;
+    $total = $counts['total'] ?? ($passed + $failed + $pending);
 
     $build = [
       '#theme' => 'sentinel_portal_analytics_block',
@@ -182,33 +183,38 @@ class SentinelPortalTestAnalyticsBlock extends BlockBase implements ContainerFac
   }
 
   /**
-   * Count samples by status for the provided client ids.
+   * Count samples by status for the provided client ids using a single query.
    */
-  protected function countSamplesByStatus(array $client_ids, string $status): int {
+  protected function getSampleStatusCounts(array $client_ids): array {
     if (empty($client_ids)) {
-      return 0;
+      return [
+        'passed' => 0,
+        'failed' => 0,
+        'pending' => 0,
+        'total' => 0,
+      ];
     }
 
     $query = $this->database->select('sentinel_sample', 'ss');
-    $query->addExpression('COUNT(DISTINCT ss.pid)', 'count');
     $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
     $query->condition('sc.cid', $client_ids, 'IN');
 
-    switch ($status) {
-      case 'passed':
-        $query->condition('ss.pass_fail', 1);
-        break;
+    $query->addExpression('COUNT(DISTINCT CASE WHEN ss.pass_fail = 1 THEN ss.pid END)', 'passed');
+    $query->addExpression('COUNT(DISTINCT CASE WHEN ss.pass_fail = 0 THEN ss.pid END)', 'failed');
+    $query->addExpression('COUNT(DISTINCT CASE WHEN ss.pass_fail IS NULL THEN ss.pid END)', 'pending');
+    $query->addExpression('COUNT(DISTINCT ss.pid)', 'total');
 
-      case 'failed':
-        $query->condition('ss.pass_fail', 0);
-        break;
-
-      case 'pending':
-        $query->isNull('ss.pass_fail');
-        break;
+    $result = $query->execute()->fetchAssoc();
+    if (!$result) {
+      return [
+        'passed' => 0,
+        'failed' => 0,
+        'pending' => 0,
+        'total' => 0,
+      ];
     }
 
-    return (int) $query->execute()->fetchField();
+    return array_map('intval', $result);
   }
 
 }
