@@ -519,3 +519,22 @@ function sentinel_portal_entities_render_field_value($value) {
   return ['data' => ['#plain_text' => (string) $value]];
 }
 
+
+/**
+* Implements hook_views_data_alter().
+*/
+function sentinel_portal_entities_views_data_alter(array &$data) {
+  if (isset($data['sentinel_sample']['fileid']['field'])) {
+    $data['sentinel_sample']['fileid']['field']['id'] = 'sentinel_sample_pdf_link';
+    $data['sentinel_sample']['fileid']['field']['title'] = t('Download PDF');
+    $data['sentinel_sample']['fileid']['field']['help'] = t('Displays a PDF download link based on the File ID.');
+  }
+ 
+  foreach (['date_booked', 'date_reported'] as $date_field) {
+    if (isset($data['sentinel_sample'][$date_field]['field'])) {
+      $data['sentinel_sample'][$date_field]['field']['id'] = 'sentinel_sample_legacy_date';
+      $data['sentinel_sample'][$date_field]['field']['title'] = t('Formatted date');
+      $data['sentinel_sample'][$date_field]['field']['help'] = t('Displays legacy Sentinel Sample dates even if they are formatted with spaces instead of ISO timestamps.');
+    }
+  }
+}
