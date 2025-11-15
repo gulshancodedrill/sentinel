@@ -816,9 +816,12 @@ table.sticky-header thead {
 }
 
 .link-download:after {
-  content: '\e806';
-  font-family: 'fontello', sans-serif;
+  content: "\f1c1";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
   margin-left: 0.3rem;
+  font-size: 0.95rem;
+  display: inline-block;
 }
 
 /* Certificate layout (matches Drupal 7 styling) */
@@ -1210,3 +1213,4 @@ body.path-view-my-results #block-sentinelportal-theme-system-main h1 {
     background: transparent;
     color: #226fbe;
 }
+.page-view-sentinel-sample .portal-welcome{display:none;}
