@@ -1,0 +1,27 @@
+{% extends "@bootstrap_barrio/layout/page.html.twig" %}
+
+{#
+  Custom page template for the certificate browser view. We intentionally
+  suppress the portal chrome so the certificate fills the page, matching the
+  legacy Drupal 7 behaviour.
+#}
+
+{% block head %}
+  {# Intentionally blank – no navigation or secondary chrome. #}
+{% endblock %}
+
+{% block content %}
+  <div class="certificate-standalone-wrapper">
+    <main{{ content_attributes.addClass('certificate-standalone') }}>
+      <section class="section">
+        <a href="#main-content" id="main-content" tabindex="-1"></a>
+        {{ page.content }}
+      </section>
+    </main>
+  </div>
+{% endblock %}
+
+{% block footer %}
+  {# Hide the standard footer for a clean print-friendly layout. #}
+{% endblock %}
+

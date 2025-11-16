@@ -119,13 +119,14 @@ class SentinelSampleViewController extends ControllerBase {
       $pdf_url = NULL;
       if ($pdf_uri) {
         $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
-
+      }
+        // Redirect to HTML view route instead of PDF.
         $links[] = Link::fromTextAndUrl(
           $this->t('View report in browser'),
-          Url::fromUri($pdf_url, ['attributes' => ['class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf']]])
+          Url::fromRoute('sentinel_systemcheck_certificate.view_result_html', ['sample_id' => $sample_id], ['attributes' => ['class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf']]])
         )->toString();
 
-        }
+     
 
      
         if ($pdf_url) {
