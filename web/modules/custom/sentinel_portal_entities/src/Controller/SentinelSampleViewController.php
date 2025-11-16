@@ -119,28 +119,18 @@ class SentinelSampleViewController extends ControllerBase {
       $pdf_url = NULL;
       if ($pdf_uri) {
         $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
-      }
-        // Redirect to HTML view route instead of PDF.
+        $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
+        
         $links[] = Link::fromTextAndUrl(
-          $this->t('View report in browser'),
-          Url::fromRoute('sentinel_systemcheck_certificate.view_result_html', ['sample_id' => $sample_id], ['attributes' => ['class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf']]])
+          $this->t('Download PDF'),
+          Url::fromUri($pdf_url, [
+            'attributes' => [
+              'class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf'],
+              'download' => '',
+            ],
+          ])
         )->toString();
-
-     
-
-     
-        if ($pdf_url) {
-          $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
-          $links[] = Link::fromTextAndUrl(
-            $this->t('Download PDF'),
-            Url::fromUri($pdf_url, [
-              'attributes' => [
-                'class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf'],
-                'download' => '', // 👈 This adds the download attribute
-              ],
-            ])
-          )->toString();
-        }
+      }
    
       $links[] = Link::fromTextAndUrl(
         $this->t('Email Report'),
@@ -270,35 +260,115 @@ class SentinelSampleViewController extends ControllerBase {
    * Build the table rows for the sample field data.
    */
   protected function buildFieldRows(SentinelSample $sample, array $fields): array {
-  
-    uasort($fields, static function (array $a, array $b) {
-      $weight_a = $a['portal_config']['weight'] ?? 0;
-      $weight_b = $b['portal_config']['weight'] ?? 0;
-      if ($weight_a === $weight_b) {
-        return 0;
-      }
-      return ($weight_a < $weight_b) ? -1 : 1;
-    });
+    // Define the exact field order as requested by the user.
+    $field_order = [
+      'pid' => 'Pack ID',
+      'pack_reference_number' => 'The pack reference number',
+      'project_id' => 'Project ID',
+      'installer_name' => 'Installer Name',
+      'installer_email' => 'Installer Email',
+      'company_name' => 'Company Name',
+      'company_email' => 'Company Email',
+      'company_address1' => 'Company Address 1',
+      'company_address2' => 'Company Address 2',
+      'company_town' => 'Company Town',
+      'company_county' => 'Company County',
+      'company_postcode' => 'Company Postcode',
+      'company_tel' => 'Company Telephone',
+      'system_location' => 'System Location',
+      'system_age' => 'System Age',
+      'system_6_months' => 'System > 6 Months Old?',
+      'uprn' => 'UPRN',
+      'property_number' => 'Property Number',
+      'street' => 'Street',
+      'town_city' => 'Town/City',
+      'county' => 'County',
+      'postcode' => 'Postcode',
+      'landlord' => 'Landlord',
+      'boiler_manufacturer' => 'Boiler Manufacturer',
+      'boiler_id' => 'Boiler ID',
+      'boiler_type' => 'Boiler Type',
+      'engineers_code' => 'Engineers Code',
+      'service_call_id' => 'Service Call ID',
+      'date_installed' => 'Date Installed',
+      'date_sent' => 'Date Sent',
+      'date_booked' => 'Date Booked In',
+      'date_processed' => 'Date Processed',
+      'date_reported' => 'Date Reported',
+      'fileid' => 'File ID',
+      'filename' => 'Filename',
+      'client_id' => 'The Client ID',
+      'client_name' => 'Client Name',
+      'customer_id' => 'Sentinel Customer ID',
+      'lab_ref' => 'Lab Ref',
+      'pack_type' => 'Pack Type',
+      'card_complete' => 'Card Complete',
+      'on_hold' => 'On Hold',
+      'pass_fail' => 'Overall Pass/Fail',
+      'appearance_result' => 'Appearance Result',
+      'appearance_pass_fail' => 'Appearance Pass/Fail',
+      'mains_cond_result' => 'Mains Conductivity Result',
+      'sys_cond_result' => 'System Conductivity Result',
+      'cond_pass_fail' => 'Conductivity Pass/Fail',
+      'mains_cl_result' => 'Mains Chlorine Result',
+      'sys_cl_result' => 'System Chlorine Result',
+      'cl_pass_fail' => 'Chlorine Pass/Fail',
+      'iron_result' => 'Iron Result',
+      'iron_pass_fail' => 'Iron Pass/Fail',
+      'copper_result' => 'Copper Result',
+      'copper_pass_fail' => 'Copper Pass/Fail',
+      'aluminium_result' => 'Aluminium Result',
+      'aluminium_pass_fail' => 'Aluminium Pass/Fail',
+      'mains_calcium_result' => 'Mains Calcium Result',
+      'sys_calcium_result' => 'System Calcium Result',
+      'calcium_pass_fail' => 'Calcium Pass/Fail',
+      'ph_result' => 'pH Result',
+      'ph_pass_fail' => 'pH Pass/Fail',
+      'sentinel_x100_result' => 'Inhibitor Result',
+      'sentinel_x100_pass_fail' => 'Inhibitor Pass/Fail',
+      'molybdenum_result' => 'Molybdenum Result',
+      'molybdenum_pass_fail' => 'Molybdenum Pass/Fail',
+      'boron_result' => 'XXX Result',
+      'boron_pass_fail' => 'XXX Pass/Fail',
+      'manganese_result' => 'Manganese Result',
+      'manganese_pass_fail' => 'Manganese Pass/Fail',
+      'nitrate_result' => 'Nitrate Result',
+      'mob_ratio' => 'Molybdenum and XXX Ratio',
+      'created' => 'Created',
+      'updated' => 'Updated',
+      'ucr' => 'The UCR',
+      'installer_company' => 'Installer Company',
+      'old_pack_reference_number' => 'The old pack reference number',
+      'duplicate_of' => 'Duplicate Of',
+      'legacy' => 'Legacy Sample',
+      'api_created_by' => 'API Created By',
+    ];
 
     $rows = [];
 
-    foreach ($fields as $field_name => $info) {
-      if (in_array($field_name, ['created', 'changed'], TRUE)) {
+    // Process fields in the specified order.
+    foreach ($field_order as $field_name => $display_title) {
+      // Skip if field doesn't exist in the fields array.
+      if (!isset($fields[$field_name])) {
         continue;
       }
+
+      $info = $fields[$field_name];
+
+      // Skip internal fields that shouldn't be displayed.
       if ($field_name === 'sentinel_sample_address_target_id') {
         // Render via system_location row.
         continue;
       }
+
+      // Check access permissions for sample results fields.
       if (!empty($info['portal_config']['access']['sample results required'])
         && !$this->currentUser()->hasPermission('sentinel sample results')) {
         continue;
       }
 
-      $title = $info['portal_config']['title'] ?? $field_name;
-      if ($title === FALSE || $title === NULL || $title === '') {
-        $title = ucwords(str_replace('_', ' ', $field_name));
-      }
+      // Use the predefined title from the order array.
+      $title = $display_title;
 
       $value = $this->formatFieldValue($sample, $field_name, $info);
 
