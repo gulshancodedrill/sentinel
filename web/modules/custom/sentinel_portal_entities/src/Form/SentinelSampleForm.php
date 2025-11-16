@@ -88,6 +88,23 @@ class SentinelSampleForm extends ContentEntityForm {
 
     return $options;
   }
+  
+    /**
+   * {@inheritdoc}
+   */
+  public function actions(array $form, FormStateInterface $form_state) {
+    $actions = parent::actions($form, $form_state);
+    // Only remove Delete on the portal admin edit path:
+    // /portal/admin/samples/manage/{sentinel_sample}/edit
+    $current_path = \Drupal::service('path.current')->getPath();
+    $normalized = '/' . ltrim($current_path, '/');
+    if (strpos($normalized, '/portal/admin/samples/manage/') === 0) {
+      if (isset($actions['delete'])) {
+        unset($actions['delete']);
+      }
+    }
+    return $actions;
+  }
 
 }
 

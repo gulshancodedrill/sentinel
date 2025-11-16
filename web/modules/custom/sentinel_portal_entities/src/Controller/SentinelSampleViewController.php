@@ -56,7 +56,7 @@ class SentinelSampleViewController extends ControllerBase {
 
     $address_section = $this->buildAddressSection($sentinel_sample);
     if ($address_section !== NULL) {
-      $address_section['#weight'] = 1;
+      $address_section['#weight'] = 5;
       $build['address'] = $address_section;
     }
 
@@ -87,7 +87,7 @@ class SentinelSampleViewController extends ControllerBase {
     if ($help_text !== NULL) {
       $build['help_bottom'] = [
         '#markup' => $help_text,
-        '#weight' => 5,
+        '#weight' => 6,
       ];
     }
 

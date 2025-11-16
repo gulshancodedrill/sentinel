@@ -8,11 +8,12 @@ use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Entity\ContentEntityInterface;
 
 /**
- * Defines the Sentinel Client entity.
+ * Defines the Portal Client entity.
  *
  * @ContentEntityType(
  *   id = "sentinel_client",
- *   label = @Translation("Sentinel Client"),
+ *   label = @Translation("Portal client"),
+ *   label_collection = @Translation("Portal-clients"),
  *   handlers = {
  *     "view_builder" = "Drupal\Core\Entity\EntityViewBuilder",
  *     "list_builder" = "Drupal\sentinel_portal_entities\SentinelClientListBuilder",
