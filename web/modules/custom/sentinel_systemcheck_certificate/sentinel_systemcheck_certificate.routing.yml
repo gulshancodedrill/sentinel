@@ -8,9 +8,21 @@ sentinel_systemcheck_certificate.matrix_upload:
     _admin_route: TRUE
 
 sentinel_systemcheck_certificate.view_result:
-  path: '/view-my-results/{sample_id}'
+  path: '/view-my-results-html/{sample_id}'
   defaults:
     _controller: '\Drupal\sentinel_systemcheck_certificate\Controller\CertificateController::viewResult'
+  requirements:
+    _permission: 'sentinel portal'
+  options:
+    parameters:
+      sample_id:
+        type: integer
+
+sentinel_systemcheck_certificate.view_result_html:
+  path: '/view-my-results/{sample_id}'
+  defaults:
+    _controller: '\Drupal\sentinel_systemcheck_certificate\Controller\CertificateController::viewResultHtml'
+    _title_callback: '\Drupal\sentinel_systemcheck_certificate\Controller\CertificateController::viewResultHtmlTitle'
   requirements:
     _permission: 'sentinel portal'
   options:

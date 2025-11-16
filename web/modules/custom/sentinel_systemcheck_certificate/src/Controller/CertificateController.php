@@ -50,6 +50,53 @@ class CertificateController extends ControllerBase {
   }
 
   /**
+   * View result as HTML page only (no PDF redirect).
+   *
+   * This preserves existing behaviour on /view-my-results while providing
+   * a dedicated HTML endpoint similar to Drupal 7 output.
+   *
+   * @param int $sample_id
+   *   The sample ID.
+   *
+   * @return array
+   *   Render array with page title and content.
+   */
+  public function viewResultHtml($sample_id) {
+    $vars = _get_result_content($sample_id, 'sentinel_sample');
+    // Ensure we are not in PDF mode for this endpoint.
+    $vars['pdf'] = FALSE;
+    $vars['show_download'] = true;
+
+    // Render the template directly to avoid render array constraints on objects.
+    $twig = \Drupal::service('twig');
+    $module_path = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
+    $template_path = $module_path . '/templates/sentinel_certificate_html.html.twig';
+    
+    // Load the template file content and render it.
+    $template_content = file_get_contents($template_path);
+    $html = $twig->createTemplate($template_content)->render($vars);
+
+    // Return as markup so it integrates with Drupal's page rendering.
+    return [
+      '#type' => 'markup',
+      '#markup' => $html,
+    ];
+  }
+
+  /**
+   * Title callback for HTML view route.
+   *
+   * @param int $sample_id
+   *   The sample ID.
+   *
+   * @return string
+   *   The page title.
+   */
+  public function viewResultHtmlTitle($sample_id) {
+    return $this->t('View my results');
+  }
+
+  /**
    * Find existing PDF file for a sample if one was pre-generated.
    */
   protected function resolveExistingPdfUri(SentinelSample $sample): ?string {
