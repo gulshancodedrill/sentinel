@@ -92,11 +92,11 @@ class SentinelPortalController extends ControllerBase {
         try {
           $route_provider->getRouteByName('entity.sentinel_client.collection');
           $output[] = [
-            '#markup' => '<p>' . Link::createFromRoute($this->t('Sentinel Clients'), 'entity.sentinel_client.collection')->toString() . '</p>',
+            '#markup' => '<p>' . Link::createFromRoute($this->t('Portal-clients'), 'entity.sentinel_client.collection')->toString() . '</p>',
           ];
         } catch (\Exception $e) {
           $output[] = [
-            '#markup' => '<p>' . $this->t('Sentinel Clients') . ' - ' . $this->t('Route not available yet') . '</p>',
+            '#markup' => '<p>' . $this->t('Portal-clients') . ' - ' . $this->t('Route not available yet') . '</p>',
           ];
         }
 

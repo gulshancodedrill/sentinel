@@ -629,6 +629,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     // Extract Edit and Delete links separately
     $ops_links = [];
     $current_user = \Drupal::currentUser();
+    /*
     if ($current_user->hasPermission('sentinel portal send email report')) {
       $ops_links[] = Link::fromTextAndUrl(
         $this->t('Email Report'),
@@ -645,6 +646,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
         }
       }
     }
+    */
  
     if (isset($operations['#links'])) {
       foreach ($operations['#links'] as $key => $link) {
