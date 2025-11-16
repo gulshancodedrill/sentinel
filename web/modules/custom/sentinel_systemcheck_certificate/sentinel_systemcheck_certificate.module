@@ -619,6 +619,10 @@ function sentinel_systemcheck_certificate_theme($existing, $type, $theme, $path)
       'template' => 'sentinel_certificate',
       'variables' => [],
     ],
+    'sentinel_certificate_html' => [
+      'template' => 'sentinel_certificate_html',
+      'variables' => [],
+    ],
   ];
 }
 
