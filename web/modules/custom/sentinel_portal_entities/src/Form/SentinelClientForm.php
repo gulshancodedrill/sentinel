@@ -150,6 +150,11 @@ class SentinelClientForm extends ContentEntityForm {
       }
     }
 
+    // Remove the delete button from the actions.
+    if (isset($form['actions']['delete'])) {
+      unset($form['actions']['delete']);
+    }
+
     return $form;
   }
 
