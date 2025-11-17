@@ -489,6 +489,8 @@ function sentinel_portal_entities_update_sample($sample, array $data) {
     }
   }
 
+  // Create a new revision on each update.
+  $sample->setNewRevision(TRUE);
   $sample->save();
   return $sample;
 }

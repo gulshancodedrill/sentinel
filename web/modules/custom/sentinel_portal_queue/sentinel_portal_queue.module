@@ -607,7 +607,8 @@ function _sentinel_portal_queue_generate_results($queue, $item) {
     sentinel_systemcheck_certificate_populate_results(new \stdClass(), $sentinel_sample, new \stdClass());
   }
   
-  // Saving the entity is important.
+  // Saving the entity is important. Create a new revision on each update.
+  $sentinel_sample->setNewRevision(TRUE);
   $sentinel_sample->save();
 
   // Now send the client the report.

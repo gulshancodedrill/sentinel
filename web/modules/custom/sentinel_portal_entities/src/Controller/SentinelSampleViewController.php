@@ -115,12 +115,25 @@ class SentinelSampleViewController extends ControllerBase {
     $is_pending = $sample->isPending();
 
     if (!$is_pending) {
+      $links[] = Link::fromTextAndUrl(
+        $this->t('View report in browser'),
+        Url::fromRoute(
+          'sentinel_systemcheck_certificate.view_result_html',
+          ['sample_id' => $sample_id],
+          [
+            'attributes' => [
+              'class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-browser', 'icon-browser'],
+              'target' => '_blank',
+            ],
+          ],
+        )
+      )->toString();
+
       $pdf_uri = $this->getExistingPdfUri($sample);
       $pdf_url = NULL;
       if ($pdf_uri) {
         $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
         $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
-        
         $links[] = Link::fromTextAndUrl(
           $this->t('Download PDF'),
           Url::fromUri($pdf_url, [
