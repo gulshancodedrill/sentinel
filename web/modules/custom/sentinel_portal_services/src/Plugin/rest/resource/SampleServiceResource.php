@@ -303,6 +303,8 @@ class SampleServiceResource extends ResourceBase {
 
       $this->ensureAddressEntities($sample_entity, $sample);
 
+      // Create a new revision on each update.
+      $sample_entity->setNewRevision(TRUE);
       $sample_entity->save();
 
       $sample_update = TRUE;

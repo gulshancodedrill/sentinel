@@ -536,4 +536,1386 @@ function sentinel_portal_entities_schema() {
   return $schema;
 }
 
+/**
+ * Enable revision support for sentinel_sample entity.
+ */
+function sentinel_portal_entities_update_8010() {
+  $entity_type_id = 'sentinel_sample';
+  $table = 'sentinel_sample';
+  $revision_table = 'sentinel_sample_revision';
+  $field_revision_table = 'sentinel_sample_field_revision';
+  
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  // Ensure vid column exists in base table.
+  if (!$schema->fieldExists($table, 'vid')) {
+    $schema->addField($table, 'vid', [
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'default' => 0,
+      'description' => 'The revision ID.',
+    ]);
+    
+    // Set vid = pid for existing records (they are their own initial revision).
+    $connection->update($table)
+      ->expression('vid', 'pid')
+      ->execute();
+  }
+  else {
+    // Ensure all vid values are valid (set to pid if vid is 0 or NULL).
+    $connection->query("UPDATE {{$table}} SET vid = COALESCE(NULLIF(vid, 0), pid) WHERE vid = 0 OR vid IS NULL");
+  }
+  
+  // Add revision metadata columns to base table.
+  if (!$schema->fieldExists($table, 'revision_user')) {
+    $schema->addField($table, 'revision_user', [
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+      'description' => 'The user ID of the author of the current revision.',
+    ]);
+    // Set default for existing records.
+    $connection->update($table)
+      ->fields(['revision_user' => \Drupal::currentUser()->id()])
+      ->isNull('revision_user')
+      ->execute();
+  }
+  
+  if (!$schema->fieldExists($table, 'revision_created')) {
+    $schema->addField($table, 'revision_created', [
+      'type' => 'datetime',
+      'mysql_type' => 'datetime',
+      'not null' => FALSE,
+      'description' => 'The time that the current revision was created.',
+    ]);
+    // Set default for existing records.
+    $connection->update($table)
+      ->fields(['revision_created' => date('Y-m-d H:i:s')])
+      ->isNull('revision_created')
+      ->execute();
+  }
+  
+  if (!$schema->fieldExists($table, 'revision_log_message')) {
+    $schema->addField($table, 'revision_log_message', [
+      'type' => 'text',
+      'size' => 'big',
+      'not null' => FALSE,
+      'description' => 'Briefly describe the changes you have made.',
+    ]);
+  }
+  
+  if (!$schema->fieldExists($table, 'revision_translation_affected')) {
+    $schema->addField($table, 'revision_translation_affected', [
+      'type' => 'int',
+      'size' => 'tiny',
+      'not null' => TRUE,
+      'default' => 1,
+      'description' => 'Indicates if the last edit of a translation belongs to current revision.',
+    ]);
+  }
+  
+  // Create revision table if it doesn't exist.
+  if (!$schema->tableExists($revision_table)) {
+    // Get the actual structure of the base table by querying the database.
+    $columns_result = $connection->query("SHOW COLUMNS FROM {{$table}}")->fetchAll();
+    
+    // Build revision table schema matching base table exactly.
+    $revision_fields = [];
+    $revision_indexes = [];
+    
+    foreach ($columns_result as $column) {
+      $field_name = $column->Field;
+      $field_type = $column->Type;
+      $field_null = $column->Null === 'YES';
+      $field_default = $column->Default;
+      $field_extra = $column->Extra;
+      $field_key = $column->Key;
+      
+      // Parse MySQL type to Drupal schema format.
+      $schema_type = 'varchar';
+      $schema_length = 255;
+      $mysql_type = NULL;
+      $unsigned = FALSE;
+      $schema_precision = 10;
+      $schema_scale = 2;
+      
+      if (strpos($field_type, 'int') !== FALSE) {
+        $schema_type = 'int';
+        $unsigned = FALSE;
+        if (strpos($field_type, 'tinyint') !== FALSE) {
+          $schema_length = 'tiny';
+        }
+        elseif (strpos($field_type, 'smallint') !== FALSE) {
+          $schema_length = 'small';
+        }
+        elseif (strpos($field_type, 'bigint') !== FALSE) {
+          $schema_length = 'big';
+        }
+        if (strpos($field_type, 'unsigned') !== FALSE) {
+          $unsigned = TRUE;
+        }
+      }
+      elseif (strpos($field_type, 'varchar') !== FALSE) {
+        preg_match('/varchar\((\d+)\)/', $field_type, $matches);
+        $schema_length = isset($matches[1]) ? (int) $matches[1] : 255;
+      }
+      elseif (strpos($field_type, 'text') !== FALSE) {
+        $schema_type = 'text';
+        if (strpos($field_type, 'tinytext') !== FALSE) {
+          $schema_length = 'tiny';
+        }
+        elseif (strpos($field_type, 'mediumtext') !== FALSE) {
+          $schema_length = 'medium';
+        }
+        elseif (strpos($field_type, 'longtext') !== FALSE) {
+          $schema_length = 'big';
+        }
+        else {
+          $schema_length = 'normal';
+        }
+      }
+      elseif (strpos($field_type, 'datetime') !== FALSE) {
+        $schema_type = 'datetime';
+        $mysql_type = 'datetime';
+      }
+      elseif (strpos($field_type, 'date') !== FALSE) {
+        $schema_type = 'date';
+        $mysql_type = 'date';
+      }
+      elseif (strpos($field_type, 'decimal') !== FALSE || strpos($field_type, 'float') !== FALSE || strpos($field_type, 'double') !== FALSE) {
+        $schema_type = 'numeric';
+        preg_match('/\((.*?)\)/', $field_type, $matches);
+        $precision_scale = isset($matches[1]) ? $matches[1] : '10,2';
+        $parts = explode(',', $precision_scale);
+        $schema_precision = isset($parts[0]) ? (int) $parts[0] : 10;
+        $schema_scale = isset($parts[1]) ? (int) $parts[1] : 2;
+      }
+      
+      // Build field definition.
+      $field_def = [
+        'type' => $schema_type,
+        'not null' => !$field_null,
+        'description' => "Column: {$field_name}",
+      ];
+      
+      if ($schema_type === 'varchar') {
+        $field_def['length'] = $schema_length;
+      }
+      elseif ($schema_type === 'text') {
+        $field_def['size'] = $schema_length;
+      }
+      elseif ($schema_type === 'int') {
+        if (isset($unsigned) && $unsigned) {
+          $field_def['unsigned'] = TRUE;
+        }
+        if (isset($schema_length) && $schema_length !== 'int') {
+          $field_def['size'] = $schema_length;
+        }
+      }
+      elseif ($schema_type === 'datetime' || $schema_type === 'date') {
+        if ($mysql_type) {
+          $field_def['mysql_type'] = $mysql_type;
+        }
+      }
+      elseif ($schema_type === 'numeric') {
+        $field_def['precision'] = $schema_precision;
+        $field_def['scale'] = $schema_scale;
+      }
+      
+      if ($field_default !== NULL) {
+        $field_def['default'] = $field_default;
+      }
+      
+      // Special handling for vid - it should be serial in revision table.
+      if ($field_name === 'vid') {
+        $field_def['type'] = 'serial';
+        $field_def['unsigned'] = TRUE;
+        $field_def['not null'] = TRUE;
+        unset($field_def['default']);
+      }
+      
+      $revision_fields[$field_name] = $field_def;
+      
+      // Track indexes.
+      if ($field_key === 'PRI' && $field_name === 'vid') {
+        // Primary key will be set separately.
+      }
+      elseif ($field_key === 'MUL' && $field_name === 'pid') {
+        $revision_indexes['pid'] = ['pid'];
+      }
+    }
+    
+    $revision_schema = [
+      'description' => 'Revision table for sentinel_sample - matches base table exactly',
+      'fields' => $revision_fields,
+      'primary key' => ['vid'],
+    ];
+    
+    if (!empty($revision_indexes)) {
+      $revision_schema['indexes'] = $revision_indexes;
+    }
+    
+    $schema->createTable($revision_table, $revision_schema);
+    
+    // Get all column names except vid (which is serial in revision table).
+    $column_names = [];
+    foreach ($columns_result as $column) {
+      if ($column->Field !== 'vid') {
+        $column_names[] = $column->Field;
+      }
+    }
+    
+    // Copy initial revision data from base table, ensuring vid is unique.
+    $columns_list = implode(', ', $column_names);
+    $connection->query("INSERT IGNORE INTO {{$revision_table}} ({$columns_list}, vid)
+      SELECT DISTINCT {$columns_list}, COALESCE(NULLIF(vid, 0), pid) as vid
+      FROM {{$table}}
+      WHERE pid > 0");
+  }
+  
+  // Create field revision table for field data storage.
+  // Drupal's entity system will handle creating the full structure via field storage,
+  // but we need at least the base structure.
+  if (!$schema->tableExists($field_revision_table)) {
+    $field_revision_schema = [
+      'description' => 'Field revision table for sentinel_sample',
+      'fields' => [
+        'pid' => [
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'description' => 'The pack entity ID.',
+        ],
+        'vid' => [
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'description' => 'The revision ID.',
+        ],
+        'langcode' => [
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+          'default' => '',
+          'description' => 'The language code for this field data.',
+        ],
+        'revision_translation_affected' => [
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => FALSE,
+          'description' => 'Indicates if the last edit of a translation belongs to current revision.',
+        ],
+      ],
+      'primary key' => ['vid', 'langcode'],
+      'indexes' => [
+        'pid' => ['pid'],
+      ],
+    ];
+    
+    $schema->createTable($field_revision_table, $field_revision_schema);
+    
+    // Copy initial field revision data, ensuring unique vid values.
+    // Only insert records that don't already exist and have valid vid > 0.
+    $connection->query("INSERT IGNORE INTO {{$field_revision_table}} (pid, vid, langcode, revision_translation_affected)
+      SELECT DISTINCT pid, COALESCE(NULLIF(vid, 0), pid) as vid, 'en' as langcode, COALESCE(revision_translation_affected, 1) as revision_translation_affected
+      FROM {{$table}}
+      WHERE pid > 0");
+  }
+  
+  // Update entity type definition to enable revisions.
+  /** @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface $update_manager */
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  /** @var \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager */
+  $entity_type_manager = \Drupal::entityTypeManager();
+  
+  $definition = $entity_type_manager->getDefinition($entity_type_id, FALSE);
+  if ($definition) {
+    try {
+      $update_manager->updateEntityType($definition);
+      
+      // Update field storage definitions to ensure revision fields are created.
+      /** @var \Drupal\Core\Entity\EntityFieldManagerInterface $field_manager */
+      $field_manager = \Drupal::service('entity_field.manager');
+      $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+      
+      foreach ($definitions as $field_name => $field_definition) {
+        if ($field_definition->isRevisionable()) {
+          $update_manager->updateFieldStorageDefinition($field_definition);
+        }
+      }
+      
+      return t('Enabled revision support for sentinel_sample entity.');
+    }
+    catch (\Exception $e) {
+      return t('Error enabling revisions: @message', ['@message' => $e->getMessage()]);
+    }
+  }
+  
+  return t('Entity type definition not found.');
+}
+
+/**
+ * Ensure sentinel_sample_revision table matches sentinel_sample exactly.
+ */
+function sentinel_portal_entities_update_8011() {
+  $table = 'sentinel_sample';
+  $revision_table = 'sentinel_sample_revision';
+  
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  // Get the actual structure of the base table.
+  if (!$schema->tableExists($table)) {
+    return t('Base table %table does not exist.', ['%table' => $table]);
+  }
+  
+  $base_columns = $connection->query("SHOW COLUMNS FROM {{$table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $base_column_names = array_column($base_columns, 'Field');
+  
+  // Check if revision table exists.
+  if (!$schema->tableExists($revision_table)) {
+    // Create it using the same logic as 8010.
+    _sentinel_portal_entities_create_revision_table($table, $revision_table);
+    return t('Created %revision_table to match %table.', [
+      '%revision_table' => $revision_table,
+      '%table' => $table,
+    ]);
+  }
+  
+  // Revision table exists - check if it matches.
+  $revision_columns = $connection->query("SHOW COLUMNS FROM {{$revision_table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $revision_column_names = array_column($revision_columns, 'Field');
+  
+  // Filter out uuid from base columns (not in revision table).
+  $base_column_names_filtered = array_filter($base_column_names, function($col) {
+    return $col !== 'uuid';
+  });
+  
+  // Check which columns are missing from revision table.
+  $missing_columns = array_diff($base_column_names_filtered, $revision_column_names);
+  
+  // Ensure entity reference fields are included.
+  $required_fields = [
+    'sentinel_sample_hold_state_target_id',
+    'sentinel_company_address_target_id',
+    'sentinel_sample_address_target_id',
+  ];
+  
+  foreach ($required_fields as $required_field) {
+    if (in_array($required_field, $base_column_names) && !in_array($required_field, $revision_column_names)) {
+      $missing_columns[] = $required_field;
+    }
+  }
+  
+  if (!empty($missing_columns)) {
+    // Build column definitions for missing columns by comparing with base table.
+    foreach ($base_columns as $base_col) {
+      $col_name = $base_col['Field'];
+      
+      // Skip uuid - not in revision table.
+      if ($col_name === 'uuid') {
+        continue;
+      }
+      
+      if (in_array($col_name, $missing_columns)) {
+        // Convert MySQL type to Drupal schema format.
+        $field_spec = _sentinel_portal_entities_parse_mysql_column($base_col);
+        
+        // Add missing column.
+        try {
+          $schema->addField($revision_table, $col_name, $field_spec);
+        }
+        catch (\Exception $e) {
+          // Column might already exist or have a conflict, continue.
+          \Drupal::logger('sentinel_portal_entities')->warning('Could not add column @col: @msg', [
+            '@col' => $col_name,
+            '@msg' => $e->getMessage(),
+          ]);
+        }
+      }
+    }
+    
+    return t('Added @count missing columns to %revision_table.', [
+      '@count' => count($missing_columns),
+      '%revision_table' => $revision_table,
+    ]);
+  }
+  
+  // Check if uuid exists in revision table and remove it if present.
+  if (in_array('uuid', $revision_column_names)) {
+    try {
+      $schema->dropField($revision_table, 'uuid');
+      return t('Removed uuid column from %revision_table and ensured all required columns are present.', [
+        '%revision_table' => $revision_table,
+      ]);
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->warning('Could not remove uuid column: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  return t('%revision_table already matches %table.', [
+    '%revision_table' => $revision_table,
+    '%table' => $table,
+  ]);
+}
+
+/**
+ * Remove uuid and add entity reference fields to sentinel_sample_revision.
+ */
+function sentinel_portal_entities_update_8012() {
+  $table = 'sentinel_sample';
+  $revision_table = 'sentinel_sample_revision';
+  
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  $changes = [];
+  
+  // Check if uuid exists in revision table and remove it.
+  if ($schema->fieldExists($revision_table, 'uuid')) {
+    try {
+      $schema->dropField($revision_table, 'uuid');
+      $changes[] = 'Removed uuid column';
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->error('Could not remove uuid column: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  // Get ALL columns from base table.
+  $base_columns = $connection->query("SHOW COLUMNS FROM {{$table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $base_columns_by_name = [];
+  foreach ($base_columns as $col) {
+    $base_columns_by_name[$col['Field']] = $col;
+  }
+  
+  // Get ALL columns from revision table.
+  $revision_columns = $connection->query("SHOW COLUMNS FROM {{$revision_table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $revision_columns_by_name = [];
+  foreach ($revision_columns as $col) {
+    $revision_columns_by_name[$col['Field']] = $col;
+  }
+  
+  // Find ALL missing columns (exclude uuid).
+  foreach ($base_columns_by_name as $field_name => $base_col) {
+    // Skip uuid - it shouldn't be in revision table.
+    if ($field_name === 'uuid') {
+      continue;
+    }
+    
+    // Skip vid - it's already in revision table as serial.
+    if ($field_name === 'vid') {
+      continue;
+    }
+    
+    // Check if column is missing from revision table.
+    if (!isset($revision_columns_by_name[$field_name])) {
+      try {
+        // Get column definition from base table.
+        $field_spec = _sentinel_portal_entities_parse_mysql_column($base_col);
+        
+        // Add column to revision table.
+        $schema->addField($revision_table, $field_name, $field_spec);
+        $changes[] = "Added {$field_name} column";
+      }
+      catch (\Exception $e) {
+        \Drupal::logger('sentinel_portal_entities')->error('Could not add column @col: @msg', [
+          '@col' => $field_name,
+          '@msg' => $e->getMessage(),
+        ]);
+      }
+    }
+  }
+  
+  if (empty($changes)) {
+    return t('%revision_table is already up to date.', [
+      '%revision_table' => $revision_table,
+    ]);
+  }
+  
+  return t('Updated %revision_table: @changes', [
+    '%revision_table' => $revision_table,
+    '@changes' => implode(', ', $changes),
+  ]);
+}
+
+/**
+ * Ensure ALL columns from sentinel_sample exist in sentinel_sample_revision (except uuid).
+ */
+function sentinel_portal_entities_update_8013() {
+  $table = 'sentinel_sample';
+  $revision_table = 'sentinel_sample_revision';
+  
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  $changes = [];
+  
+  // Check if uuid exists in revision table and remove it.
+  if ($schema->fieldExists($revision_table, 'uuid')) {
+    try {
+      $schema->dropField($revision_table, 'uuid');
+      $changes[] = 'Removed uuid column';
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->error('Could not remove uuid column: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  // Get ALL columns from base table.
+  $base_columns = $connection->query("SHOW COLUMNS FROM {{$table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $base_columns_by_name = [];
+  foreach ($base_columns as $col) {
+    $base_columns_by_name[$col['Field']] = $col;
+  }
+  
+  // Get ALL columns from revision table.
+  $revision_columns = $connection->query("SHOW COLUMNS FROM {{$revision_table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $revision_columns_by_name = [];
+  foreach ($revision_columns as $col) {
+    $revision_columns_by_name[$col['Field']] = $col;
+  }
+  
+  // Find ALL missing columns (exclude uuid).
+  foreach ($base_columns_by_name as $field_name => $base_col) {
+    // Skip uuid - it shouldn't be in revision table.
+    if ($field_name === 'uuid') {
+      continue;
+    }
+    
+    // Skip vid - it's already in revision table as serial.
+    if ($field_name === 'vid') {
+      continue;
+    }
+    
+    // Check if column is missing from revision table.
+    if (!isset($revision_columns_by_name[$field_name])) {
+      try {
+        // Get column definition from base table.
+        $field_spec = _sentinel_portal_entities_parse_mysql_column($base_col);
+        
+        // Add column to revision table.
+        $schema->addField($revision_table, $field_name, $field_spec);
+        $changes[] = "Added {$field_name} column";
+      }
+      catch (\Exception $e) {
+        \Drupal::logger('sentinel_portal_entities')->error('Could not add column @col: @msg', [
+          '@col' => $field_name,
+          '@msg' => $e->getMessage(),
+        ]);
+      }
+    }
+  }
+  
+  if (empty($changes)) {
+    return t('%revision_table already contains all columns from %table.', [
+      '%revision_table' => $revision_table,
+      '%table' => $table,
+    ]);
+  }
+  
+  return t('Updated %revision_table: Added @count columns (@changes).', [
+    '%revision_table' => $revision_table,
+    '@count' => count($changes),
+    '@changes' => implode(', ', array_slice($changes, 0, 10)) . (count($changes) > 10 ? '...' : ''),
+  ]);
+}
+
+/**
+ * Ensure ALL columns from sentinel_sample exist in sentinel_sample_revision (except uuid).
+ * This update uses direct SQL for reliable column addition.
+ */
+function sentinel_portal_entities_update_8014() {
+  $table = 'sentinel_sample';
+  $revision_table = 'sentinel_sample_revision';
+  
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  $changes = [];
+  
+  // Check if uuid exists in revision table and remove it.
+  if ($schema->fieldExists($revision_table, 'uuid')) {
+    try {
+      $schema->dropField($revision_table, 'uuid');
+      $changes[] = 'Removed uuid column';
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->error('Could not remove uuid column: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  // Get ALL columns from base table.
+  $base_columns = $connection->query("SHOW COLUMNS FROM {{$table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $base_columns_by_name = [];
+  foreach ($base_columns as $col) {
+    $base_columns_by_name[$col['Field']] = $col;
+  }
+  
+  // Get ALL columns from revision table.
+  $revision_columns = $connection->query("SHOW COLUMNS FROM {{$revision_table}}")->fetchAll(\PDO::FETCH_ASSOC);
+  $revision_columns_by_name = [];
+  foreach ($revision_columns as $col) {
+    $revision_columns_by_name[$col['Field']] = $col;
+  }
+  
+  // Find ALL missing columns (exclude uuid).
+  $missing_columns = [];
+  foreach ($base_columns_by_name as $field_name => $base_col) {
+    // Skip uuid - it shouldn't be in revision table.
+    if ($field_name === 'uuid') {
+      continue;
+    }
+    
+    // Skip vid - it's already in revision table as serial.
+    if ($field_name === 'vid') {
+      continue;
+    }
+    
+    // Check if column is missing from revision table.
+    if (!isset($revision_columns_by_name[$field_name])) {
+      $missing_columns[$field_name] = $base_col;
+    }
+  }
+  
+  if (empty($missing_columns)) {
+    return t('%revision_table already contains all columns from %table.', [
+      '%revision_table' => $revision_table,
+      '%table' => $table,
+    ]);
+  }
+  
+  // Build ALTER TABLE statement to add all missing columns at once.
+  $alter_statements = [];
+  $first_column = TRUE;
+  
+  foreach ($missing_columns as $field_name => $base_col) {
+    $column_def = _sentinel_portal_entities_build_column_sql($base_col);
+    
+    if ($first_column) {
+      // For the first column, we can position it after pid.
+      $alter_statements[] = "ADD COLUMN `{$field_name}` {$column_def} AFTER `pid`";
+      $first_column = FALSE;
+    }
+    else {
+      // For subsequent columns, add them at the end or after the previous one.
+      $alter_statements[] = "ADD COLUMN `{$field_name}` {$column_def}";
+    }
+    
+    $changes[] = "Added {$field_name} column";
+  }
+  
+  // Execute ALTER TABLE statement.
+  if (!empty($alter_statements)) {
+    try {
+      $alter_sql = "ALTER TABLE {{$revision_table}} " . implode(', ', $alter_statements);
+      $connection->query($alter_sql);
+    }
+    catch (\Exception $e) {
+      // If bulk ALTER fails, try adding columns one by one.
+      \Drupal::logger('sentinel_portal_entities')->warning('Bulk ALTER failed, trying individual columns: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+      
+      $changes = [];
+      foreach ($missing_columns as $field_name => $base_col) {
+        try {
+          $column_def = _sentinel_portal_entities_build_column_sql($base_col);
+          $connection->query("ALTER TABLE {{$revision_table}} ADD COLUMN `{$field_name}` {$column_def}");
+          $changes[] = "Added {$field_name} column";
+        }
+        catch (\Exception $e2) {
+          \Drupal::logger('sentinel_portal_entities')->error('Could not add column @col: @msg', [
+            '@col' => $field_name,
+            '@msg' => $e2->getMessage(),
+          ]);
+        }
+      }
+    }
+  }
+  
+  if (empty($changes)) {
+    return t('%revision_table is already up to date.', [
+      '%revision_table' => $revision_table,
+    ]);
+  }
+  
+  return t('Updated %revision_table: Added @count columns.', [
+    '%revision_table' => $revision_table,
+    '@count' => count($changes),
+  ]);
+}
+
+/**
+ * Force update active entity definition to recognize revisions.
+ * Uses updateFieldableEntityType to properly update the entity schema.
+ */
+function sentinel_portal_entities_update_8015() {
+  $entity_type_id = 'sentinel_sample';
+  
+  /** @var \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager */
+  $entity_type_manager = \Drupal::entityTypeManager();
+  /** @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface $update_manager */
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  
+  // Get the entity type definition from annotation.
+  $entity_type = $entity_type_manager->getDefinition($entity_type_id, FALSE);
+  
+  if (!$entity_type) {
+    return t('Entity type @id not found.', ['@id' => $entity_type_id]);
+  }
+  
+  // Check if active definition is different.
+  $active_definition = $entity_type_manager->getActiveDefinition($entity_type_id);
+  
+  $is_revisionable_in_annotation = $entity_type->isRevisionable();
+  $is_revisionable_in_active = $active_definition->isRevisionable();
+  
+  if ($is_revisionable_in_annotation && !$is_revisionable_in_active) {
+    try {
+      // Get the last installed definition and update it directly.
+      // Since revision tables already exist, we just need to update the last installed schema.
+      $last_installed_repo = \Drupal::service('entity.last_installed_schema.repository');
+      
+      // Get current field storage definitions.
+      $field_manager = \Drupal::service('entity_field.manager');
+      $field_storage_definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+      
+      // Ensure vid field is in the storage definitions.
+      if (!isset($field_storage_definitions['vid'])) {
+        return t('Revision field (vid) is not defined in field storage definitions.');
+      }
+      
+      // Update the last installed entity type definition to match the annotation.
+      // This tells Drupal that the entity is now revisionable.
+      $last_installed_repo->setLastInstalledDefinition($entity_type);
+      $last_installed_repo->setLastInstalledFieldStorageDefinitions($entity_type_id, $field_storage_definitions);
+      
+      // Clear all caches.
+      $entity_type_manager->clearCachedDefinitions();
+      \Drupal::service('cache.entity')->deleteAll();
+      \Drupal::service('cache.discovery')->deleteAll();
+      
+      // Verify it's now correct.
+      $new_active = $entity_type_manager->getActiveDefinition($entity_type_id);
+      
+      if ($new_active->isRevisionable()) {
+        return t('Updated active entity definition to recognize revisions.');
+      }
+      else {
+        return t('Active definition still not revisionable. Cache may need to be cleared manually.');
+      }
+    }
+    catch (\Exception $e) {
+      return t('Error updating entity definition: @message', ['@message' => $e->getMessage()]);
+    }
+  }
+  
+  return t('Active definition is already correct.');
+}
+
+/**
+ * Populate sentinel_sample_revision table with initial revisions from base table.
+ */
+function sentinel_portal_entities_update_8016() {
+  $table = 'sentinel_sample';
+  $revision_table = 'sentinel_sample_revision';
+  
+  $connection = \Drupal::database();
+  $schema = \Drupal::database()->schema();
+  
+  // Check if revision table exists.
+  if (!$schema->tableExists($revision_table)) {
+    return t('Revision table does not exist. Please run earlier update hooks first.');
+  }
+  
+  // Check how many records are already in revision table.
+  $existing_count = $connection->query("SELECT COUNT(*) FROM {{$revision_table}}")->fetchField();
+  $base_count = $connection->query("SELECT COUNT(*) FROM {{$table}}")->fetchField();
+  
+  if ($existing_count >= $base_count) {
+    return t('Revision table already populated with @count records.', ['@count' => $existing_count]);
+  }
+  
+  // Get all column names from base table (except uuid and vid).
+  $base_columns = $connection->query("SHOW COLUMNS FROM {{$table}}")->fetchAll(\PDO::FETCH_COLUMN);
+  $base_columns_set = array_flip($base_columns);
+  
+  // Get all column names from revision table (except vid which is auto-increment).
+  $revision_columns = $connection->query("SHOW COLUMNS FROM {{$revision_table}}")->fetchAll(\PDO::FETCH_COLUMN);
+  $revision_columns_set = array_flip($revision_columns);
+  
+  // Build column lists for INSERT.
+  $select_columns = [];
+  $insert_columns = [];
+  
+  // Revision metadata columns that need special handling.
+  $revision_metadata_columns = [
+    'revision_user',
+    'revision_created',
+    'revision_log_message',
+    'revision_translation_affected',
+    'revision_default',
+  ];
+  
+  // Process all revision table columns (except vid).
+  foreach ($revision_columns as $col) {
+    if ($col === 'vid') {
+      continue; // Skip vid, it's auto-increment in revision table.
+    }
+    
+    $insert_columns[] = $col;
+    
+    if (in_array($col, $revision_metadata_columns)) {
+      // Handle revision metadata columns with defaults.
+      switch ($col) {
+        case 'revision_user':
+          $select_columns[] = isset($base_columns_set[$col]) 
+            ? "COALESCE(s.{$col}, 0)" 
+            : "0 as {$col}";
+          break;
+        case 'revision_created':
+          $select_columns[] = isset($base_columns_set[$col]) 
+            ? "COALESCE(s.{$col}, NOW())" 
+            : "NOW() as {$col}";
+          break;
+        case 'revision_log_message':
+          $select_columns[] = isset($base_columns_set[$col]) 
+            ? "s.{$col}" 
+            : "NULL as {$col}";
+          break;
+        case 'revision_translation_affected':
+          $select_columns[] = isset($base_columns_set[$col]) 
+            ? "COALESCE(s.{$col}, 1)" 
+            : "1 as {$col}";
+          break;
+        case 'revision_default':
+          $select_columns[] = "1 as {$col}";
+          break;
+      }
+    }
+    elseif (isset($base_columns_set[$col])) {
+      // Column exists in both tables, use it directly.
+      $select_columns[] = "s.{$col}";
+    }
+    else {
+      // Column doesn't exist in base table, use NULL.
+      $select_columns[] = "NULL as {$col}";
+    }
+  }
+  
+  // Fix duplicate vid values in base table first - ensure each entity has unique vid.
+  // For duplicates, use pid as vid.
+  $connection->query("UPDATE {{$table}} s1
+    INNER JOIN (
+      SELECT pid, 
+             CASE 
+               WHEN vid = 0 OR vid IS NULL THEN pid
+               ELSE vid 
+             END as new_vid
+      FROM {{$table}}
+    ) s2 ON s1.pid = s2.pid
+    SET s1.vid = s2.new_vid
+    WHERE s1.vid = 0 OR s1.vid IS NULL");
+  
+  // Handle remaining duplicates by assigning pid as vid.
+  $connection->query("UPDATE {{$table}} s1
+    SET s1.vid = s1.pid
+    WHERE s1.vid IN (
+      SELECT vid FROM (
+        SELECT vid FROM {{$table}} GROUP BY vid HAVING COUNT(*) > 1
+      ) AS duplicates
+    ) AND s1.vid != s1.pid");
+  
+  // Now populate revision table using INSERT IGNORE to handle any remaining duplicates.
+  // Use COALESCE to ensure vid is never 0 or NULL, defaulting to pid.
+  $insert_columns_list = implode(', ', $insert_columns);
+  $select_columns_list = implode(', ', $select_columns);
+  
+  $insert_sql = "INSERT IGNORE INTO {{$revision_table}} ({$insert_columns_list}, vid)
+    SELECT {$select_columns_list}, 
+           COALESCE(NULLIF(s.vid, 0), s.pid) as vid
+    FROM {{$table}} s
+    WHERE s.pid > 0";
+  
+  try {
+    $connection->query($insert_sql);
+    $inserted = $connection->query("SELECT COUNT(*) FROM {{$revision_table}}")->fetchField();
+    
+    // Update base table vid to match revision table vid for consistency.
+    $connection->query("UPDATE {{$table}} s 
+      INNER JOIN {{$revision_table}} r ON s.pid = r.pid 
+      SET s.vid = r.vid 
+      WHERE s.vid != r.vid");
+    
+    return t('Populated revision table with @count initial revisions.', ['@count' => $inserted]);
+  }
+  catch (\Exception $e) {
+    return t('Error populating revision table: @message', ['@message' => $e->getMessage()]);
+  }
+}
+
+/**
+ * Change revision_created column from datetime to varchar to handle invalid datetime values.
+ */
+function sentinel_portal_entities_update_8017() {
+  $table = 'sentinel_sample';
+  $revision_table = 'sentinel_sample_revision';
+  
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  $changes = [];
+  
+  // Change revision_created in base table.
+  if ($schema->fieldExists($table, 'revision_created')) {
+    try {
+      // Get current column definition.
+      $column_info = $connection->query("SHOW COLUMNS FROM {{$table}} WHERE Field = 'revision_created'")->fetchObject();
+      
+      if ($column_info && strpos($column_info->Type, 'datetime') !== FALSE) {
+        // Change from datetime to varchar(255).
+        $connection->query("ALTER TABLE {{$table}} MODIFY COLUMN revision_created VARCHAR(255) NULL");
+        $changes[] = 'Changed revision_created to VARCHAR in base table';
+      }
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->error('Could not change revision_created in base table: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  // Change revision_created in revision table.
+  if ($schema->fieldExists($revision_table, 'revision_created')) {
+    try {
+      // Get current column definition.
+      $column_info = $connection->query("SHOW COLUMNS FROM {{$revision_table}} WHERE Field = 'revision_created'")->fetchObject();
+      
+      if ($column_info && strpos($column_info->Type, 'datetime') !== FALSE) {
+        // Change from datetime to varchar(255).
+        $connection->query("ALTER TABLE {{$revision_table}} MODIFY COLUMN revision_created VARCHAR(255) NULL");
+        $changes[] = 'Changed revision_created to VARCHAR in revision table';
+      }
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_portal_entities')->error('Could not change revision_created in revision table: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  if (empty($changes)) {
+    return t('revision_created columns are already VARCHAR or do not exist.');
+  }
+  
+  return t('Updated revision_created columns: @changes', [
+    '@changes' => implode(', ', $changes),
+  ]);
+}
+
+/**
+ * Remove specified columns from sentinel_sample_revision table.
+ * 
+ * NOTE: Update the $columns_to_remove array below with the column names
+ * you want to remove from the revision table.
+ */
+function sentinel_portal_entities_update_8018() {
+  $revision_table = 'sentinel_sample_revision';
+  
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  // Remove revision metadata columns - we'll use 'created' and 'changed' instead.
+  $columns_to_remove = [
+    'revision_default',
+    'revision_created',
+    'revision_log_message',
+    'revision_translation_affected',
+    'revision_user',
+  ];
+  
+  $removed = [];
+  $errors = [];
+  
+  foreach ($columns_to_remove as $column_name) {
+    if ($schema->fieldExists($revision_table, $column_name)) {
+      try {
+        $schema->dropField($revision_table, $column_name);
+        $removed[] = $column_name;
+      }
+      catch (\Exception $e) {
+        $errors[] = $column_name . ': ' . $e->getMessage();
+        \Drupal::logger('sentinel_portal_entities')->error('Could not remove column @col from revision table: @msg', [
+          '@col' => $column_name,
+          '@msg' => $e->getMessage(),
+        ]);
+      }
+    }
+  }
+  
+  $messages = [];
+  if (!empty($removed)) {
+    $messages[] = t('Removed columns: @cols', ['@cols' => implode(', ', $removed)]);
+  }
+  if (!empty($errors)) {
+    $messages[] = t('Errors: @errors', ['@errors' => implode('; ', $errors)]);
+  }
+  
+  return !empty($messages) ? implode(' ', $messages) : t('No columns were removed.');
+}
+
+/**
+ * Remove revision metadata columns from sentinel_sample_revision table.
+ * This is a re-run of 8018 to ensure columns are removed.
+ */
+function sentinel_portal_entities_update_8019() {
+  $revision_table = 'sentinel_sample_revision';
+  
+  $schema = \Drupal::database()->schema();
+  
+  // Remove revision metadata columns - we'll use 'created' and 'changed' instead.
+  $columns_to_remove = [
+    'revision_default',
+    'revision_created',
+    'revision_log_message',
+    'revision_translation_affected',
+    'revision_user',
+  ];
+  
+  $removed = [];
+  $errors = [];
+  
+  foreach ($columns_to_remove as $column_name) {
+    if ($schema->fieldExists($revision_table, $column_name)) {
+      try {
+        $schema->dropField($revision_table, $column_name);
+        $removed[] = $column_name;
+      }
+      catch (\Exception $e) {
+        $errors[] = $column_name . ': ' . $e->getMessage();
+        \Drupal::logger('sentinel_portal_entities')->error('Could not remove column @col from revision table: @msg', [
+          '@col' => $column_name,
+          '@msg' => $e->getMessage(),
+        ]);
+      }
+    }
+  }
+  
+  $messages = [];
+  if (!empty($removed)) {
+    $messages[] = t('Removed columns: @cols', ['@cols' => implode(', ', $removed)]);
+  }
+  if (!empty($errors)) {
+    $messages[] = t('Errors: @errors', ['@errors' => implode('; ', $errors)]);
+  }
+  
+  if (empty($removed) && empty($errors)) {
+    return t('All revision metadata columns have already been removed.');
+  }
+  
+  // Update the last installed entity definition to remove revision metadata keys.
+  try {
+    $entity_type_manager = \Drupal::entityTypeManager();
+    $entity_type = $entity_type_manager->getDefinition('sentinel_sample');
+    
+    // Get the last installed schema repository.
+    $schema_repository = \Drupal::service('entity.last_installed_schema.repository');
+    
+    // Get current field storage definitions.
+    $field_storage_definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('sentinel_sample');
+    
+    // Remove revision metadata fields from field storage definitions.
+    $revision_metadata_fields = [
+      'revision_user',
+      'revision_created',
+      'revision_log_message',
+      'revision_translation_affected',
+      'revision_default',
+    ];
+    
+    foreach ($revision_metadata_fields as $field_name) {
+      if (isset($field_storage_definitions[$field_name])) {
+        unset($field_storage_definitions[$field_name]);
+      }
+    }
+    
+    // Update the last installed schema.
+    $schema_repository->setLastInstalledFieldStorageDefinitions('sentinel_sample', $field_storage_definitions);
+    $schema_repository->setLastInstalledDefinition($entity_type);
+    
+    $messages[] = t('Updated entity definition cache.');
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('sentinel_portal_entities')->error('Could not update entity definition: @msg', [
+      '@msg' => $e->getMessage(),
+    ]);
+    $errors[] = 'Entity definition update: ' . $e->getMessage();
+  }
+  
+  return !empty($messages) ? implode(' ', $messages) : t('No columns were removed.');
+}
+
+/**
+ * Update entity definition to remove revision metadata keys from schema cache.
+ */
+function sentinel_portal_entities_update_8020() {
+  try {
+    $entity_type_manager = \Drupal::entityTypeManager();
+    $entity_type = $entity_type_manager->getDefinition('sentinel_sample');
+    
+    // Get the last installed schema repository.
+    $schema_repository = \Drupal::service('entity.last_installed_schema.repository');
+    
+    // Get current field storage definitions.
+    $field_storage_definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('sentinel_sample');
+    
+    // Remove revision metadata fields from field storage definitions.
+    $revision_metadata_fields = [
+      'revision_user',
+      'revision_created',
+      'revision_log_message',
+      'revision_translation_affected',
+      'revision_default',
+    ];
+    
+    $removed_fields = [];
+    foreach ($revision_metadata_fields as $field_name) {
+      if (isset($field_storage_definitions[$field_name])) {
+        unset($field_storage_definitions[$field_name]);
+        $removed_fields[] = $field_name;
+      }
+    }
+    
+    // Update the last installed schema.
+    $schema_repository->setLastInstalledFieldStorageDefinitions('sentinel_sample', $field_storage_definitions);
+    $schema_repository->setLastInstalledDefinition($entity_type);
+    
+    // Clear entity type cache.
+    \Drupal::entityTypeManager()->clearCachedDefinitions();
+    \Drupal::service('entity_field.manager')->clearCachedFieldDefinitions();
+    
+    if (!empty($removed_fields)) {
+      return t('Removed revision metadata fields from schema cache: @fields', [
+        '@fields' => implode(', ', $removed_fields),
+      ]);
+    }
+    
+    return t('Entity definition cache updated. No fields to remove.');
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('sentinel_portal_entities')->error('Could not update entity definition: @msg', [
+      '@msg' => $e->getMessage(),
+    ]);
+    return t('Error updating entity definition: @message', ['@message' => $e->getMessage()]);
+  }
+}
+
+/**
+ * Helper function to build SQL column definition from MySQL column info.
+ */
+function _sentinel_portal_entities_build_column_sql($column) {
+  $field_type = $column['Type'];
+  $field_null = $column['Null'] === 'YES';
+  $field_default = $column['Default'];
+  
+  $sql_def = $field_type;
+  
+  if (!$field_null) {
+    $sql_def .= ' NOT NULL';
+  }
+  
+  if ($field_default !== NULL) {
+    if ($field_default === 'CURRENT_TIMESTAMP' || $field_default === 'current_timestamp()') {
+      $sql_def .= ' DEFAULT CURRENT_TIMESTAMP';
+    }
+    elseif (is_numeric($field_default)) {
+      $sql_def .= ' DEFAULT ' . $field_default;
+    }
+    else {
+      $sql_def .= ' DEFAULT \'' . addslashes($field_default) . '\'';
+    }
+  }
+  elseif ($field_null) {
+    $sql_def .= ' DEFAULT NULL';
+  }
+  
+  return $sql_def;
+}
+
+/**
+ * Helper function to parse MySQL column definition to Drupal schema format.
+ */
+function _sentinel_portal_entities_parse_mysql_column($column) {
+  $field_type = $column['Type'];
+  $field_null = $column['Null'] === 'YES';
+  $field_default = $column['Default'];
+  
+  $schema_type = 'varchar';
+  $schema_length = 255;
+  $mysql_type = NULL;
+  $unsigned = FALSE;
+  $field_def = [
+    'not null' => !$field_null,
+    'description' => "Column: {$column['Field']}",
+  ];
+  
+  if (strpos($field_type, 'int') !== FALSE) {
+    $schema_type = 'int';
+    if (strpos($field_type, 'tinyint') !== FALSE) {
+      $schema_length = 'tiny';
+    }
+    elseif (strpos($field_type, 'smallint') !== FALSE) {
+      $schema_length = 'small';
+    }
+    elseif (strpos($field_type, 'bigint') !== FALSE) {
+      $schema_length = 'big';
+    }
+    if (strpos($field_type, 'unsigned') !== FALSE) {
+      $unsigned = TRUE;
+    }
+    $field_def['type'] = $schema_type;
+    if ($unsigned) {
+      $field_def['unsigned'] = TRUE;
+    }
+    if ($schema_length !== 'int') {
+      $field_def['size'] = $schema_length;
+    }
+  }
+  elseif (strpos($field_type, 'varchar') !== FALSE) {
+    preg_match('/varchar\((\d+)\)/', $field_type, $matches);
+    $schema_length = isset($matches[1]) ? (int) $matches[1] : 255;
+    $field_def['type'] = 'varchar';
+    $field_def['length'] = $schema_length;
+  }
+  elseif (strpos($field_type, 'text') !== FALSE || strpos($field_type, 'blob') !== FALSE) {
+    $field_def['type'] = 'text';
+    if (strpos($field_type, 'tinytext') !== FALSE || strpos($field_type, 'tinyblob') !== FALSE) {
+      $field_def['size'] = 'tiny';
+    }
+    elseif (strpos($field_type, 'mediumtext') !== FALSE || strpos($field_type, 'mediumblob') !== FALSE) {
+      $field_def['size'] = 'medium';
+    }
+    elseif (strpos($field_type, 'longtext') !== FALSE || strpos($field_type, 'longblob') !== FALSE) {
+      $field_def['size'] = 'big';
+    }
+    else {
+      $field_def['size'] = 'normal';
+    }
+  }
+  elseif (strpos($field_type, 'datetime') !== FALSE) {
+    $field_def['type'] = 'datetime';
+    $field_def['mysql_type'] = 'datetime';
+  }
+  elseif (strpos($field_type, 'date') !== FALSE) {
+    $field_def['type'] = 'date';
+    $field_def['mysql_type'] = 'date';
+  }
+  elseif (strpos($field_type, 'time') !== FALSE) {
+    $field_def['type'] = 'time';
+    $field_def['mysql_type'] = 'time';
+  }
+  elseif (strpos($field_type, 'decimal') !== FALSE || strpos($field_type, 'numeric') !== FALSE) {
+    preg_match('/\((.*?)\)/', $field_type, $matches);
+    $precision_scale = isset($matches[1]) ? $matches[1] : '10,2';
+    $parts = explode(',', $precision_scale);
+    $field_def['type'] = 'numeric';
+    $field_def['precision'] = isset($parts[0]) ? (int) $parts[0] : 10;
+    $field_def['scale'] = isset($parts[1]) ? (int) $parts[1] : 2;
+  }
+  elseif (strpos($field_type, 'float') !== FALSE || strpos($field_type, 'double') !== FALSE) {
+    $field_def['type'] = 'float';
+  }
+  else {
+    $field_def['type'] = 'varchar';
+    $field_def['length'] = 255;
+  }
+  
+  if ($field_default !== NULL) {
+    $field_def['default'] = $field_default;
+  }
+  
+  return $field_def;
+}
+
+/**
+ * Helper function to create revision table matching base table.
+ */
+function _sentinel_portal_entities_create_revision_table($table, $revision_table) {
+  $schema = \Drupal::database()->schema();
+  $connection = \Drupal::database();
+  
+  // Get the actual structure of the base table.
+  $columns_result = $connection->query("SHOW COLUMNS FROM {{$table}}")->fetchAll();
+  
+  // Build revision table schema matching base table exactly.
+  $revision_fields = [];
+  $revision_indexes = [];
+  
+  foreach ($columns_result as $column) {
+    $field_name = $column->Field;
+    
+    // Skip uuid in revision table - it should not be in revision tables.
+    if ($field_name === 'uuid') {
+      continue;
+    }
+    
+    $field_spec = _sentinel_portal_entities_parse_mysql_column((array) $column);
+    
+    // Special handling for vid - it should be serial in revision table.
+    if ($field_name === 'vid') {
+      $field_spec['type'] = 'serial';
+      $field_spec['unsigned'] = TRUE;
+      $field_spec['not null'] = TRUE;
+      unset($field_spec['default']);
+    }
+    
+    $revision_fields[$field_name] = $field_spec;
+    
+    // Track indexes.
+    if ($column->Key === 'MUL' && $field_name === 'pid') {
+      $revision_indexes['pid'] = ['pid'];
+    }
+  }
+  
+  $revision_schema = [
+    'description' => 'Revision table for sentinel_sample - matches base table exactly',
+    'fields' => $revision_fields,
+    'primary key' => ['vid'],
+  ];
+  
+  if (!empty($revision_indexes)) {
+    $revision_schema['indexes'] = $revision_indexes;
+  }
+  
+  $schema->createTable($revision_table, $revision_schema);
+  
+  // Get all column names except vid (which is serial in revision table) and uuid (not in revision table).
+  $column_names = [];
+  foreach ($columns_result as $column) {
+    $field_name = $column->Field;
+    if ($field_name !== 'vid' && $field_name !== 'uuid') {
+      $column_names[] = $field_name;
+    }
+  }
+  
+  // Copy initial revision data from base table, ensuring vid is unique.
+  $columns_list = implode(', ', $column_names);
+  $connection->query("INSERT IGNORE INTO {{$revision_table}} ({$columns_list}, vid)
+    SELECT DISTINCT {$columns_list}, COALESCE(NULLIF(vid, 0), pid) as vid
+    FROM {{$table}}
+    WHERE pid > 0");
+}
+
 

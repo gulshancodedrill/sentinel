@@ -32,6 +32,8 @@ use Drupal\datetime\Plugin\Field\FieldType\DateTimeItemInterface;
  *       "add" = "Drupal\sentinel_portal_entities\Form\SentinelSampleForm",
  *       "edit" = "Drupal\sentinel_portal_entities\Form\SentinelSampleForm",
  *       "delete" = "Drupal\Core\Entity\ContentEntityDeleteForm",
+ *       "revision-delete" = "Drupal\Core\Entity\ContentEntityDeleteForm",
+ *       "revision-revert" = "Drupal\Core\Entity\ContentEntityRevisionRevertForm",
  *     },
  *     "route_provider" = {
  *       "html" = "Drupal\sentinel_portal_entities\SentinelSampleHtmlRouteProvider",
@@ -39,9 +41,12 @@ use Drupal\datetime\Plugin\Field\FieldType\DateTimeItemInterface;
  *     "access" = "Drupal\Core\Entity\EntityAccessControlHandler",
  *   },
  *   base_table = "sentinel_sample",
+ *   revision_table = "sentinel_sample_revision",
+ *   revision_data_table = "sentinel_sample_field_revision",
  *   admin_permission = "administer sentinel_sample",
  *   entity_keys = {
  *     "id" = "pid",
+ *     "revision" = "vid",
  *     "label" = "pack_reference_number",
  *     "uuid" = "uuid",
  *   },
@@ -52,6 +57,10 @@ use Drupal\datetime\Plugin\Field\FieldType\DateTimeItemInterface;
  *     "edit-form" = "/portal/admin/samples/manage/{sentinel_sample}/edit",
  *     "delete-form" = "/portal/admin/samples/manage/{sentinel_sample}/delete",
  *     "collection" = "/portal/admin/samples",
+ *     "version-history" = "/portal/admin/samples/manage/{sentinel_sample}/revisions",
+ *     "revision" = "/portal/admin/samples/manage/{sentinel_sample}/revisions/{sentinel_sample_revision}/view",
+ *     "revision-delete-form" = "/portal/admin/samples/manage/{sentinel_sample}/revisions/{sentinel_sample_revision}/delete",
+ *     "revision-revert-form" = "/portal/admin/samples/manage/{sentinel_sample}/revisions/{sentinel_sample_revision}/revert",
  *   },
  *   field_ui_base_route = "entity.sentinel_sample.collection",
  * )
@@ -167,6 +176,19 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
             ->setRequired(TRUE)
             ->setDisplayConfigurable('view', FALSE)
             ->setDisplayConfigurable('form', FALSE);
+
+    // Revision ID field (vid).
+    $fields['vid'] = BaseFieldDefinition::create('integer')
+      ->setLabel(t('Revision ID'))
+      ->setDescription(t('The revision ID.'))
+      ->setReadOnly(TRUE)
+      ->setSetting('unsigned', TRUE)
+      ->setDisplayConfigurable('view', FALSE)
+      ->setDisplayConfigurable('form', FALSE);
+
+    // Revision tracking is done via 'created' and 'changed' fields.
+    // Removed revision metadata fields: revision_user, revision_created, revision_log_message, 
+    // revision_translation_affected, revision_default
 
 
         $fields['pack_reference_number'] = BaseFieldDefinition::create('string')
@@ -1619,6 +1641,7 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
             ->setSetting('datetime_type', 'datetime')
             ->setRequired(FALSE)
             ->setDefaultValueCallback(static::class . '::getCurrentDateTimeDefault')
+            ->setRevisionable(TRUE)
             ->setDisplayConfigurable('form', TRUE)
             ->setDisplayConfigurable('view', TRUE);
 
@@ -1628,6 +1651,7 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
             ->setSetting('datetime_type', 'datetime')
             ->setRequired(FALSE)
             ->setDefaultValueCallback(static::class . '::getCurrentDateTimeDefault')
+            ->setRevisionable(TRUE)
             ->setDisplayConfigurable('form', TRUE)
             ->setDisplayConfigurable('view', TRUE);
 
