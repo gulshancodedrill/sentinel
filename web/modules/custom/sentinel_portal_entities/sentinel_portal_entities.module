@@ -540,3 +540,40 @@ function sentinel_portal_entities_views_data_alter(array &$data) {
     }
   }
 }
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ */
+function sentinel_portal_entities_menu_local_tasks_alter(&$data, $route_name) {
+  // Remove tabs from revision overview page.
+  if ($route_name === 'entity.sentinel_sample.version_history') {
+    $data['tabs'][0] = [];
+  }
+}
+
+/**
+ * Implements hook_preprocess_block().
+ */
+function sentinel_portal_entities_preprocess_block(&$variables) {
+  // Remove "-FINAL" from page title block for sentinel_sample routes.
+  if (isset($variables['elements']['#plugin_id']) && $variables['elements']['#plugin_id'] === 'page_title_block') {
+    $route_name = \Drupal::routeMatch()->getRouteName();
+    if (in_array($route_name, ['entity.sentinel_sample.version_history', 'entity.sentinel_sample.revision_compare'])) {
+      if (isset($variables['content']['#title'])) {
+        $title = $variables['content']['#title'];
+        if (is_string($title)) {
+          $title = preg_replace('/-FINAL$/i', '', $title);
+          $variables['content']['#title'] = $title;
+        }
+        elseif (is_array($title) && isset($title['#markup'])) {
+          $title['#markup'] = preg_replace('/-FINAL$/i', '', $title['#markup']);
+          $variables['content']['#title'] = $title;
+        }
+      }
+      // Also check in content array directly.
+      if (isset($variables['content'][0]['#markup'])) {
+        $variables['content'][0]['#markup'] = preg_replace('/-FINAL$/i', '', $variables['content'][0]['#markup']);
+      }
+    }
+  }
+}

@@ -54,6 +54,34 @@ sentinel_portal.sample_email:
     _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
-    parameters:
-      sentinel_sample:
-        type: entity:sentinel_sample
+  parameters:
+    sentinel_sample:
+      type: entity:sentinel_sample
+
+entity.sentinel_sample.version_history:
+  path: '/portal/admin/samples/manage/{sentinel_sample}/revisions'
+  defaults:
+    _form: '\Drupal\sentinel_portal_entities\Form\SentinelSampleRevisionOverviewForm'
+    _title_callback: '\Drupal\sentinel_portal_entities\Form\SentinelSampleRevisionOverviewForm::title'
+  requirements:
+    _permission: 'administer sentinel_sample'
+  options:
+    _admin_route: FALSE
+  parameters:
+    sentinel_sample:
+      type: entity:sentinel_sample
+
+entity.sentinel_sample.revision_compare:
+  path: '/portal/admin/samples/manage/{sentinel_sample}/revisions/view/{source_revision}/{target_revision}'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleRevisionCompareController::compare'
+    _title_callback: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleRevisionCompareController::title'
+  requirements:
+    _permission: 'administer sentinel_sample'
+    source_revision: \d+
+    target_revision: \d+
+  options:
+    _admin_route: FALSE
+  parameters:
+    sentinel_sample:
+      type: entity:sentinel_sample
