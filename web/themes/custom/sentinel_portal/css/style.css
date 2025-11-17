@@ -1243,4 +1243,15 @@ select.form-select#edit-field-user-cohorts {
     height: 400px;
 
 }
- 
+
+a.nav-link.admin-area::before {
+  content: "\f013";
+  margin: 0;
+}
+
+a.nav-link.admin-area {
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+}

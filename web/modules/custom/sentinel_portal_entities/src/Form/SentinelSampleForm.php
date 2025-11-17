@@ -107,17 +107,7 @@ class SentinelSampleForm extends ContentEntityForm {
       }
     }
 
-    // Sentinel Customer ID - weight 3 (third)
-    if ($entity->hasField('customer_id')) {
-      $form['customer_id']['#group'] = 'company_details';
-      $form['customer_id']['#weight'] = 3;
-      $form['customer_id']['#title'] = $this->t('Sentinel Customer ID');
-      $form['customer_id']['#description'] = $this->t('Your Sentinel Unique Customer Reference number (UCR). This can be found in your account settings.');
-      // Ensure parent weights are overridden
-      if (isset($form['customer_id'][0])) {
-        $form['customer_id'][0]['#weight'] = 3;
-      }
-    }
+    // Sentinel Customer ID is configured later to appear after the Updated field.
 
     // Fieldset: Company Address (nested in Company Details)
     $form['company_address'] = [
@@ -353,7 +343,7 @@ class SentinelSampleForm extends ContentEntityForm {
         '#title' => $this->t('Created'),
         '#default_value' => $created_date,
         '#description' => $this->t('E.g., 16-11-2025 When this record was created.'),
-        '#weight' => -97, // After Company Details (weight -98)
+        '#weight' => -97,
         '#disabled' => TRUE,
         '#required' => FALSE,
         '#access' => TRUE,
@@ -392,12 +382,34 @@ class SentinelSampleForm extends ContentEntityForm {
         '#title' => $this->t('Updated'),
         '#default_value' => $updated_date,
         '#description' => $this->t('E.g., 16-11-2025 When this record was last updated.'),
-        '#weight' => -96, // After Created field (weight -97)
+        '#weight' => -96,
         '#disabled' => TRUE,
         '#required' => FALSE,
         '#access' => TRUE,
         '#description_display' => 'after',
         '#attributes' => ['placeholder' => $this->t('E.g., 16-11-2025')],
+      ];
+    }
+
+    // Sentinel UCR field - show immediately after Updated field.
+    if ($entity->hasField('customer_id')) {
+      $ucr_value = '';
+      $field_item = $entity->get('customer_id');
+      if (!$field_item->isEmpty()) {
+        $ucr_value = $field_item->value ?? '';
+      }
+
+      // Ensure the widget exists as a plain textfield.
+      $form['customer_id'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('The UCR'),
+        '#default_value' => $ucr_value,
+        '#description' => $this->t('Your Sentinel Unique Customer Reference number (UCR). This can be found in your account settings.'),
+        '#maxlength' => 255,
+        '#required' => $field_item->getFieldDefinition()->isRequired(),
+        '#weight' => -95,
+        '#description_display' => 'after',
+        '#access' => TRUE,
       ];
     }
 
