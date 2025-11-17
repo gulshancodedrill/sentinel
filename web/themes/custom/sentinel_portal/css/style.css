@@ -1226,3 +1226,14 @@ body.path-view-my-results #block-sentinelportal-theme-system-main h1 {
   margin: 0;
   display: flex;
 }
+
+div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.admin-area {
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+}
+div#sidebar_first.sidebar nav ul.nav li.nav-item a.nav-link.admin-area::before {
+  content: "\f013";
+  margin: 0;
+}
