@@ -30,7 +30,7 @@ class SentinelSampleForm extends ContentEntityForm {
         '#disabled' => TRUE,
       ];
     }
-
+    
     // The pack reference number
     $form['pack_reference_number'] = [
       '#type' => 'textfield',
@@ -51,27 +51,60 @@ class SentinelSampleForm extends ContentEntityForm {
       '#after_build' => [[$this, 'reorderCompanyDetailsFields']],
     ];
 
-    // Company Email - weight 1 (first)
-    if ($entity->hasField('company_email')) {
-      $form['company_email']['#group'] = 'company_details';
-      $form['company_email']['#weight'] = 1;
-      $form['company_email']['#title'] = $this->t('Company Email');
-      $form['company_email']['#description'] = $this->t('Email address of the company managing installation/maintenance. A copy of the SystemCheck report will be made available to this email address.');
-      // Ensure parent weights are overridden
-      if (isset($form['company_email'][0])) {
-        $form['company_email'][0]['#weight'] = 1;
-      }
-    }
+    // Company Email field will be handled in reorderCompanyDetailsFields after_build callback
+    // This ensures it's properly placed inside Company Details fieldset and avoids duplicates
 
-    // Company Telephone - weight 2 (second)
+    // Company Telephone - weight 2 (second) - Always show even if empty
     if ($entity->hasField('company_tel')) {
+      // Get the field value (handle empty values)
+      $tel_value = '';
+      if (!$entity->get('company_tel')->isEmpty()) {
+        $tel_value = $entity->get('company_tel')->value;
+      }
+      
+      // If field doesn't exist in form, create it explicitly
+      if (!isset($form['company_tel'])) {
+        $form['company_tel'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Company Telephone'),
+          '#default_value' => $tel_value,
+          '#maxlength' => 255,
+          '#required' => $entity->get('company_tel')->getFieldDefinition()->isRequired(),
+        ];
+      }
+      
+      // Always ensure the field is configured and visible
       $form['company_tel']['#group'] = 'company_details';
       $form['company_tel']['#weight'] = 2;
       $form['company_tel']['#title'] = $this->t('Company Telephone');
       $form['company_tel']['#description'] = $this->t('Telephone number of the company managing installation/maintenance for the system.');
+      $form['company_tel']['#access'] = TRUE;
+      $form['company_tel']['#default_value'] = $tel_value;
+      
+      // Remove any access restrictions that might hide the field
+      unset($form['company_tel']['#access_callback']);
+      
+      // Ensure widget is accessible and properly weighted
+      if (isset($form['company_tel']['widget'])) {
+        $form['company_tel']['widget']['#access'] = TRUE;
+        unset($form['company_tel']['widget']['#access_callback']);
+        if (isset($form['company_tel']['widget'][0])) {
+          $form['company_tel']['widget'][0]['#weight'] = 2;
+          $form['company_tel']['widget'][0]['#access'] = TRUE;
+          if (isset($form['company_tel']['widget'][0]['value'])) {
+            $form['company_tel']['widget'][0]['value']['#default_value'] = $tel_value;
+          }
+          unset($form['company_tel']['widget'][0]['#access_callback']);
+        }
+      }
       // Ensure parent weights are overridden
       if (isset($form['company_tel'][0])) {
         $form['company_tel'][0]['#weight'] = 2;
+        $form['company_tel'][0]['#access'] = TRUE;
+        if (isset($form['company_tel'][0]['value'])) {
+          $form['company_tel'][0]['value']['#default_value'] = $tel_value;
+        }
+        unset($form['company_tel'][0]['#access_callback']);
       }
     }
 
@@ -99,79 +132,275 @@ class SentinelSampleForm extends ContentEntityForm {
     ];
 
     // Order: Country (1), Company (2), Address 1 (3), Property name (4), Property number (5), Town/City (6), Postcode (7)
+    // All fields should always be visible
 
     // Country field - check if it exists as company_country or in address entity reference
     // Note: field_company_address might be an entity reference with nested address fields
-    if ($entity->hasField('field_company_address')) {
+    if ($entity->hasField('field_company_address') && isset($form['field_company_address'])) {
       // If using entity reference field, ensure it's grouped correctly
       // The address widget might show country field inside it
       $form['field_company_address']['#group'] = 'company_address';
       $form['field_company_address']['#weight'] = 0;
-      // Ensure nested address fields are also ordered if they exist
+      $form['field_company_address']['#access'] = TRUE;
+      unset($form['field_company_address']['#access_callback']);
     }
-    // Also check for simple country field if it exists
+    // Also check for simple country field if it exists (company_country or company_county)
     if ($entity->hasField('company_country')) {
+      if (!isset($form['company_country'])) {
+        $country_value = '';
+        if (!$entity->get('company_country')->isEmpty()) {
+          $country_value = $entity->get('company_country')->value ?? '';
+        }
+        $form['company_country'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Country'),
+          '#default_value' => $country_value,
+          '#required' => FALSE,
+        ];
+      }
       $form['company_country']['#group'] = 'company_address';
       $form['company_country']['#weight'] = 1;
       $form['company_country']['#title'] = $this->t('Country');
+      $form['company_country']['#access'] = TRUE;
+      $form['company_country']['#description_display'] = 'after';
+      unset($form['company_country']['#access_callback']);
+    }
+    // Also handle company_county field (may be used as Country)
+    if ($entity->hasField('company_county')) {
+      if (!isset($form['company_county'])) {
+        $county_value = '';
+        if (!$entity->get('company_county')->isEmpty()) {
+          $county_value = $entity->get('company_county')->value ?? '';
+        }
+        $form['company_county'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Country'),
+          '#default_value' => $county_value,
+          '#required' => FALSE,
+        ];
+      }
+      $form['company_county']['#group'] = 'company_address';
+      $form['company_county']['#weight'] = 1;
+      $form['company_county']['#title'] = $this->t('Country');
+      $form['company_county']['#access'] = TRUE;
+      $form['company_county']['#description_display'] = 'after';
+      unset($form['company_county']['#access_callback']);
     }
 
     // Company field - weight 2
     if ($entity->hasField('company_name')) {
+      if (!isset($form['company_name'])) {
+        $company_value = '';
+        if (!$entity->get('company_name')->isEmpty()) {
+          $company_value = $entity->get('company_name')->value ?? '';
+        }
+        $form['company_name'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Company'),
+          '#default_value' => $company_value,
+          '#maxlength' => 255,
+          '#required' => FALSE,
+        ];
+      }
       $form['company_name']['#group'] = 'company_address';
       $form['company_name']['#weight'] = 2;
       $form['company_name']['#title'] = $this->t('Company');
+      $form['company_name']['#access'] = TRUE;
+      $form['company_name']['#description_display'] = 'after';
+      unset($form['company_name']['#access_callback']);
     }
 
     // Address 1 - weight 3
     if ($entity->hasField('company_address1')) {
+      if (!isset($form['company_address1'])) {
+        $address1_value = '';
+        if (!$entity->get('company_address1')->isEmpty()) {
+          $address1_value = $entity->get('company_address1')->value ?? '';
+        }
+        $form['company_address1'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Address 1'),
+          '#default_value' => $address1_value,
+          '#maxlength' => 255,
+          '#required' => FALSE,
+        ];
+      }
       $form['company_address1']['#group'] = 'company_address';
       $form['company_address1']['#weight'] = 3;
       $form['company_address1']['#title'] = $this->t('Address 1');
+      $form['company_address1']['#access'] = TRUE;
+      $form['company_address1']['#description_display'] = 'after';
+      unset($form['company_address1']['#access_callback']);
     }
 
     // Property name - weight 4
     if ($entity->hasField('company_address2')) {
+      if (!isset($form['company_address2'])) {
+        $address2_value = '';
+        if (!$entity->get('company_address2')->isEmpty()) {
+          $address2_value = $entity->get('company_address2')->value ?? '';
+        }
+        $form['company_address2'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Property name'),
+          '#default_value' => $address2_value,
+          '#maxlength' => 255,
+          '#required' => FALSE,
+        ];
+      }
       $form['company_address2']['#group'] = 'company_address';
       $form['company_address2']['#weight'] = 4;
       $form['company_address2']['#title'] = $this->t('Property name');
+      $form['company_address2']['#access'] = TRUE;
+      $form['company_address2']['#description_display'] = 'after';
+      unset($form['company_address2']['#access_callback']);
     }
 
     // Property number - weight 5
     if ($entity->hasField('company_property_number')) {
+      if (!isset($form['company_property_number'])) {
+        $prop_num_value = '';
+        if (!$entity->get('company_property_number')->isEmpty()) {
+          $prop_num_value = $entity->get('company_property_number')->value ?? '';
+        }
+        $form['company_property_number'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Property number'),
+          '#default_value' => $prop_num_value,
+          '#maxlength' => 255,
+          '#required' => FALSE,
+        ];
+      }
       $form['company_property_number']['#group'] = 'company_address';
       $form['company_property_number']['#weight'] = 5;
       $form['company_property_number']['#title'] = $this->t('Property number');
+      $form['company_property_number']['#access'] = TRUE;
+      $form['company_property_number']['#description_display'] = 'after';
+      unset($form['company_property_number']['#access_callback']);
     }
 
     // Town/City - weight 6
     if ($entity->hasField('company_town')) {
+      if (!isset($form['company_town'])) {
+        $town_value = '';
+        if (!$entity->get('company_town')->isEmpty()) {
+          $town_value = $entity->get('company_town')->value ?? '';
+        }
+        $form['company_town'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Town/City'),
+          '#default_value' => $town_value,
+          '#maxlength' => 255,
+          '#required' => FALSE,
+        ];
+      }
       $form['company_town']['#group'] = 'company_address';
       $form['company_town']['#weight'] = 6;
       $form['company_town']['#title'] = $this->t('Town/City');
+      $form['company_town']['#access'] = TRUE;
+      $form['company_town']['#description_display'] = 'after';
+      unset($form['company_town']['#access_callback']);
     }
 
     // Postcode - weight 7
     if ($entity->hasField('company_postcode')) {
+      if (!isset($form['company_postcode'])) {
+        $postcode_value = '';
+        if (!$entity->get('company_postcode')->isEmpty()) {
+          $postcode_value = $entity->get('company_postcode')->value ?? '';
+        }
+        $form['company_postcode'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('Postcode'),
+          '#default_value' => $postcode_value,
+          '#maxlength' => 255,
+          '#required' => FALSE,
+        ];
+      }
       $form['company_postcode']['#group'] = 'company_address';
       $form['company_postcode']['#weight'] = 7;
       $form['company_postcode']['#title'] = $this->t('Postcode');
+      $form['company_postcode']['#access'] = TRUE;
+      $form['company_postcode']['#description_display'] = 'after';
+      unset($form['company_postcode']['#access_callback']);
     }
 
-    // Created field
+    // Created field - show after Company Details fieldset - Always visible - Simple text field showing only date
     if ($entity->hasField('created')) {
-      $form['created']['#title'] = $this->t('Created');
-      $form['created']['#description'] = $this->t('E.g., 16-11-2025 When this record was created.');
-      $form['created']['#weight'] = -97;
-      $form['created']['#disabled'] = TRUE;
+      // Get the created value and format as date only (d-m-Y)
+      $created_date = '';
+      $field_item = $entity->get('created');
+      if (!$field_item->isEmpty()) {
+        $created_value = $field_item->value ?? '';
+        if (!empty($created_value)) {
+          try {
+            // Try to parse the datetime value and format as date only
+            $date = new \DateTime($created_value);
+            $created_date = $date->format('d-m-Y');
+          } catch (\Exception $e) {
+            // If parsing fails, try to extract just the date part
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $created_value, $matches)) {
+              $date = new \DateTime($matches[1]);
+              $created_date = $date->format('d-m-Y');
+            } else {
+              $created_date = $created_value;
+            }
+          }
+        }
+      }
+      
+      // Always create as simple textfield
+      $form['created'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('Created'),
+        '#default_value' => $created_date,
+        '#description' => $this->t('E.g., 16-11-2025 When this record was created.'),
+        '#weight' => -97, // After Company Details (weight -98)
+        '#disabled' => TRUE,
+        '#required' => FALSE,
+        '#access' => TRUE,
+        '#description_display' => 'after',
+        '#attributes' => ['placeholder' => $this->t('E.g., 16-11-2025')],
+      ];
     }
 
-    // Updated field
+    // Updated field - show after Created field - Always visible - Simple text field showing only date
     if ($entity->hasField('updated')) {
-      $form['updated']['#title'] = $this->t('Updated');
-      $form['updated']['#description'] = $this->t('E.g., 16-11-2025 When this record was last updated.');
-      $form['updated']['#weight'] = -96;
-      $form['updated']['#disabled'] = TRUE;
+      // Get the updated value and format as date only (d-m-Y)
+      $updated_date = '';
+      $field_item = $entity->get('updated');
+      if (!$field_item->isEmpty()) {
+        $updated_value = $field_item->value ?? '';
+        if (!empty($updated_value)) {
+          try {
+            // Try to parse the datetime value and format as date only
+            $date = new \DateTime($updated_value);
+            $updated_date = $date->format('d-m-Y');
+          } catch (\Exception $e) {
+            // If parsing fails, try to extract just the date part
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $updated_value, $matches)) {
+              $date = new \DateTime($matches[1]);
+              $updated_date = $date->format('d-m-Y');
+            } else {
+              $updated_date = $updated_value;
+            }
+          }
+        }
+      }
+      
+      // Always create as simple textfield
+      $form['updated'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('Updated'),
+        '#default_value' => $updated_date,
+        '#description' => $this->t('E.g., 16-11-2025 When this record was last updated.'),
+        '#weight' => -96, // After Created field (weight -97)
+        '#disabled' => TRUE,
+        '#required' => FALSE,
+        '#access' => TRUE,
+        '#description_display' => 'after',
+        '#attributes' => ['placeholder' => $this->t('E.g., 16-11-2025')],
+      ];
     }
 
     // The UCR
@@ -818,6 +1047,52 @@ class SentinelSampleForm extends ContentEntityForm {
       $this->entity->set('pack_reference_number', (string) $pack_ref);
     }
 
+    // Update Company Email (handle both widget and direct field structures)
+    if ($this->entity->hasField('company_email')) {
+      $email_value = $form_state->getValue('company_email');
+      if (is_array($email_value) && isset($email_value[0]['value'])) {
+        $email_value = $email_value[0]['value'];
+      }
+      if ($email_value !== NULL) {
+        $this->entity->set('company_email', $email_value);
+      }
+    }
+
+    // Update Company Telephone (handle both widget and direct field structures)
+    if ($this->entity->hasField('company_tel')) {
+      $tel_value = $form_state->getValue('company_tel');
+      if (is_array($tel_value) && isset($tel_value[0]['value'])) {
+        $tel_value = $tel_value[0]['value'];
+      }
+      if ($tel_value !== NULL) {
+        $this->entity->set('company_tel', $tel_value);
+      }
+    }
+
+    // Update Company Address fields
+    $company_address_fields = [
+      'company_country',
+      'company_county',
+      'company_name',
+      'company_address1',
+      'company_address2',
+      'company_property_number',
+      'company_town',
+      'company_postcode',
+    ];
+    
+    foreach ($company_address_fields as $field_name) {
+      if ($this->entity->hasField($field_name)) {
+        $field_value = $form_state->getValue($field_name);
+        if (is_array($field_value) && isset($field_value[0]['value'])) {
+          $field_value = $field_value[0]['value'];
+        }
+        if ($field_value !== NULL) {
+          $this->entity->set($field_name, $field_value);
+        }
+      }
+    }
+
     // Update hold state
     $hold_state = $form_state->getValue('sentinel_sample_hold_state_target_id');
     if ($hold_state === '' || $hold_state === NULL) {
@@ -856,11 +1131,95 @@ class SentinelSampleForm extends ContentEntityForm {
    */
   public function reorderCompanyDetailsFields(array $element, FormStateInterface $form_state) {
     // Ensure correct order: Company Email (1), Company Telephone (2), Sentinel Customer ID (3)
+    // Always ensure company_email is visible and inside Company Details fieldset
+    // Get the value from the entity's company_email field
+    $entity = $this->entity;
+    $email_value = '';
+    if ($entity && $entity->hasField('company_email')) {
+      $field_item = $entity->get('company_email');
+      if (!$field_item->isEmpty()) {
+        $email_value = $field_item->value ?? '';
+      }
+    }
+    
     if (isset($element['company_email'])) {
       $element['company_email']['#weight'] = 1;
+      $element['company_email']['#group'] = 'company_details';
+      $element['company_email']['#access'] = TRUE;
+      $element['company_email']['#title'] = $this->t('Company Email');
+      $element['company_email']['#description'] = $this->t('Email address of the company managing installation/maintenance. A copy of the SystemCheck report will be made available to this email address.');
+      $element['company_email']['#description_display'] = 'after';
+      $element['company_email']['#required'] = FALSE;
+      $element['company_email']['#default_value'] = $email_value;
+      unset($element['company_email']['#access_callback']);
+      
+      // Ensure widget is accessible and has the correct value
+      if (isset($element['company_email']['widget'])) {
+        $element['company_email']['widget']['#access'] = TRUE;
+        unset($element['company_email']['widget']['#access_callback']);
+        if (isset($element['company_email']['widget'][0])) {
+          $element['company_email']['widget'][0]['#weight'] = 1;
+          $element['company_email']['widget'][0]['#access'] = TRUE;
+          if (isset($element['company_email']['widget'][0]['value'])) {
+            $element['company_email']['widget'][0]['value']['#default_value'] = $email_value;
+            $element['company_email']['widget'][0]['value']['#access'] = TRUE;
+            $element['company_email']['widget'][0]['value']['#required'] = FALSE;
+          }
+          unset($element['company_email']['widget'][0]['#access_callback']);
+        }
+      }
+      if (isset($element['company_email'][0])) {
+        $element['company_email'][0]['#weight'] = 1;
+        $element['company_email'][0]['#access'] = TRUE;
+        if (isset($element['company_email'][0]['value'])) {
+          $element['company_email'][0]['value']['#default_value'] = $email_value;
+          $element['company_email'][0]['value']['#access'] = TRUE;
+          $element['company_email'][0]['value']['#required'] = FALSE;
+        }
+        unset($element['company_email'][0]['#access_callback']);
+      }
+    }
+    else {
+      // Field doesn't exist - create it in after_build as fallback
+      $entity = $this->entity;
+      if ($entity && $entity->hasField('company_email')) {
+        $email_value = '';
+        if (!$entity->get('company_email')->isEmpty()) {
+          $email_value = $entity->get('company_email')->value;
+        }
+        $element['company_email'] = [
+          '#type' => 'email',
+          '#title' => $this->t('Company Email'),
+          '#default_value' => $email_value,
+          '#required' => FALSE,
+          '#weight' => 1,
+          '#group' => 'company_details',
+          '#description' => $this->t('Email address of the company managing installation/maintenance. A copy of the SystemCheck report will be made available to this email address.'),
+          '#description_display' => 'after',
+          '#access' => TRUE,
+        ];
+      }
+    }
+    
+    // Ensure company_email is always grouped inside Company Details
+    if (isset($element['company_email'])) {
+      $element['company_email']['#group'] = 'company_details';
     }
     if (isset($element['company_tel'])) {
       $element['company_tel']['#weight'] = 2;
+      $element['company_tel']['#access'] = TRUE;
+      // Ensure widget is accessible
+      if (isset($element['company_tel']['widget'])) {
+        $element['company_tel']['widget']['#access'] = TRUE;
+        if (isset($element['company_tel']['widget'][0])) {
+          $element['company_tel']['widget'][0]['#weight'] = 2;
+          $element['company_tel']['widget'][0]['#access'] = TRUE;
+        }
+      }
+      if (isset($element['company_tel'][0])) {
+        $element['company_tel'][0]['#weight'] = 2;
+        $element['company_tel'][0]['#access'] = TRUE;
+      }
     }
     if (isset($element['customer_id'])) {
       $element['customer_id']['#weight'] = 3;
@@ -876,43 +1235,74 @@ class SentinelSampleForm extends ContentEntityForm {
    */
   public function reorderCompanyAddressFields(array $element, FormStateInterface $form_state) {
     // Ensure correct order: Country (1), Company (2), Address 1 (3), Property name (4), Property number (5), Town/City (6), Postcode (7)
+    // All fields should always be visible
     
     // Country - could be field_company_address (entity ref) or company_country
     if (isset($element['field_company_address'])) {
       $element['field_company_address']['#weight'] = 0;
+      $element['field_company_address']['#access'] = TRUE;
+      unset($element['field_company_address']['#access_callback']);
     }
     if (isset($element['company_country'])) {
       $element['company_country']['#weight'] = 1;
+      $element['company_country']['#access'] = TRUE;
+      $element['company_country']['#description_display'] = 'after';
+      unset($element['company_country']['#access_callback']);
+    }
+    if (isset($element['company_county'])) {
+      $element['company_county']['#weight'] = 1;
+      $element['company_county']['#access'] = TRUE;
+      $element['company_county']['#title'] = $this->t('Country');
+      $element['company_county']['#description_display'] = 'after';
+      unset($element['company_county']['#access_callback']);
     }
     
     // Company - weight 2
     if (isset($element['company_name'])) {
       $element['company_name']['#weight'] = 2;
+      $element['company_name']['#access'] = TRUE;
+      $element['company_name']['#description_display'] = 'after';
+      unset($element['company_name']['#access_callback']);
     }
     
     // Address 1 - weight 3
     if (isset($element['company_address1'])) {
       $element['company_address1']['#weight'] = 3;
+      $element['company_address1']['#access'] = TRUE;
+      $element['company_address1']['#description_display'] = 'after';
+      unset($element['company_address1']['#access_callback']);
     }
     
     // Property name - weight 4
     if (isset($element['company_address2'])) {
       $element['company_address2']['#weight'] = 4;
+      $element['company_address2']['#access'] = TRUE;
+      $element['company_address2']['#description_display'] = 'after';
+      unset($element['company_address2']['#access_callback']);
     }
     
     // Property number - weight 5
     if (isset($element['company_property_number'])) {
       $element['company_property_number']['#weight'] = 5;
+      $element['company_property_number']['#access'] = TRUE;
+      $element['company_property_number']['#description_display'] = 'after';
+      unset($element['company_property_number']['#access_callback']);
     }
     
     // Town/City - weight 6
     if (isset($element['company_town'])) {
       $element['company_town']['#weight'] = 6;
+      $element['company_town']['#access'] = TRUE;
+      $element['company_town']['#description_display'] = 'after';
+      unset($element['company_town']['#access_callback']);
     }
     
     // Postcode - weight 7
     if (isset($element['company_postcode'])) {
       $element['company_postcode']['#weight'] = 7;
+      $element['company_postcode']['#access'] = TRUE;
+      $element['company_postcode']['#description_display'] = 'after';
+      unset($element['company_postcode']['#access_callback']);
     }
     
     return $element;
