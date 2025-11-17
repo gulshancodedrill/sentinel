@@ -22,8 +22,14 @@ class TestPdfLogicController extends ControllerBase {
     
     $build['header'] = [
       '#markup' => '<div class="test-pdf-header">' .
-        Link::fromTextAndUrl($this->t('Add test'), Url::fromRoute('entity.sentinel_sample.add_form'))->toString() . ' | ' .
-        Link::fromTextAndUrl($this->t('Import tests'), Url::fromRoute('<front>'))->toString() .
+        Link::fromTextAndUrl(
+          $this->t('Add test'),
+          Url::fromUri('internal:/admin/content/test_entity/add/condition_entity')
+        )->toString() . ' | ' .
+        Link::fromTextAndUrl(
+          $this->t('Import tests'),
+          Url::fromUri('internal:/feed/1/edit')
+        )->toString() .
         '</div>',
       '#weight' => -10,
     ];

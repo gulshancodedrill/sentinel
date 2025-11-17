@@ -54,6 +54,36 @@ sentinel_portal.sample_email:
     _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
-    parameters:
-      sentinel_sample:
-        type: entity:sentinel_sample
+  parameters:
+    sentinel_sample:
+      type: entity:sentinel_sample
+
+sentinel_portal.sample_export_csv:
+  path: '/portal/admin/samples/export/csv'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleExportController::exportCsv'
+    _title: 'Export Samples to CSV'
+  requirements:
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal.sample_export_csv_success:
+  path: '/portal/admin/samples/export/csv/success'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleExportController::exportSuccess'
+    _title: 'Export Successful'
+  requirements:
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal.sample_export_csv_download:
+  path: '/portal/admin/samples/export/csv/download'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleExportController::downloadCsv'
+    _title: 'Download CSV Export'
+  requirements:
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
+  options:
+    _admin_route: FALSE
