@@ -1,18 +1,21 @@
-notice-styling:
-  version: VERSION
+sample-list-styling:
   css:
     theme:
-      css/notice.css: {}
+      css/sample-list.css: {}
 
 sample_list:
-  version: VERSION
   js:
     js/sample_list.js: {}
   dependencies:
     - core/drupal
-    - core/drupal.tableselect
     - core/once
 
+export_success:
+  js:
+    js/export-success.js: {}
+  dependencies:
+    - core/drupal
+    - core/jquery
 
 sample-list-styling:
   version: VERSION

@@ -218,6 +218,19 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       '#weight' => 100,
     ];
 
+    // Add CSV export button
+    $form['export_csv'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Export CSV'),
+      '#url' => Url::fromRoute('sentinel_portal.sample_export_csv', [], [
+        'query' => \Drupal::request()->query->all(),
+      ]),
+      '#attributes' => [
+        'class' => ['button', 'button--primary'],
+      ],
+      '#weight' => 101,
+    ];
+
     $form['#attached']['library'][] = 'core/drupal.tableselect';
     $form['#attached']['library'][] = 'sentinel_portal_entities/sample-list-styling';
     $form['#attached']['library'][] = 'sentinel_portal_entities/sample_list';
