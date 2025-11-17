@@ -1214,3 +1214,15 @@ body.path-view-my-results #block-sentinelportal-theme-system-main h1 {
     color: #226fbe;
 }
 .page-view-sentinel-sample .portal-welcome{display:none;}
+
+#header.header nav#navbar-main .collapse {
+  height: unset;
+}
+#header.header nav#navbar-main {
+  margin-bottom: 0;
+}
+#header.header ul.nav.navbar-nav {
+  padding: unset;
+  margin: 0;
+  display: flex;
+}
