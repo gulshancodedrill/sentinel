@@ -60,6 +60,8 @@ class SentinelSampleEditForm extends FormBase {
       $sentinel_sample->set('sentinel_sample_hold_state_target_id', (int) $hold_state);
     }
 
+    // Create a new revision on each save.
+    $sentinel_sample->setNewRevision(TRUE);
     $sentinel_sample->save();
 
     $this->messenger()->addMessage($this->t('Sample updated successfully.'));

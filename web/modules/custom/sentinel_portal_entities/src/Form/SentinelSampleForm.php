@@ -44,9 +44,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Company Details (start)
     $form['company_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Company Details'),
-      '#open' => TRUE,
       '#weight' => -98,
       '#after_build' => [[$this, 'reorderCompanyDetailsFields']],
     ];
@@ -108,24 +107,13 @@ class SentinelSampleForm extends ContentEntityForm {
       }
     }
 
-    // Sentinel Customer ID - weight 3 (third)
-    if ($entity->hasField('customer_id')) {
-      $form['customer_id']['#group'] = 'company_details';
-      $form['customer_id']['#weight'] = 3;
-      $form['customer_id']['#title'] = $this->t('Sentinel Customer ID');
-      $form['customer_id']['#description'] = $this->t('Your Sentinel Unique Customer Reference number (UCR). This can be found in your account settings.');
-      // Ensure parent weights are overridden
-      if (isset($form['customer_id'][0])) {
-        $form['customer_id'][0]['#weight'] = 3;
-      }
-    }
+    // Sentinel Customer ID is configured later to appear after the Updated field.
 
     // Fieldset: Company Address (nested in Company Details)
     $form['company_address'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Company Address'),
       '#description' => $this->t('Please provide the name and address of the company managing installation/maintenance on this system.'),
-      '#open' => TRUE,
       '#weight' => 4,
       '#group' => 'company_details',
       '#after_build' => [[$this, 'reorderCompanyAddressFields']],
@@ -355,7 +343,7 @@ class SentinelSampleForm extends ContentEntityForm {
         '#title' => $this->t('Created'),
         '#default_value' => $created_date,
         '#description' => $this->t('E.g., 16-11-2025 When this record was created.'),
-        '#weight' => -97, // After Company Details (weight -98)
+        '#weight' => -97,
         '#disabled' => TRUE,
         '#required' => FALSE,
         '#access' => TRUE,
@@ -394,12 +382,34 @@ class SentinelSampleForm extends ContentEntityForm {
         '#title' => $this->t('Updated'),
         '#default_value' => $updated_date,
         '#description' => $this->t('E.g., 16-11-2025 When this record was last updated.'),
-        '#weight' => -96, // After Created field (weight -97)
+        '#weight' => -96,
         '#disabled' => TRUE,
         '#required' => FALSE,
         '#access' => TRUE,
         '#description_display' => 'after',
         '#attributes' => ['placeholder' => $this->t('E.g., 16-11-2025')],
+      ];
+    }
+
+    // Sentinel UCR field - show immediately after Updated field.
+    if ($entity->hasField('customer_id')) {
+      $ucr_value = '';
+      $field_item = $entity->get('customer_id');
+      if (!$field_item->isEmpty()) {
+        $ucr_value = $field_item->value ?? '';
+      }
+
+      // Ensure the widget exists as a plain textfield.
+      $form['customer_id'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('The UCR'),
+        '#default_value' => $ucr_value,
+        '#description' => $this->t('Your Sentinel Unique Customer Reference number (UCR). This can be found in your account settings.'),
+        '#maxlength' => 255,
+        '#required' => $field_item->getFieldDefinition()->isRequired(),
+        '#weight' => -95,
+        '#description_display' => 'after',
+        '#access' => TRUE,
       ];
     }
 
@@ -422,9 +432,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Job Details (start)
     $form['job_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Job Details'),
-      '#open' => TRUE,
       '#weight' => -90,
     ];
 
@@ -542,9 +551,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: System Details (start)
     $form['system_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('System Details'),
-      '#open' => TRUE,
       '#weight' => -80,
     ];
 
@@ -566,10 +574,9 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Address (nested in System Details)
     $form['address'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Address'),
       '#description' => $this->t('The full address of where the system is located.'),
-      '#open' => TRUE,
       '#weight' => 3,
       '#group' => 'system_details',
       '#after_build' => [[$this, 'reorderAddressFields']],
@@ -630,9 +637,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Result Details (start)
     $form['result_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Result Details'),
-      '#open' => TRUE,
       '#weight' => -70,
     ];
 

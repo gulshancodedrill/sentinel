@@ -16,3 +16,17 @@ export_success:
   dependencies:
     - core/drupal
     - core/jquery
+
+sample-list-styling:
+  version: VERSION
+  css:
+    theme:
+      css/sample-list.css: {}
+
+revision_form:
+  version: VERSION
+  js:
+    js/revision_form.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
