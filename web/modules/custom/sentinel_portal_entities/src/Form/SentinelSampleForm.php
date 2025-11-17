@@ -44,9 +44,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Company Details (start)
     $form['company_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Company Details'),
-      '#open' => TRUE,
       '#weight' => -98,
       '#after_build' => [[$this, 'reorderCompanyDetailsFields']],
     ];
@@ -122,10 +121,9 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Company Address (nested in Company Details)
     $form['company_address'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Company Address'),
       '#description' => $this->t('Please provide the name and address of the company managing installation/maintenance on this system.'),
-      '#open' => TRUE,
       '#weight' => 4,
       '#group' => 'company_details',
       '#after_build' => [[$this, 'reorderCompanyAddressFields']],
@@ -422,9 +420,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Job Details (start)
     $form['job_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Job Details'),
-      '#open' => TRUE,
       '#weight' => -90,
     ];
 
@@ -542,9 +539,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: System Details (start)
     $form['system_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('System Details'),
-      '#open' => TRUE,
       '#weight' => -80,
     ];
 
@@ -566,10 +562,9 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Address (nested in System Details)
     $form['address'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Address'),
       '#description' => $this->t('The full address of where the system is located.'),
-      '#open' => TRUE,
       '#weight' => 3,
       '#group' => 'system_details',
       '#after_build' => [[$this, 'reorderAddressFields']],
@@ -630,9 +625,8 @@ class SentinelSampleForm extends ContentEntityForm {
 
     // Fieldset: Result Details (start)
     $form['result_details'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Result Details'),
-      '#open' => TRUE,
       '#weight' => -70,
     ];
 
