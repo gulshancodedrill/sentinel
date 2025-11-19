@@ -1,7 +1,0 @@
-sentinel_vaillant_api.config:
-  title: 'Vaillant API Configuration'
-  description: 'Configure Vaillant API settings'
-  parent: 'system.admin_config_system'
-  weight: 100
-
-

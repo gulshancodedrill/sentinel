@@ -99,10 +99,10 @@ function sentinel_systemcheck_vaillant_api_format_data($sample_entity) {
   $data['project_id'] = $sample_entity->get('project_id')->value ?? '';
   $data['customer_id'] = $sample_entity->get('customer_id')->value ?? '';
   $data['lab_reference'] = $sample_entity->get('pack_reference_number')->value ?? '';
-  $data['notes'] = $sample_entity->get('notes')->value ?? '';
+  $data['notes'] = sentinel_systemcheck_vaillant_api_get_optional_value($sample_entity, 'notes');
   $data['boiler_serial_id'] = $sample_entity->get('boiler_id')->value ?? '';
-  $data['customer_name'] = $sample_entity->get('client_name')->value ?? '';
-  $data['customer_email'] = $sample_entity->get('customer_email')->value ?? '';
+  $data['customer_name'] = sentinel_systemcheck_vaillant_api_get_optional_value($sample_entity, 'client_name');
+  $data['customer_email'] = sentinel_systemcheck_vaillant_api_get_optional_value($sample_entity, 'customer_email');
   $data['uprn'] = $sample_entity->get('uprn')->value ?? '';
   $data['landlord'] = $sample_entity->get('landlord')->value ?? '';
   $data['property_number'] = $sample_entity->get('property_number')->value ?? '';
@@ -177,4 +177,31 @@ function sentinel_systemcheck_vaillant_api_get_key() {
   }
   
   return $api_key ?? '';
+}
+
+/**
+ * Safely fetches optional field values from a sentinel sample entity.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $sample_entity
+ *   The sample entity.
+ * @param string $field_name
+ *   The field machine name.
+ * @param string $default
+ *   The default value to return when the field is missing or empty.
+ *
+ * @return string
+ *   The field value or the default.
+ */
+function sentinel_systemcheck_vaillant_api_get_optional_value($sample_entity, $field_name, $default = '') {
+  if ($sample_entity->hasField($field_name)) {
+    $field = $sample_entity->get($field_name);
+    if ($field && !$field->isEmpty()) {
+      $item = $field->first();
+      if ($item && isset($item->value)) {
+        return $item->value;
+      }
+    }
+  }
+
+  return $default;
 }
