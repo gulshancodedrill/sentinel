@@ -1255,3 +1255,7 @@ a.nav-link.admin-area {
   flex-direction: row-reverse;
   justify-content: space-between;
 }
+
+#ui-datepicker-div {
+  z-index: 2000 !important;
+}
