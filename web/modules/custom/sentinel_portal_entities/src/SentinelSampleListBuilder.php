@@ -46,133 +46,516 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
   public function buildForm(array $form, FormStateInterface $form_state) {
     $filters = $this->getFilters();
 
-    $form['filters'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Filter samples'),
-      '#open' => TRUE,
-      '#tree' => TRUE,
+    // Views exposed form structure
+    $form['#attributes'] = [
+      'class' => ['views-exposed-form'],
+      'id' => 'views-exposed-form-test-page',
+      'method' => 'get',
+      'action' => '/portal/admin/sample',
     ];
 
-    $form['filters']['pack_id'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Search Pack ID'),
-      '#default_value' => $filters['pack_id'] ?? '',
-    ];
-
-    $form['filters']['pass_fail'] = [
-      '#type' => 'select',
-      '#title' => $this->t('The Sample Result'),
-      '#options' => [
-        '' => $this->t('-Any-'),
-        '1' => $this->t('Pass'),
-        '0' => $this->t('Fail'),
-        '2' => $this->t('Pending'),
+    $form['views_exposed_form_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-exposed-form'],
       ],
-      '#default_value' => $filters['pass_fail'] ?? '',
     ];
 
-    $pack_type_options = ['' => $this->t('- Any -')];
+    $form['views_exposed_form_wrapper']['views_exposed_widgets'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-exposed-widgets', 'clearfix'],
+        'style' => 'display: flex; flex-wrap: wrap; gap: 10px 15px; align-items: flex-end;',
+      ],
+    ];
+
+    $wrapper = &$form['views_exposed_form_wrapper']['views_exposed_widgets'];
+
+    // Pack Reference Number
+    $wrapper['pack_reference_number_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-pack-reference-number-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-pack_reference_number'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['pack_reference_number_wrapper']['label'] = [
+      '#type' => 'label',
+      '#title' => $this->t('Search Pack ID'),
+      '#for' => 'edit-pack-reference-number',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['pack_reference_number_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['pack_reference_number_wrapper']['views_widget']['pack_reference_number'] = [
+      '#type' => 'textfield',
+      '#id' => 'edit-pack-reference-number',
+      '#name' => 'pack_reference_number',
+      '#default_value' => $filters['pack_reference_number'] ?? '',
+      '#attributes' => [
+        'size' => 30,
+        'maxlength' => 128,
+        'class' => ['form-text'],
+      ],
+    ];
+
+    // Pass/Fail
+    $wrapper['pass_fail_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-pass-fail-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-pass_fail'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['pass_fail_wrapper']['label'] = [
+      '#type' => 'label',
+      '#title' => $this->t('The Sample Result'),
+      '#for' => 'edit-pass-fail',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['pass_fail_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['pass_fail_wrapper']['views_widget']['pass_fail'] = [
+      '#type' => 'select',
+      '#id' => 'edit-pass-fail',
+      '#name' => 'pass_fail',
+      '#options' => [
+        'All' => $this->t('- Any -'),
+        '0' => $this->t('Fail'),
+        '1' => $this->t('Pass'),
+        'p' => $this->t('Pending'),
+      ],
+      '#default_value' => $filters['pass_fail'] ?? 'All',
+      '#attributes' => ['class' => ['form-select']],
+    ];
+
+    // Pack Type (pack_reference_number_1)
+    $pack_type_options = ['All' => $this->t('- Any -')];
     foreach (PackTypeFilter::getDefinitions() as $key => $definition) {
       $pack_type_options[$key] = $this->t($definition['label']);
     }
 
-    $form['filters']['pack_type'] = [
-      '#type' => 'select',
+    $wrapper['pack_reference_number_1_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-pack-reference-number-1-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-pack_reference_number_1'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['pack_reference_number_1_wrapper']['label'] = [
+      '#type' => 'label',
       '#title' => $this->t('Pack Type'),
-      '#options' => $pack_type_options,
-      '#default_value' => $filters['pack_type'] ?? '',
+      '#for' => 'edit-pack-reference-number-1',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
     ];
-
-    $form['filters']['client_email'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('The email of the client'),
-      '#default_value' => $filters['client_email'] ?? '',
+    $wrapper['pack_reference_number_1_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
     ];
-
-    $form['filters']['reported'] = [
+    $wrapper['pack_reference_number_1_wrapper']['views_widget']['pack_reference_number_1'] = [
       '#type' => 'select',
+      '#id' => 'edit-pack-reference-number-1',
+      '#name' => 'pack_reference_number_1',
+      '#options' => $pack_type_options,
+      '#default_value' => $filters['pack_reference_number_1'] ?? 'All',
+      '#attributes' => ['class' => ['form-select']],
+    ];
+
+    // Email
+    $wrapper['email_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-email-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-email'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['email_wrapper']['label'] = [
+      '#type' => 'label',
+      '#title' => $this->t('The email of the client'),
+      '#for' => 'edit-email',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['email_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['email_wrapper']['views_widget']['email'] = [
+      '#type' => 'textfield',
+      '#id' => 'edit-email',
+      '#name' => 'email',
+      '#default_value' => $filters['email'] ?? '',
+      '#attributes' => [
+        'size' => 30,
+        'maxlength' => 128,
+        'class' => ['form-text'],
+      ],
+    ];
+
+    // Date Reported (simple select)
+    $wrapper['date_reported_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-date-reported-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-date_reported'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['date_reported_wrapper']['label'] = [
+      '#type' => 'label',
       '#title' => $this->t('Reported'),
+      '#for' => 'edit-date-reported',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['date_reported_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['date_reported_wrapper']['views_widget']['date_reported'] = [
+      '#type' => 'select',
+      '#id' => 'edit-date-reported',
+      '#name' => 'date_reported',
       '#options' => [
-        '' => $this->t('- Any -'),
+        'All' => $this->t('- Any -'),
         'reported' => $this->t('Reported'),
         'not_reported' => $this->t('Not reported'),
       ],
-      '#default_value' => $filters['reported'] ?? '',
+      '#default_value' => $filters['date_reported'] ?? 'All',
+      '#attributes' => ['class' => ['form-select']],
     ];
 
-    $form['filters']['booked'] = [
-      '#type' => 'select',
+    // Date Booked (simple select)
+    $wrapper['date_booked_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-date-booked-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-date_booked'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['date_booked_wrapper']['label'] = [
+      '#type' => 'label',
       '#title' => $this->t('Booked'),
+      '#for' => 'edit-date-booked',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['date_booked_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['date_booked_wrapper']['views_widget']['date_booked'] = [
+      '#type' => 'select',
+      '#id' => 'edit-date-booked',
+      '#name' => 'date_booked',
       '#options' => [
-        '' => $this->t('- Any -'),
+        'All' => $this->t('- Any -'),
         '5_plus_days_booked' => $this->t('5+ days booked'),
       ],
-      '#default_value' => $filters['booked'] ?? '',
+      '#default_value' => $filters['date_booked'] ?? 'All',
+      '#attributes' => ['class' => ['form-select']],
     ];
 
-    $form['filters']['system_postcode'] = [
-      '#type' => 'textfield',
+    // Postcode
+    $wrapper['postcode_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-postcode-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-postcode'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['postcode_wrapper']['label'] = [
+      '#type' => 'label',
       '#title' => $this->t('System postcode'),
-      '#default_value' => $filters['system_postcode'] ?? '',
+      '#for' => 'edit-postcode',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
     ];
-
-    $form['filters']['system_address'] = [
+    $wrapper['postcode_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['postcode_wrapper']['views_widget']['postcode'] = [
       '#type' => 'textfield',
+      '#id' => 'edit-postcode',
+      '#name' => 'postcode',
+      '#default_value' => $filters['postcode'] ?? '',
+      '#attributes' => [
+        'size' => 30,
+        'maxlength' => 128,
+        'class' => ['form-text'],
+      ],
+    ];
+
+    // Combine (System address)
+    $wrapper['combine_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'edit-combine-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-combine'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 200px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['combine_wrapper']['label'] = [
+      '#type' => 'label',
       '#title' => $this->t('System address'),
-      '#default_value' => $filters['system_address'] ?? '',
+      '#for' => 'edit-combine',
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['combine_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['combine_wrapper']['views_widget']['combine'] = [
+      '#type' => 'textfield',
+      '#id' => 'edit-combine',
+      '#name' => 'combine',
+      '#default_value' => $filters['combine'] ?? '',
+      '#attributes' => [
+        'size' => 30,
+        'maxlength' => 128,
+        'class' => ['form-text'],
+      ],
     ];
 
-    $form['filters']['date_reported_from'] = [
-      '#type' => 'date',
+    // Date Reported Range (date_reported_1)
+    $date_reported_1_id = 'date_views_exposed_filter-ea03d926b0370320cd6b403e9806ea2e';
+    $wrapper['date_reported_1_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => $date_reported_1_id . '-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-date_reported_1'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 300px; margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['date_reported_1_wrapper']['label'] = [
+      '#type' => 'label',
       '#title' => $this->t('Date Reported'),
-      '#default_value' => $filters['date_reported_from'] ?? '',
-      '#attributes' => ['placeholder' => $this->t('E.g. 10/31/2025')],
+      '#for' => $date_reported_1_id,
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => $date_reported_1_id,
+        'class' => ['form-wrapper'],
+      ],
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-reported-min-wrapper'],
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min']['inside'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-reported-min-inside-wrapper'],
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['container-inline-date']],
+    ];
+    // Only show date if it's set in filters (from query parameters)
+    $date_reported_min = '';
+    if (isset($filters['date_reported_1']['min']['date'])) {
+      $date_reported_min = $filters['date_reported_1']['min']['date'];
+    }
+    
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_reported_1_min'] = [
+      '#type' => 'textfield',
+      '#id' => 'edit-date-reported-1-min-datepicker-popup-0',
+      '#name' => 'date_reported_1[min][date]',
+      '#default_value' => $date_reported_min,
+      '#attributes' => [
+        'size' => 20,
+        'maxlength' => 30,
+        'class' => ['form-text', 'datepicker-popup'],
+        'placeholder' => 'E.g., 11/19/2025',
+        'autocomplete' => 'off',
+      ],
+      '#description' => $this->t('E.g., 11/19/2025'),
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-reported-max-wrapper'],
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-reported-max-inside-wrapper'],
+    ];
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['container-inline-date']],
+    ];
+    // Only show date if it's set in filters (from query parameters)
+    $date_reported_max = '';
+    if (isset($filters['date_reported_1']['max']['date'])) {
+      $date_reported_max = $filters['date_reported_1']['max']['date'];
+    }
+    
+    $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_reported_1_max'] = [
+      '#type' => 'textfield',
+      '#id' => 'edit-date-reported-1-max-datepicker-popup-0',
+      '#name' => 'date_reported_1[max][date]',
+      '#default_value' => $date_reported_max,
+      '#attributes' => [
+        'size' => 20,
+        'maxlength' => 30,
+        'class' => ['form-text', 'datepicker-popup'],
+        'placeholder' => 'E.g., 11/19/2025',
+        'autocomplete' => 'off',
+      ],
+      '#description' => $this->t('E.g., 11/19/2025'),
     ];
 
-    $form['filters']['date_reported_to'] = [
-      '#type' => 'date',
-      '#title' => '',
-      '#default_value' => $filters['date_reported_to'] ?? '',
-      '#attributes' => ['placeholder' => $this->t('E.g. 10/31/2025')],
+    // Date Booked Range (date_booked_1)
+    $date_booked_1_id = 'date_views_exposed_filter-4201a9cbc3d0ae23268e507b4fa9e77b';
+    $wrapper['date_booked_1_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => $date_booked_1_id . '-wrapper',
+        'class' => ['views-exposed-widget', 'views-widget-filter-date_booked_1'],
+        'style' => 'flex: 0 0 calc(25% - 12px); min-width: 300px; margin-bottom: 0 !important;',
+      ],
     ];
-
-    $form['filters']['date_booked_from'] = [
-      '#type' => 'date',
+    $wrapper['date_booked_1_wrapper']['label'] = [
+      '#type' => 'label',
       '#title' => $this->t('Date Booked In'),
-      '#default_value' => $filters['date_booked_from'] ?? '',
-      '#attributes' => ['placeholder' => $this->t('E.g. 10/31/2025')],
+      '#for' => $date_booked_1_id,
+      '#attributes' => ['style' => 'display: block; margin-bottom: 5px;'],
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['views-widget'],
+        'style' => 'margin-bottom: 0 !important;',
+      ],
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => $date_booked_1_id,
+        'class' => ['form-wrapper'],
+      ],
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-booked-min-wrapper'],
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min']['inside'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-booked-min-inside-wrapper'],
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['container-inline-date']],
+    ];
+    $date_booked_min = $filters['date_booked_1']['min']['date'] ?? '';
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_booked_1_min'] = [
+      '#type' => 'textfield',
+      '#id' => 'edit-date-booked-1-min-datepicker-popup-0',
+      '#name' => 'date_booked_1[min][date]',
+      '#default_value' => $date_booked_min,
+      '#attributes' => [
+        'size' => 20,
+        'maxlength' => 30,
+        'class' => ['form-text', 'datepicker-popup'],
+        'placeholder' => 'E.g., 11/19/2025',
+        'autocomplete' => 'off',
+      ],
+      '#description' => $this->t('E.g., 11/19/2025'),
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-booked-max-wrapper'],
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'edit-date-booked-max-inside-wrapper'],
+    ];
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['container-inline-date']],
+    ];
+    $date_booked_max = $filters['date_booked_1']['max']['date'] ?? '';
+    $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_booked_1_max'] = [
+      '#type' => 'textfield',
+      '#id' => 'edit-date-booked-1-max-datepicker-popup-0',
+      '#name' => 'date_booked_1[max][date]',
+      '#default_value' => $date_booked_max,
+      '#attributes' => [
+        'size' => 20,
+        'maxlength' => 30,
+        'class' => ['form-text', 'datepicker-popup'],
+        'placeholder' => 'E.g., 11/19/2025',
+        'autocomplete' => 'off',
+      ],
+      '#description' => $this->t('E.g., 11/19/2025'),
     ];
 
-    $form['filters']['date_booked_to'] = [
-      '#type' => 'date',
-      '#title' => '',
-      '#default_value' => $filters['date_booked_to'] ?? '',
-      '#attributes' => ['placeholder' => $this->t('E.g. 10/31/2025')],
-    ];
-
-    $form['filters']['actions'] = [
-      '#type' => 'actions',
-    ];
-
-    $form['filters']['actions']['submit'] = [
+    // Submit button
+    $wrapper['submit'] = [
       '#type' => 'submit',
       '#value' => $this->t('Apply'),
+      '#id' => 'edit-submit-test',
+      '#name' => '',
+      '#attributes' => ['class' => ['btn', 'form-submit']],
+      '#prefix' => '<div class="views-exposed-widget views-submit-button" style="flex: 0 0 calc(25% - 12px); min-width: 100px;">',
+      '#suffix' => '</div>',
     ];
 
-    if (!empty($filters)) {
-      $form['filters']['actions']['reset'] = [
+    // Reset button
+    $wrapper['reset'] = [
         '#type' => 'submit',
         '#value' => $this->t('Reset'),
+      '#id' => 'edit-reset',
+      '#name' => 'op',
+      '#attributes' => ['class' => ['btn', 'form-submit']],
         '#submit' => ['::resetForm'],
+      '#prefix' => '<div class="views-exposed-widget views-reset-button" style="flex: 0 0 calc(25% - 12px); min-width: 100px;">',
+      '#suffix' => '</div>',
       ];
-    }
 
+    // Operations section - place after date fields
     $form['operations'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Operations'),
-      '#open' => TRUE,
       '#attributes' => ['class' => ['sentinel-sample-operations']],
-      '#weight' => -5,
       '#tree' => TRUE,
     ];
 
@@ -217,7 +600,6 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
 
     $form['pager'] = [
       '#type' => 'pager',
-      '#weight' => 100,
     ];
 
     // Add CSV export button
@@ -230,15 +612,32 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       '#attributes' => [
         'class' => ['button', 'button--primary'],
       ],
-      '#weight' => 101,
     ];
 
     $form['#attached']['library'][] = 'core/drupal.tableselect';
     $form['#attached']['library'][] = 'sentinel_portal_entities/sample-list-styling';
     $form['#attached']['library'][] = 'sentinel_portal_entities/sample_list';
+    $form['#attached']['library'][] = 'sentinel_portal_entities/sample_datepicker';
+    
     $form['#attached']['drupalSettings']['sentinelSampleList'] = [
       'selectAllClass' => 'select-all',
       'entitySelectClass' => 'entity-select',
+    ];
+    
+    // Override Bootstrap Barrio mb-3 margins
+    $form['#attached']['html_head'][] = [
+      [
+        '#tag' => 'style',
+        '#value' => '.views-exposed-widgets .mb-3,
+                      .views-exposed-widgets .views-exposed-widget,
+                      .views-exposed-widgets .views-widget,
+                      .views-exposed-widgets .form-item,
+                      .views-exposed-widgets .js-form-wrapper,
+                      .views-exposed-widgets .form-wrapper {
+                        margin-bottom: 0 !important;
+                      }',
+      ],
+      'remove_mb3_margins',
     ];
 
     return $form;
@@ -260,42 +659,107 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     // Create a new query parameter bag
     $query_params = [];
 
-    // Extract filter values - try both nested and direct access
-    $filter_keys = [
-      'pack_id',
-      'pass_fail',
-      'pack_type',
-      'client_email',
-      'reported',
-      'booked',
-      'system_postcode',
-      'system_address',
-      'date_reported_from',
-      'date_reported_to',
-      'date_booked_from',
-      'date_booked_to',
-    ];
+    // Extract filter values from the views exposed form structure
+    $wrapper = $form_values['views_exposed_form_wrapper']['views_exposed_widgets'] ?? [];
 
-    foreach ($filter_keys as $key) {
-      // Try accessing via getValue with nested path first
-      $value = $form_state->getValue(['filters', $key]);
-      
-      // If that doesn't work, try direct access
-      if ($value === NULL && isset($form_values['filters'][$key])) {
-        $value = $form_values['filters'][$key];
+    // Pack reference number
+    if (isset($wrapper['pack_reference_number_wrapper']['views_widget']['pack_reference_number'])) {
+      $value = trim((string) $wrapper['pack_reference_number_wrapper']['views_widget']['pack_reference_number']);
+      if ($value !== '') {
+        $query_params['pack_reference_number'] = $value;
       }
-      
-      // If still nothing, try top-level access (in case filters aren't nested)
-      if ($value === NULL && isset($form_values[$key])) {
-        $value = $form_values[$key];
+    }
+
+    // Pass/Fail
+    if (isset($wrapper['pass_fail_wrapper']['views_widget']['pass_fail'])) {
+      $value = trim((string) $wrapper['pass_fail_wrapper']['views_widget']['pass_fail']);
+      if ($value !== '' && $value !== 'All') {
+        $query_params['pass_fail'] = $value;
       }
-      
-      if ($value !== NULL) {
-        $value = trim((string) $value);
+    }
+
+    // Pack Type (pack_reference_number_1)
+    if (isset($wrapper['pack_reference_number_1_wrapper']['views_widget']['pack_reference_number_1'])) {
+      $value = trim((string) $wrapper['pack_reference_number_1_wrapper']['views_widget']['pack_reference_number_1']);
+      if ($value !== '' && $value !== 'All') {
+        $query_params['pack_reference_number_1'] = $value;
+      }
+    }
+
+    // Email
+    if (isset($wrapper['email_wrapper']['views_widget']['email'])) {
+      $value = trim((string) $wrapper['email_wrapper']['views_widget']['email']);
         if ($value !== '') {
-          $query_params[$key] = $value;
-        }
+        $query_params['email'] = $value;
       }
+    }
+
+    // Date Reported (simple select)
+    if (isset($wrapper['date_reported_wrapper']['views_widget']['date_reported'])) {
+      $value = trim((string) $wrapper['date_reported_wrapper']['views_widget']['date_reported']);
+      if ($value !== '' && $value !== 'All') {
+        $query_params['date_reported'] = $value;
+      }
+    }
+
+    // Date Booked (simple select)
+    if (isset($wrapper['date_booked_wrapper']['views_widget']['date_booked'])) {
+      $value = trim((string) $wrapper['date_booked_wrapper']['views_widget']['date_booked']);
+      if ($value !== '' && $value !== 'All') {
+        $query_params['date_booked'] = $value;
+      }
+    }
+
+    // Postcode
+    if (isset($wrapper['postcode_wrapper']['views_widget']['postcode'])) {
+      $value = trim((string) $wrapper['postcode_wrapper']['views_widget']['postcode']);
+      if ($value !== '') {
+        $query_params['postcode'] = $value;
+      }
+    }
+
+    // Combine (System address)
+    if (isset($wrapper['combine_wrapper']['views_widget']['combine'])) {
+      $value = trim((string) $wrapper['combine_wrapper']['views_widget']['combine']);
+      if ($value !== '') {
+        $query_params['combine'] = $value;
+      }
+    }
+
+    // Date Reported Range (date_reported_1)
+    $date_reported_1 = [];
+    if (isset($wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_reported_1_min'])) {
+      $value = trim((string) $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_reported_1_min']);
+      if ($value !== '') {
+        $date_reported_1['min']['date'] = $value;
+      }
+    }
+    if (isset($wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_reported_1_max'])) {
+      $value = trim((string) $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_reported_1_max']);
+      if ($value !== '') {
+        $date_reported_1['max']['date'] = $value;
+      }
+    }
+    if (!empty($date_reported_1)) {
+      $query_params['date_reported_1'] = $date_reported_1;
+    }
+
+    // Date Booked Range (date_booked_1)
+    $date_booked_1 = [];
+    if (isset($wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_booked_1_min'])) {
+      $value = trim((string) $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_booked_1_min']);
+      if ($value !== '') {
+        $date_booked_1['min']['date'] = $value;
+      }
+    }
+    if (isset($wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_booked_1_max'])) {
+      $value = trim((string) $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_booked_1_max']);
+      if ($value !== '') {
+        $date_booked_1['max']['date'] = $value;
+      }
+    }
+    if (!empty($date_booked_1)) {
+      $query_params['date_booked_1'] = $date_booked_1;
     }
 
     $form_state->setRedirect('sentinel_portal.admin_sample', [], ['query' => $query_params]);
@@ -399,32 +863,113 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $request = \Drupal::request();
     
     $query_params = $request->query->all();
-
-    // Filter out pager and other non-filter query parameters
-    $filter_keys = [
-      'pack_id',
-      'pass_fail',
-      'pack_type',
-      'client_email',
-      'reported',
-      'booked',
-      'system_postcode',
-      'system_address',
-      'date_reported_from',
-      'date_reported_to',
-      'date_booked_from',
-      'date_booked_to',
-    ];
     
     $filters = [];
-    foreach ($filter_keys as $key) {
-      if (isset($query_params[$key])) {
-        $value = trim((string) $query_params[$key]);
+    
+    // Pack reference number
+    if (isset($query_params['pack_reference_number'])) {
+      $value = trim((string) $query_params['pack_reference_number']);
         if ($value !== '') {
-          $filters[$key] = $value;
-        }
+        $filters['pack_reference_number'] = $value;
       }
     }
+    
+    // Pass/Fail - handle "All" as empty
+    if (isset($query_params['pass_fail'])) {
+      $value = trim((string) $query_params['pass_fail']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['pass_fail'] = $value;
+      }
+    }
+    
+    // Pack Type (pack_reference_number_1) - handle "All" as empty
+    if (isset($query_params['pack_reference_number_1'])) {
+      $value = trim((string) $query_params['pack_reference_number_1']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['pack_reference_number_1'] = $value;
+      }
+    }
+    
+    // Email
+    if (isset($query_params['email'])) {
+      $value = trim((string) $query_params['email']);
+      if ($value !== '') {
+        $filters['email'] = $value;
+      }
+    }
+    
+    // Date Reported (simple select) - handle "All" as empty
+    if (isset($query_params['date_reported'])) {
+      $value = trim((string) $query_params['date_reported']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['date_reported'] = $value;
+      }
+    }
+    
+    // Date Booked (simple select) - handle "All" as empty
+    if (isset($query_params['date_booked'])) {
+      $value = trim((string) $query_params['date_booked']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['date_booked'] = $value;
+      }
+    }
+    
+    // Postcode
+    if (isset($query_params['postcode'])) {
+      $value = trim((string) $query_params['postcode']);
+      if ($value !== '') {
+        $filters['postcode'] = $value;
+      }
+    }
+    
+    // Combine (System address)
+    if (isset($query_params['combine'])) {
+      $value = trim((string) $query_params['combine']);
+      if ($value !== '') {
+        $filters['combine'] = $value;
+      }
+    }
+    
+    // Date Reported Range (date_reported_1)
+    if (isset($query_params['date_reported_1']) && is_array($query_params['date_reported_1'])) {
+      $date_reported_1 = [];
+      if (isset($query_params['date_reported_1']['min']['date'])) {
+        $value = trim((string) $query_params['date_reported_1']['min']['date']);
+        if ($value !== '') {
+          $date_reported_1['min']['date'] = $value;
+        }
+      }
+      if (isset($query_params['date_reported_1']['max']['date'])) {
+        $value = trim((string) $query_params['date_reported_1']['max']['date']);
+        if ($value !== '') {
+          $date_reported_1['max']['date'] = $value;
+        }
+      }
+      if (!empty($date_reported_1)) {
+        $filters['date_reported_1'] = $date_reported_1;
+      }
+    }
+    
+    // Date Booked Range (date_booked_1)
+    if (isset($query_params['date_booked_1']) && is_array($query_params['date_booked_1'])) {
+      $date_booked_1 = [];
+      if (isset($query_params['date_booked_1']['min']['date'])) {
+        $value = trim((string) $query_params['date_booked_1']['min']['date']);
+        if ($value !== '') {
+          $date_booked_1['min']['date'] = $value;
+        }
+      }
+      if (isset($query_params['date_booked_1']['max']['date'])) {
+        $value = trim((string) $query_params['date_booked_1']['max']['date']);
+        if ($value !== '') {
+          $date_booked_1['max']['date'] = $value;
+        }
+      }
+      if (!empty($date_booked_1)) {
+        $filters['date_booked_1'] = $date_booked_1;
+      }
+    }
+    
     return $filters;
   }
 
@@ -441,33 +986,37 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       ->orderBy('ss.pid', 'ASC');
 
     // Search Pack ID - filter on pack_reference_number
-    if (!empty($filters['pack_id'])) {
-      $query->condition('ss.pack_reference_number', '%' . $connection->escapeLike($filters['pack_id']) . '%', 'LIKE');
+    if (!empty($filters['pack_reference_number'])) {
+      $query->condition('ss.pack_reference_number', '%' . $connection->escapeLike($filters['pack_reference_number']) . '%', 'LIKE');
     }
     
-    // The Sample Result
+    // The Sample Result - handle 'p' for pending (maps to 2)
     if (isset($filters['pass_fail']) && $filters['pass_fail'] !== '') {
-      $query->condition('ss.pass_fail', $filters['pass_fail'], '=');
+      $pass_fail_value = $filters['pass_fail'];
+      if ($pass_fail_value === 'p') {
+        $pass_fail_value = '2';
+      }
+      $query->condition('ss.pass_fail', $pass_fail_value, '=');
     }
     
-    // Pack Type - apply combined pack type / prefix filters.
-    if (!empty($filters['pack_type'])) {
-      PackTypeFilter::applyFilterConditions($query, $connection, $filters['pack_type']);
+    // Pack Type (pack_reference_number_1) - apply combined pack type / prefix filters.
+    if (!empty($filters['pack_reference_number_1'])) {
+      PackTypeFilter::applyFilterConditions($query, $connection, $filters['pack_reference_number_1']);
     }
     
-    // Reported - check if date_reported is not null
-    if (isset($filters['reported']) && $filters['reported'] !== '') {
-      if ($filters['reported'] === 'reported') {
+    // Date Reported (simple select) - check if date_reported is not null
+    if (isset($filters['date_reported']) && $filters['date_reported'] !== '') {
+      if ($filters['date_reported'] === 'reported') {
         $query->isNotNull('ss.date_reported');
       }
-      elseif ($filters['reported'] === 'not_reported') {
+      elseif ($filters['date_reported'] === 'not_reported') {
         $query->isNull('ss.date_reported');
       }
     }
     
-    // Booked - check if date_booked is not null
-    if (isset($filters['booked']) && $filters['booked'] !== '') {
-      if ($filters['booked'] === '5_plus_days_booked') {
+    // Date Booked (simple select) - check if date_booked is not null
+    if (isset($filters['date_booked']) && $filters['date_booked'] !== '') {
+      if ($filters['date_booked'] === '5_plus_days_booked') {
         $threshold = (new \DateTime('-5 days'))->format('Y-m-d H:i:s');
         $query->isNotNull('ss.date_booked');
         $query->condition('ss.date_booked', $threshold, '<=');
@@ -475,48 +1024,52 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     }
     
     // System postcode
-    if (!empty($filters['system_postcode'])) {
-      $query->condition('ss.postcode', '%' . $connection->escapeLike($filters['system_postcode']) . '%', 'LIKE');
+    if (!empty($filters['postcode'])) {
+      $query->condition('ss.postcode', '%' . $connection->escapeLike($filters['postcode']) . '%', 'LIKE');
     }
     
-    // System address - combine street, county, town_city, system_location
-    if (!empty($filters['system_address'])) {
+    // System address (combine) - combine street, county, town_city, system_location
+    if (!empty($filters['combine'])) {
       $or_group = $query->orConditionGroup()
-        ->condition('ss.street', '%' . $connection->escapeLike($filters['system_address']) . '%', 'LIKE')
-        ->condition('ss.county', '%' . $connection->escapeLike($filters['system_address']) . '%', 'LIKE')
-        ->condition('ss.town_city', '%' . $connection->escapeLike($filters['system_address']) . '%', 'LIKE')
-        ->condition('ss.system_location', '%' . $connection->escapeLike($filters['system_address']) . '%', 'LIKE');
+        ->condition('ss.street', '%' . $connection->escapeLike($filters['combine']) . '%', 'LIKE')
+        ->condition('ss.county', '%' . $connection->escapeLike($filters['combine']) . '%', 'LIKE')
+        ->condition('ss.town_city', '%' . $connection->escapeLike($filters['combine']) . '%', 'LIKE')
+        ->condition('ss.system_location', '%' . $connection->escapeLike($filters['combine']) . '%', 'LIKE');
       $query->condition($or_group);
     }
     
-    // Date Reported range
-    if (!empty($filters['date_reported_from'])) {
-      if ($from = $this->normalizeFilterDate($filters['date_reported_from'])) {
+    // Date Reported range (date_reported_1)
+    if (!empty($filters['date_reported_1'])) {
+      if (!empty($filters['date_reported_1']['min']['date'])) {
+        if ($from = $this->normalizeFilterDate($filters['date_reported_1']['min']['date'])) {
         $query->condition('ss.date_reported', $from, '>=');
       }
     }
-    if (!empty($filters['date_reported_to'])) {
-      if ($to = $this->normalizeFilterDate($filters['date_reported_to'], TRUE)) {
+      if (!empty($filters['date_reported_1']['max']['date'])) {
+        if ($to = $this->normalizeFilterDate($filters['date_reported_1']['max']['date'], TRUE)) {
         $query->condition('ss.date_reported', $to, '<=');
+        }
       }
     }
     
-    // Date Booked range
-    if (!empty($filters['date_booked_from'])) {
-      if ($from = $this->normalizeFilterDate($filters['date_booked_from'])) {
+    // Date Booked range (date_booked_1)
+    if (!empty($filters['date_booked_1'])) {
+      if (!empty($filters['date_booked_1']['min']['date'])) {
+        if ($from = $this->normalizeFilterDate($filters['date_booked_1']['min']['date'])) {
         $query->condition('ss.date_booked', $from, '>=');
       }
     }
-    if (!empty($filters['date_booked_to'])) {
-      if ($to = $this->normalizeFilterDate($filters['date_booked_to'], TRUE)) {
+      if (!empty($filters['date_booked_1']['max']['date'])) {
+        if ($to = $this->normalizeFilterDate($filters['date_booked_1']['max']['date'], TRUE)) {
         $query->condition('ss.date_booked', $to, '<=');
+        }
       }
     }
 
-    // Client email filter uses installer_email field
-    if (!empty($filters['client_email'])) {
+    // Email filter uses installer_email field
+    if (!empty($filters['email'])) {
       $query->join('sentinel_client', 'sc', 'ss.ucr = sc.ucr');
-      $query->condition('sc.email', '%' . $connection->escapeLike($filters['client_email']) . '%', 'LIKE');
+      $query->condition('sc.email', '%' . $connection->escapeLike($filters['email']) . '%', 'LIKE');
     }
 
     // Add pager with current query parameters preserved
@@ -700,7 +1253,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       return NULL;
     }
 
-    $formats = ['d/m/Y', 'Y-m-d', 'Y-m-d H:i:s'];
+    // Support multiple date formats including MM/DD/YYYY from datepicker
+    $formats = ['m/d/Y', 'd/m/Y', 'Y-m-d', 'Y-m-d H:i:s'];
     foreach ($formats as $format) {
       $date = \DateTime::createFromFormat($format, $value);
       if ($date instanceof \DateTime) {

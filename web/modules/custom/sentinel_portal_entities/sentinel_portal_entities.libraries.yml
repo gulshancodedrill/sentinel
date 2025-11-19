@@ -25,3 +25,15 @@ revision_form:
   dependencies:
     - core/drupal
     - core/once
+
+sample_datepicker:
+  js:
+    https://code.jquery.com/ui/1.13.2/jquery-ui.min.js: { type: external, minified: true }
+    js/sample_datepicker.js: {}
+  css:
+    theme:
+      https://code.jquery.com/ui/1.13.2/themes/ui-lightness/jquery-ui.min.css: { type: external, minified: true }
+  dependencies:
+    - core/drupal
+    - core/once
+    - core/jquery

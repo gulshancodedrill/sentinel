@@ -88,30 +88,113 @@ class SentinelSampleExportController extends ControllerBase {
    * Extract filters from query parameters (same logic as list builder).
    */
   protected function extractFilters(array $query_params) {
-    $filter_keys = [
-      'pack_id',
-      'pass_fail',
-      'pack_type',
-      'client_email',
-      'reported',
-      'booked',
-      'system_postcode',
-      'system_address',
-      'date_reported_from',
-      'date_reported_to',
-      'date_booked_from',
-      'date_booked_to',
-    ];
-    
+    // Use same logic as SentinelSampleListBuilder::getFilters()
     $filters = [];
-    foreach ($filter_keys as $key) {
-      if (isset($query_params[$key])) {
-        $value = trim((string) $query_params[$key]);
-        if ($value !== '') {
-          $filters[$key] = $value;
-        }
+    
+    // Pack reference number
+    if (isset($query_params['pack_reference_number'])) {
+      $value = trim((string) $query_params['pack_reference_number']);
+      if ($value !== '') {
+        $filters['pack_reference_number'] = $value;
       }
     }
+    
+    // Pass/Fail - handle "All" as empty
+    if (isset($query_params['pass_fail'])) {
+      $value = trim((string) $query_params['pass_fail']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['pass_fail'] = $value;
+      }
+    }
+    
+    // Pack Type (pack_reference_number_1) - handle "All" as empty
+    if (isset($query_params['pack_reference_number_1'])) {
+      $value = trim((string) $query_params['pack_reference_number_1']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['pack_reference_number_1'] = $value;
+      }
+    }
+    
+    // Email
+    if (isset($query_params['email'])) {
+      $value = trim((string) $query_params['email']);
+      if ($value !== '') {
+        $filters['email'] = $value;
+      }
+    }
+    
+    // Date Reported (simple select) - handle "All" as empty
+    if (isset($query_params['date_reported'])) {
+      $value = trim((string) $query_params['date_reported']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['date_reported'] = $value;
+      }
+    }
+    
+    // Date Booked (simple select) - handle "All" as empty
+    if (isset($query_params['date_booked'])) {
+      $value = trim((string) $query_params['date_booked']);
+      if ($value !== '' && $value !== 'All') {
+        $filters['date_booked'] = $value;
+      }
+    }
+    
+    // Postcode
+    if (isset($query_params['postcode'])) {
+      $value = trim((string) $query_params['postcode']);
+      if ($value !== '') {
+        $filters['postcode'] = $value;
+      }
+    }
+    
+    // Combine (System address)
+    if (isset($query_params['combine'])) {
+      $value = trim((string) $query_params['combine']);
+      if ($value !== '') {
+        $filters['combine'] = $value;
+      }
+    }
+    
+    // Date Reported Range (date_reported_1)
+    if (isset($query_params['date_reported_1']) && is_array($query_params['date_reported_1'])) {
+      $date_reported_1 = [];
+      if (isset($query_params['date_reported_1']['min']['date'])) {
+        $value = trim((string) $query_params['date_reported_1']['min']['date']);
+        if ($value !== '') {
+          $date_reported_1['min']['date'] = $value;
+        }
+      }
+      if (isset($query_params['date_reported_1']['max']['date'])) {
+        $value = trim((string) $query_params['date_reported_1']['max']['date']);
+        if ($value !== '') {
+          $date_reported_1['max']['date'] = $value;
+        }
+      }
+      if (!empty($date_reported_1)) {
+        $filters['date_reported_1'] = $date_reported_1;
+      }
+    }
+    
+    // Date Booked Range (date_booked_1)
+    if (isset($query_params['date_booked_1']) && is_array($query_params['date_booked_1'])) {
+      $date_booked_1 = [];
+      if (isset($query_params['date_booked_1']['min']['date'])) {
+        $value = trim((string) $query_params['date_booked_1']['min']['date']);
+        if ($value !== '') {
+          $date_booked_1['min']['date'] = $value;
+        }
+      }
+      if (isset($query_params['date_booked_1']['max']['date'])) {
+        $value = trim((string) $query_params['date_booked_1']['max']['date']);
+        if ($value !== '') {
+          $date_booked_1['max']['date'] = $value;
+        }
+      }
+      if (!empty($date_booked_1)) {
+        $filters['date_booked_1'] = $date_booked_1;
+      }
+    }
+    
     return $filters;
   }
 
@@ -124,77 +207,91 @@ class SentinelSampleExportController extends ControllerBase {
       ->orderBy('ss.pid', 'ASC');
 
     // Apply same filters as list builder
-    if (!empty($filters['pack_id'])) {
-      $query->condition('ss.pack_reference_number', '%' . $this->database->escapeLike($filters['pack_id']) . '%', 'LIKE');
+    // Search Pack ID - filter on pack_reference_number
+    if (!empty($filters['pack_reference_number'])) {
+      $query->condition('ss.pack_reference_number', '%' . $this->database->escapeLike($filters['pack_reference_number']) . '%', 'LIKE');
     }
     
+    // The Sample Result - handle 'p' for pending (maps to 2)
     if (isset($filters['pass_fail']) && $filters['pass_fail'] !== '') {
-      $query->condition('ss.pass_fail', $filters['pass_fail'], '=');
+      $pass_fail_value = $filters['pass_fail'];
+      if ($pass_fail_value === 'p') {
+        $pass_fail_value = '2';
+      }
+      $query->condition('ss.pass_fail', $pass_fail_value, '=');
     }
     
-    if (!empty($filters['pack_type'])) {
-      PackTypeFilter::applyFilterConditions($query, $this->database, $filters['pack_type']);
-    }
-    if (!empty($filters['pack_type'])) {
-      PackTypeFilter::applyFilterConditions($query, $this->database, $filters['pack_type']);
+    // Pack Type (pack_reference_number_1) - apply combined pack type / prefix filters.
+    if (!empty($filters['pack_reference_number_1'])) {
+      PackTypeFilter::applyFilterConditions($query, $this->database, $filters['pack_reference_number_1']);
     }
     
-    if (isset($filters['reported']) && $filters['reported'] !== '') {
-      if ($filters['reported'] === 'reported') {
+    // Date Reported (simple select) - check if date_reported is not null
+    if (isset($filters['date_reported']) && $filters['date_reported'] !== '') {
+      if ($filters['date_reported'] === 'reported') {
         $query->isNotNull('ss.date_reported');
       }
-      elseif ($filters['reported'] === 'not_reported') {
+      elseif ($filters['date_reported'] === 'not_reported') {
         $query->isNull('ss.date_reported');
       }
     }
     
-    if (isset($filters['booked']) && $filters['booked'] !== '') {
-      if ($filters['booked'] === '5_plus_days_booked') {
+    // Date Booked (simple select) - check if date_booked is not null
+    if (isset($filters['date_booked']) && $filters['date_booked'] !== '') {
+      if ($filters['date_booked'] === '5_plus_days_booked') {
         $threshold = (new \DateTime('-5 days'))->format('Y-m-d H:i:s');
         $query->isNotNull('ss.date_booked');
         $query->condition('ss.date_booked', $threshold, '<=');
       }
     }
     
-    if (!empty($filters['system_postcode'])) {
-      $query->condition('ss.postcode', '%' . $this->database->escapeLike($filters['system_postcode']) . '%', 'LIKE');
+    // System postcode
+    if (!empty($filters['postcode'])) {
+      $query->condition('ss.postcode', '%' . $this->database->escapeLike($filters['postcode']) . '%', 'LIKE');
     }
     
-    if (!empty($filters['system_address'])) {
+    // System address (combine) - combine street, county, town_city, system_location
+    if (!empty($filters['combine'])) {
       $or_group = $query->orConditionGroup()
-        ->condition('ss.street', '%' . $this->database->escapeLike($filters['system_address']) . '%', 'LIKE')
-        ->condition('ss.county', '%' . $this->database->escapeLike($filters['system_address']) . '%', 'LIKE')
-        ->condition('ss.town_city', '%' . $this->database->escapeLike($filters['system_address']) . '%', 'LIKE')
-        ->condition('ss.system_location', '%' . $this->database->escapeLike($filters['system_address']) . '%', 'LIKE');
+        ->condition('ss.street', '%' . $this->database->escapeLike($filters['combine']) . '%', 'LIKE')
+        ->condition('ss.county', '%' . $this->database->escapeLike($filters['combine']) . '%', 'LIKE')
+        ->condition('ss.town_city', '%' . $this->database->escapeLike($filters['combine']) . '%', 'LIKE')
+        ->condition('ss.system_location', '%' . $this->database->escapeLike($filters['combine']) . '%', 'LIKE');
       $query->condition($or_group);
     }
     
-    // Date filters
-    if (!empty($filters['date_reported_from'])) {
-      if ($from = $this->normalizeFilterDate($filters['date_reported_from'])) {
-        $query->condition('ss.date_reported', $from, '>=');
+    // Date Reported range (date_reported_1)
+    if (!empty($filters['date_reported_1'])) {
+      if (!empty($filters['date_reported_1']['min']['date'])) {
+        if ($from = $this->normalizeFilterDate($filters['date_reported_1']['min']['date'])) {
+          $query->condition('ss.date_reported', $from, '>=');
+        }
       }
-    }
-    if (!empty($filters['date_reported_to'])) {
-      if ($to = $this->normalizeFilterDate($filters['date_reported_to'], TRUE)) {
-        $query->condition('ss.date_reported', $to, '<=');
-      }
-    }
-    if (!empty($filters['date_booked_from'])) {
-      if ($from = $this->normalizeFilterDate($filters['date_booked_from'])) {
-        $query->condition('ss.date_booked', $from, '>=');
-      }
-    }
-    if (!empty($filters['date_booked_to'])) {
-      if ($to = $this->normalizeFilterDate($filters['date_booked_to'], TRUE)) {
-        $query->condition('ss.date_booked', $to, '<=');
+      if (!empty($filters['date_reported_1']['max']['date'])) {
+        if ($to = $this->normalizeFilterDate($filters['date_reported_1']['max']['date'], TRUE)) {
+          $query->condition('ss.date_reported', $to, '<=');
+        }
       }
     }
     
-    // Client email filter - join with sentinel_client table
-    if (!empty($filters['client_email'])) {
+    // Date Booked range (date_booked_1)
+    if (!empty($filters['date_booked_1'])) {
+      if (!empty($filters['date_booked_1']['min']['date'])) {
+        if ($from = $this->normalizeFilterDate($filters['date_booked_1']['min']['date'])) {
+          $query->condition('ss.date_booked', $from, '>=');
+        }
+      }
+      if (!empty($filters['date_booked_1']['max']['date'])) {
+        if ($to = $this->normalizeFilterDate($filters['date_booked_1']['max']['date'], TRUE)) {
+          $query->condition('ss.date_booked', $to, '<=');
+        }
+      }
+    }
+
+    // Email filter uses installer_email field
+    if (!empty($filters['email'])) {
       $query->join('sentinel_client', 'sc', 'ss.ucr = sc.ucr');
-      $query->condition('sc.email', '%' . $this->database->escapeLike($filters['client_email']) . '%', 'LIKE');
+      $query->condition('sc.email', '%' . $this->database->escapeLike($filters['email']) . '%', 'LIKE');
     }
 
     return $query->execute()->fetchCol();
@@ -204,19 +301,31 @@ class SentinelSampleExportController extends ControllerBase {
    * Normalize filter date value.
    */
   protected function normalizeFilterDate($value, $end_of_day = FALSE) {
-    if (empty($value)) {
+    if ($value === NULL) {
       return NULL;
     }
-    
+
+    $value = trim((string) $value);
+    if ($value === '') {
+      return NULL;
+    }
+
+    // Support multiple date formats including MM/DD/YYYY from datepicker
+    $formats = ['m/d/Y', 'd/m/Y', 'Y-m-d', 'Y-m-d H:i:s'];
+    foreach ($formats as $format) {
+      $date = \DateTime::createFromFormat($format, $value);
+      if ($date instanceof \DateTime) {
+        $date->setTime($end_of_day ? 23 : 0, $end_of_day ? 59 : 0, $end_of_day ? 59 : 0);
+        return $date->format('Y-m-d H:i:s');
+      }
+    }
+
     try {
       $date = new \DateTime($value);
-      if ($end_of_day) {
-        $date->setTime(23, 59, 59);
-      } else {
-        $date->setTime(0, 0, 0);
-      }
+      $date->setTime($end_of_day ? 23 : 0, $end_of_day ? 59 : 0, $end_of_day ? 59 : 0);
       return $date->format('Y-m-d H:i:s');
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       return NULL;
     }
   }
