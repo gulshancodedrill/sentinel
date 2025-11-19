@@ -24,10 +24,10 @@
 
 {# Determine result images based on pass/fail #}
 {% if pass_fail_value == 0 %}
-  {% set system_check_result = '<img src="' ~ img_path ~ '/' ~ lang ~ '-report-failed.jpg" alt="' ~ 'Overall result - Fail'|t ~ '" />' %}
+  {% set system_check_result = '<img src="' ~ img_path ~ '/' ~ lang ~ '-report-failed.jpg" alt="' ~ 'Overall result - Fail'|t_lang(lang) ~ '" />' %}
   {% set recommendation_logo = '<img class="result-icon" src="' ~ img_path ~ '/failed.jpg" alt="Fail" />' %}
 {% else %}
-  {% set system_check_result = '<img src="' ~ img_path ~ '/' ~ lang ~ '-report-success.jpg" alt="' ~ 'Overall result - Pass'|t ~ '" />' %}
+  {% set system_check_result = '<img src="' ~ img_path ~ '/' ~ lang ~ '-report-success.jpg" alt="' ~ 'Overall result - Pass'|t_lang(lang) ~ '" />' %}
   {% set recommendation_logo = '<img class="result-icon" src="' ~ img_path ~ '/success.jpg" alt="Pass" />' %}
 {% endif %}
 
@@ -44,9 +44,9 @@
 {# System age text #}
 {% set system_6_months_val = field_values.system_6_months|upper|default('') %}
 {% if system_6_months_val == 'LESS6' %}
-  {% set system_age_text = 'Less than 6 months old'|t %}
+  {% set system_age_text = 'Less than 6 months old'|t_lang(lang) %}
 {% elseif system_6_months_val == 'MORE6' %}
-  {% set system_age_text = 'More than 6 months old'|t %}
+  {% set system_age_text = 'More than 6 months old'|t_lang(lang) %}
 {% else %}
   {% set system_age_text = '' %}
 {% endif %}
@@ -95,7 +95,7 @@
       <tbody>
         <tr>
           <td style="vertical-align: top;">
-            <img class="pdf-report__logo-image" src="{{ module_img_path }}/logo.png" alt="{{ 'Sentinel'|t }}" />
+            <img class="pdf-report__logo-image" src="{{ module_img_path }}/logo.png" alt="{{ 'Sentinel'|t_lang(lang) }}" />
             <span class="pdf-report__logo-caption"><strong>System</strong>Check</span>
           </td>
           <td align="right" style="vertical-align: top;">
@@ -105,38 +105,38 @@
       </tbody>
     </table>
 
-    <h1>{{ 'Independent Laboratory Report'|t }}</h1>
+    <h1>{{ 'Independent Laboratory Report'|t_lang(lang) }}</h1>
 
     <div>
       {# Report Details Table #}
       <table>
         <tr>
-          <td><strong>{{ 'Unique Pack Reference'|t }}:</strong> {{ field_values.pack_reference_number|default('') }}</td>
-          <td class="small"><strong>{{ 'Date Reported'|t }}:</strong> {{ field_values.date_reported_formatted|default('') }}</td>
-          <td class="small"><strong>{{ 'Date Received'|t }}:</strong> {{ field_values.date_booked_formatted|default('') }}</td>
+          <td><strong>{{ 'Unique Pack Reference'|t_lang(lang) }}:</strong> {{ field_values.pack_reference_number|default('') }}</td>
+          <td class="small"><strong>{{ 'Date Reported'|t_lang(lang) }}:</strong> {{ field_values.date_reported_formatted|default('') }}</td>
+          <td class="small"><strong>{{ 'Date Received'|t_lang(lang) }}:</strong> {{ field_values.date_booked_formatted|default('') }}</td>
         </tr>
         <tr>
-          <td><strong>{{ 'Sender\'s Name'|t }}:</strong> {{ field_values.installer_name|default('') }}</td>
+          <td><strong>{{ 'Sender\'s Name'|t_lang(lang) }}:</strong> {{ field_values.installer_name|default('') }}</td>
           <td class="small">
-            <strong>{{ 'Project Ref'|t }}:</strong> {{ field_values.project_id|default('') }}<br>
+            <strong>{{ 'Project Ref'|t_lang(lang) }}:</strong> {{ field_values.project_id|default('') }}<br>
             {% if field_values.engineers_code %}
-              <strong>{{ 'Engineer\'s Code'|t }}:</strong> {{ field_values.engineers_code }}
+              <strong>{{ 'Engineer\'s Code'|t_lang(lang) }}:</strong> {{ field_values.engineers_code }}
             {% endif %}
           </td>
-          <td class="small"><strong>{{ 'Boiler No'|t }}:</strong> {{ field_values.boiler_id|default('') }}</td>
+          <td class="small"><strong>{{ 'Boiler No'|t_lang(lang) }}:</strong> {{ field_values.boiler_id|default('') }}</td>
         </tr>
         <tr>
-          <td><strong>{{ 'Sender\'s Company'|t }}:</strong> {{ field_values.company_name|default('') }}</td>
-          <td class="small" colspan="2"><strong>{{ 'System Age'|t }}:</strong> {{ system_age_text }}</td>
+          <td><strong>{{ 'Sender\'s Company'|t_lang(lang) }}:</strong> {{ field_values.company_name|default('') }}</td>
+          <td class="small" colspan="2"><strong>{{ 'System Age'|t_lang(lang) }}:</strong> {{ system_age_text }}</td>
         </tr>
         <tr>
-          <td><strong>{{ 'Sender\'s Address'|t }}:</strong> {{ company_address }}</td>
-          <td class="small" colspan="2"><strong>{{ 'Site Address'|t }}:</strong> {{ site_address }}</td>
+          <td><strong>{{ 'Sender\'s Address'|t_lang(lang) }}:</strong> {{ company_address }}</td>
+          <td class="small" colspan="2"><strong>{{ 'Site Address'|t_lang(lang) }}:</strong> {{ site_address }}</td>
         </tr>
       </table>
 
       {# Recommendations Section #}
-      <h2>{{ 'Recommendations'|t }}</h2>
+      <h2>{{ 'Recommendations'|t_lang(lang) }}</h2>
       <table class="recommendations-table">
         <tr>
           <td style="width: 18%;" align="center">
@@ -147,12 +147,12 @@
       </table>
 
       {# System Water Results Summary #}
-      <h2>{{ 'System Water Results'|t }}</h2>
+      <h2>{{ 'System Water Results'|t_lang(lang) }}</h2>
       <table class="table-horizontal">
         {# Appearance #}
         {% if sentinel_sample_result.appearance_result %}
           <tr>
-            <th style="width: 20%;">{{ 'Appearance'|t }}</th>
+            <th style="width: 20%;">{{ 'Appearance'|t_lang(lang) }}</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.appearance_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -163,7 +163,7 @@
         {# pH #}
         {% if sentinel_sample_result.ph_result %}
           <tr>
-            <th style="width: 20%;">{{ 'pH'|t }}</th>
+            <th style="width: 20%;">{{ 'pH'|t_lang(lang) }}</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.ph_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -174,7 +174,7 @@
         {# Conductivity #}
         {% if sentinel_sample_result.sys_cond_result %}
           <tr>
-            <th style="width: 20%;">{{ 'Conductivity'|t }}</th>
+            <th style="width: 20%;">{{ 'Conductivity'|t_lang(lang) }}</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.sys_cond_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -185,7 +185,7 @@
         {# Chloride #}
         {% if formatted_results.mains_cl_result is defined %}
           <tr>
-            <th style="width: 20%;">{{ 'Chloride'|t }}</th>
+            <th style="width: 20%;">{{ 'Chloride'|t_lang(lang) }}</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.sys_cl_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -196,7 +196,7 @@
         {# Calcium Hardness (conditional) #}
         {% if sentinel_sample_result.sys_calcium_result %}
           <tr>
-            <th style="width: 20%;">{{ 'Calcium Hardness'|t }}</th>
+            <th style="width: 20%;">{{ 'Calcium Hardness'|t_lang(lang) }}</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.sys_calcium_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -207,7 +207,7 @@
         {# Iron #}
         {% if sentinel_sample_result.iron_result %}
           <tr>
-            <th style="width: 20%;">{{ 'Iron'|t }} ({{ 'Soluble'|t }})</th>
+            <th style="width: 20%;">{{ 'Iron'|t_lang(lang) }} ({{ 'Soluble'|t_lang(lang) }})</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.iron_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -218,7 +218,7 @@
         {# Copper #}
         {% if sentinel_sample_result.copper_result %}
           <tr>
-            <th style="width: 20%;">{{ 'Copper'|t }} ({{ 'Soluble'|t }})</th>
+            <th style="width: 20%;">{{ 'Copper'|t_lang(lang) }} ({{ 'Soluble'|t_lang(lang) }})</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.copper_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -229,7 +229,7 @@
         {# Aluminium (conditional) #}
         {% if sentinel_sample_result.aluminium_result %}
           <tr>
-            <th style="width: 20%;">{{ 'Aluminium'|t }} ({{ 'Soluble'|t }})</th>
+            <th style="width: 20%;">{{ 'Aluminium'|t_lang(lang) }} ({{ 'Soluble'|t_lang(lang) }})</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.aluminium_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -240,7 +240,7 @@
         {# Inhibitor #}
         {% if sentinel_sample_result.sentinel_x100_result %}
           <tr>
-            <th style="width: 20%;">{{ 'Inhibitor Concentration'|t }}</th>
+            <th style="width: 20%;">{{ 'Inhibitor Concentration'|t_lang(lang) }}</th>
             <td style="width: 10%; vertical-align: top;" align="center">
               {{ helper.get_result_icon(sentinel_sample_result.sentinel_x100_result, result_pass, result_fail, result_pending) }}
             </td>
@@ -252,73 +252,73 @@
 
       {# Disclaimer #}
       <div class="disclaimer">
-        <small>{{ 'Note: Interpretation of results is based on the system being treated with Sentinel X100'|t }}</small>
+        <small>{{ 'Note: Interpretation of results is based on the system being treated with Sentinel X100'|t_lang(lang) }}</small>
       </div>
 
       {# Detailed Results Table #}
       <table class="table-centered">
         <thead>
           <tr>
-            <th>{{ 'Test'|t }}</th>
-            <th>{{ 'Mains Water Results'|t }}</th>
-            <th>{{ 'System Water Results'|t }}</th>
-            <th>{{ 'Recommended Results'|t }}</th>
+            <th>{{ 'Test'|t_lang(lang) }}</th>
+            <th>{{ 'Mains Water Results'|t_lang(lang) }}</th>
+            <th>{{ 'System Water Results'|t_lang(lang) }}</th>
+            <th>{{ 'Recommended Results'|t_lang(lang) }}</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>{{ 'Appearance'|t }}</td>
+            <td>{{ 'Appearance'|t_lang(lang) }}</td>
               <td class="is-empty"></td>
               {% set appearance_label = helper.result_label(sentinel_sample_result.appearance_result)|trim %}
               <td>
                 {% if appearance_label %}
                   {% if appearance_label|lower == 'fail' %}
-                    {{ 'Water is very turbid'|t }}
+                    {{ 'Water is very turbid'|t_lang(lang) }}
                   {% else %}
                     {{ appearance_label }}
                   {% endif %}
                 {% endif %}
               </td>
-            <td class="is-highlighted">{{ 'Clear or slighlty turbid'|t }}</td>
+            <td class="is-highlighted">{{ 'Clear or slighlty turbid'|t_lang(lang) }}</td>
           </tr>
           <tr>
-            <td>{{ 'pH'|t }}</td>
+            <td>{{ 'pH'|t_lang(lang) }}</td>
             <td class="is-empty"></td>
             <td>{{ formatted_results.ph_result|default('') }}</td>
-            <td class="is-highlighted">{{ '6.5 - 8.5'|t }}</td>
+            <td class="is-highlighted">{{ '6.5 - 8.5'|t_lang(lang) }}</td>
           </tr>
           <tr>
-            <td>{{ 'Conductivity'|t }} &#x3BC;S/cm</td>
+            <td>{{ 'Conductivity'|t_lang(lang) }} &#x3BC;S/cm</td>
               <td>{{ formatted_results.mains_cond_result|default('') }}</td>
               {% set cond_label = helper.result_label(sentinel_sample_result.sys_cond_result)|trim %}
               <td>
                 {% if cond_label %}
                   {% if cond_label|lower == 'fail' %}
-                    {{ 'Excess detected'|t }}
+                    {{ 'Excess detected'|t_lang(lang) }}
                   {% else %}
                     {{ cond_label }}
                   {% endif %}
                 {% endif %}
               </td>
-            <td class="is-highlighted">{{ 'No excess'|t }}</td>
+            <td class="is-highlighted">{{ 'No excess'|t_lang(lang) }}</td>
           </tr>
 
           {# Chloride (conditional) #}
           {% if formatted_results.mains_cl_result is defined %}
             <tr>
-              <td>{{ 'Chloride ppm'|t }}</td>
+              <td>{{ 'Chloride ppm'|t_lang(lang) }}</td>
               <td>{{ formatted_results.mains_cl_result }}</td>
               {% set cl_label = helper.result_label(sentinel_sample_result.sys_cl_result)|trim %}
               <td>
                 {% if cl_label %}
                   {% if cl_label|lower == 'fail' %}
-                    {{ 'Excess detected'|t }}
+                    {{ 'Excess detected'|t_lang(lang) }}
                   {% else %}
                     {{ cl_label }}
                   {% endif %}
                 {% endif %}
               </td>
-              <td class="is-highlighted">{{ 'No excess'|t }}</td>
+              <td class="is-highlighted">{{ 'No excess'|t_lang(lang) }}</td>
             </tr>
           {% endif %}
 
@@ -327,41 +327,41 @@
             {% set calcium_signs = {'gb': 'ppm', 'it': 'ppm', 'de': 'ºdH', 'fr': 'ºTH'} %}
             {% set calcium_sign = calcium_signs[lang]|default('ppm') %}
             <tr>
-              <td>{{ 'Calcium Hardness (as CaCO'|t }}<span class="sub">3</span>) {{ calcium_sign }}</td>
+              <td>{{ 'Calcium Hardness (as CaCO'|t_lang(lang) }}<span class="sub">3</span>) {{ calcium_sign }}</td>
               <td>{{ calcium_values.mains|default('') }}</td>
               <td>{{ calcium_values.system|default('') }}</td>
-              <td class="is-highlighted">{{ 'Min 75% of mains unless treated with sufficient inhibitor'|t }}</td>
+              <td class="is-highlighted">{{ 'Min 75% of mains unless treated with sufficient inhibitor'|t_lang(lang) }}</td>
             </tr>
           {% endif %}
 
           <tr>
-            <td>{{ 'Iron (soluble) ppm'|t }}</td>
+            <td>{{ 'Iron (soluble) ppm'|t_lang(lang) }}</td>
             <td class="is-empty"></td>
             <td>{{ formatted_results.iron_result|default('') }}</td>
-            <td class="is-highlighted">{{ '125 maximum if treated with sufficient inhibitor'|t }}</td>
+            <td class="is-highlighted">{{ '125 maximum if treated with sufficient inhibitor'|t_lang(lang) }}</td>
           </tr>
           <tr>
-            <td>{{ 'Copper (soluble) ppm'|t }}</td>
+            <td>{{ 'Copper (soluble) ppm'|t_lang(lang) }}</td>
             <td class="is-empty"></td>
             <td>{{ formatted_results.copper_result|default('') }}</td>
-            <td class="is-highlighted">{{ '1 maximum if treated with sufficient inhibitor'|t }}</td>
+            <td class="is-highlighted">{{ '1 maximum if treated with sufficient inhibitor'|t_lang(lang) }}</td>
           </tr>
 
           {# Aluminium (conditional) #}
           {% if sentinel_sample_result.aluminium_result %}
             <tr>
-              <td>{{ 'Aluminium (soluble) ppm'|t }}</td>
+              <td>{{ 'Aluminium (soluble) ppm'|t_lang(lang) }}</td>
               <td class="is-empty"></td>
               <td>{{ formatted_results.aluminium_result|default('') }}</td>
-              <td class="is-highlighted">{{ '1 maximum if treated with sufficient inhibitor'|t }}</td>
+              <td class="is-highlighted">{{ '1 maximum if treated with sufficient inhibitor'|t_lang(lang) }}</td>
             </tr>
           {% endif %}
 
           <tr>
-            <td>{{ 'Inhibitor %'|t }}</td>
+            <td>{{ 'Inhibitor %'|t_lang(lang) }}</td>
             <td class="is-empty"></td>
             <td>{{ formatted_results.sentinel_x100_result|default('') }}</td>
-            <td class="is-highlighted">{{ 'Min. 1.00%'|t }}</td>
+            <td class="is-highlighted">{{ 'Min. 1.00%'|t_lang(lang) }}</td>
           </tr>
         </tbody>
       </table>
@@ -373,10 +373,10 @@
         <tbody>
           <tr>
             <td>
-              {{ 'Sentinel Performance Solutions Ltd, 7650 Daresbury Park, Warrington, WA4 4BS'|t }}
+              {{ 'Sentinel Performance Solutions Ltd, 7650 Daresbury Park, Warrington, WA4 4BS'|t_lang(lang) }}
               <br />
-              T: <a href="tel:{{ '+44 (0) 1928 704330'|t }}">{{ '+44 (0) 1928 704330'|t }}</a>
-              F: <a href="fax:{{ '+44 (0) 1928 562070'|t }}">{{ '+44 (0) 1928 562070'|t }}</a>
+              T: <a href="tel:{{ '+44 (0) 1928 704330'|t_lang(lang) }}">{{ '+44 (0) 1928 704330'|t_lang(lang) }}</a>
+              F: <a href="fax:{{ '+44 (0) 1928 562070'|t_lang(lang) }}">{{ '+44 (0) 1928 562070'|t_lang(lang) }}</a>
               W: <a href="http://www.sentinelprotects.com/uk">sentinelprotects.com</a>
             </td>
             {% if lang == 'gb' or lang == 'it' %}
@@ -384,23 +384,23 @@
                 <table class="table-layout">
                   <tr>
                     <td>
-                      <a class="social-links__link" href="https://twitter.com/{{ 'SentinelHQ'|t }}">
+                      <a class="social-links__link" href="https://twitter.com/{{ 'SentinelHQ'|t_lang(lang) }}">
                         <img src="{{ img_path }}/twitter.png" />
                       </a>
                     </td>
                     <td>
-                      <a class="social-links__link" href="https://twitter.com/{{ 'SentinelHQ'|t }}">
-                        @{{ 'SentinelHQ'|t }}
+                      <a class="social-links__link" href="https://twitter.com/{{ 'SentinelHQ'|t_lang(lang) }}">
+                        @{{ 'SentinelHQ'|t_lang(lang) }}
                       </a>
                     </td>
                     <td>
-                      <a class="social-links__link" href="https://www.facebook.com/{{ 'SentinelCPM'|t }}">
+                      <a class="social-links__link" href="https://www.facebook.com/{{ 'SentinelCPM'|t_lang(lang) }}">
                         <img src="{{ img_path }}/facebook.png" />
                       </a>
                     </td>
                     <td>
-                      <a class="social-links__link" href="https://www.facebook.com/{{ 'SentinelCPM'|t }}">
-                        {{ 'SentinelCPM'|t }}
+                      <a class="social-links__link" href="https://www.facebook.com/{{ 'SentinelCPM'|t_lang(lang) }}">
+                        {{ 'SentinelCPM'|t_lang(lang) }}
                       </a>
                     </td>
                   </tr>
@@ -413,14 +413,14 @@
           </tr>
         </tbody>
       </table>
-      <p>{{ 'ppm(parts per million) = mg/l'|t }}</p>
+      <p>{{ 'ppm(parts per million) = mg/l'|t_lang(lang) }}</p>
       <p>
         {% if lang == 'gb' %}
           <small>
-            {{ 'Sentinel Performance Solutions Limited Registered in England and Wales'|t }}.
-            {{ 'Company No'|t }}. 5433529.
-            {{ 'VAT registration No'|t }}. GB1001 905 80.
-            {{ 'Registered as above'|t }}
+            {{ 'Sentinel Performance Solutions Limited Registered in England and Wales'|t_lang(lang) }}.
+            {{ 'Company No'|t_lang(lang) }}. 5433529.
+            {{ 'VAT registration No'|t_lang(lang) }}. GB1001 905 80.
+            {{ 'Registered as above'|t_lang(lang) }}
           </small>
         {% endif %}
       </p>
