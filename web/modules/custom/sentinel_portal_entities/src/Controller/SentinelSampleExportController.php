@@ -4,6 +4,7 @@ namespace Drupal\sentinel_portal_entities\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Database\Connection;
+use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -132,7 +133,10 @@ class SentinelSampleExportController extends ControllerBase {
     }
     
     if (!empty($filters['pack_type'])) {
-      $query->condition('ss.pack_reference_number', $this->database->escapeLike($filters['pack_type']) . '%', 'LIKE');
+      PackTypeFilter::applyFilterConditions($query, $this->database, $filters['pack_type']);
+    }
+    if (!empty($filters['pack_type'])) {
+      PackTypeFilter::applyFilterConditions($query, $this->database, $filters['pack_type']);
     }
     
     if (isset($filters['reported']) && $filters['reported'] !== '') {

@@ -10,6 +10,7 @@ use Drupal\Core\Link;
 use Drupal\Core\Messenger\MessengerTrait;
 use Drupal\Core\Render\Markup;
 use Drupal\Core\Url;
+use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 
 /**
  * Defines a class to build a listing of Sentinel Sample entities.
@@ -70,14 +71,15 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       '#default_value' => $filters['pass_fail'] ?? '',
     ];
 
+    $pack_type_options = ['' => $this->t('- Any -')];
+    foreach (PackTypeFilter::getDefinitions() as $key => $definition) {
+      $pack_type_options[$key] = $this->t($definition['label']);
+    }
+
     $form['filters']['pack_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Pack Type'),
-      '#options' => [
-        '' => $this->t('-Any-'),
-        'Domestic' => $this->t('Domestic'),
-        'Commercial' => $this->t('Commercial'),
-      ],
+      '#options' => $pack_type_options,
       '#default_value' => $filters['pack_type'] ?? '',
     ];
 
@@ -448,9 +450,9 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       $query->condition('ss.pass_fail', $filters['pass_fail'], '=');
     }
     
-    // Pack Type - if pack_type is set, filter by pack_reference_number pattern
+    // Pack Type - apply combined pack type / prefix filters.
     if (!empty($filters['pack_type'])) {
-      $query->condition('ss.pack_reference_number', $connection->escapeLike($filters['pack_type']) . '%', 'LIKE');
+      PackTypeFilter::applyFilterConditions($query, $connection, $filters['pack_type']);
     }
     
     // Reported - check if date_reported is not null
