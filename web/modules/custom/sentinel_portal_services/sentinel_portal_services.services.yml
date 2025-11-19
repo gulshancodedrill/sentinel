@@ -1,0 +1,15 @@
+services:
+  sentinel_portal_services.heartbeat_route_subscriber:
+    class: Drupal\sentinel_portal_services\EventSubscriber\HeartbeatRouteSubscriber
+    tags:
+      - { name: event_subscriber }
+  sentinel_portal_services.heartbeat_request_subscriber:
+    class: Drupal\sentinel_portal_services\EventSubscriber\HeartbeatRequestSubscriber
+    tags:
+      - { name: event_subscriber }
+  sentinel_portal_services.heartbeat_response_subscriber:
+    class: Drupal\sentinel_portal_services\EventSubscriber\HeartbeatResponseSubscriber
+    arguments: ['@current_route_match']
+    tags:
+      - { name: event_subscriber }
+

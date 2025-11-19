@@ -60,22 +60,24 @@ class SampleServiceResource extends ResourceBase {
       throw new BadRequestHttpException('pack_reference_number is not valid');
     }
 
-    // Validate UCR if provided
-    if (!empty($ucr)) {
-      $entity_type_manager = \Drupal::entityTypeManager();
-      $storage = $entity_type_manager->getStorage('sentinel_client');
-      $client = $storage->create([]);
+    // Validate UCR (required)
+    if (empty($ucr)) {
+      throw new BadRequestHttpException('ucr is missing');
+    }
 
-      if (method_exists($client, 'validateUcr')) {
-        $ucr_int = (int) $ucr;
-        if (!$client->validateUcr($ucr_int)) {
-          $generated_ucr = $client->generateUcr($ucr_int);
-          if ($client->validateUcr($generated_ucr)) {
-            $ucr = $generated_ucr;
-          }
-          else {
-            throw new BadRequestHttpException('UCR is not valid');
-          }
+    $entity_type_manager = \Drupal::entityTypeManager();
+    $storage = $entity_type_manager->getStorage('sentinel_client');
+    $client = $storage->create([]);
+
+    if (method_exists($client, 'validateUcr')) {
+      $ucr_int = (int) $ucr;
+      if (!$client->validateUcr($ucr_int)) {
+        $generated_ucr = $client->generateUcr($ucr_int);
+        if ($client->validateUcr($generated_ucr)) {
+          $ucr = $generated_ucr;
+        }
+        else {
+          throw new BadRequestHttpException('UCR is not valid');
         }
       }
     }

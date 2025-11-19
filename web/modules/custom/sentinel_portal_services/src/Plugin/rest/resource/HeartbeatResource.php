@@ -20,6 +20,20 @@ use Symfony\Component\HttpFoundation\Response;
 class HeartbeatResource extends ResourceBase {
 
   /**
+   * {@inheritdoc}
+   */
+  public function routes() {
+    $collection = parent::routes();
+    
+    // Set default format to 'json' so endpoint works without _format parameter
+    foreach ($collection->all() as $route) {
+      $route->setDefault('_format', 'json');
+    }
+    
+    return $collection;
+  }
+
+  /**
    * Responds to GET requests.
    *
    * Returns the current server time to verify API is alive.

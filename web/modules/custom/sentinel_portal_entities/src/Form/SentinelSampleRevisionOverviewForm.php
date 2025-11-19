@@ -101,16 +101,28 @@ class SentinelSampleRevisionOverviewForm extends FormBase {
 
     $storage = $this->entityTypeManager->getStorage('sentinel_sample');
     
-    // Get all revisions with pagination.
-    $query = $storage->getQuery()
-      ->condition('pid', $sentinel_sample->id())
-      ->allRevisions()
-      ->sort('vid', 'DESC')
-      ->pager(50)
-      ->accessCheck(FALSE)
-      ->execute();
+    // Get all revisions with pagination, sorted by updated field.
+    // Use raw SQL query to properly handle NULL values and ensure correct sorting.
+    // For MySQL, we use ISNULL() to push NULL values to the end.
+    $database = \Drupal::database();
+    $query = $database->select('sentinel_sample_revision', 'r')
+      ->fields('r', ['vid'])
+      ->condition('r.pid', $sentinel_sample->id());
     
-    $vids = array_keys($query);
+    // Add expression for NULL handling
+    $query->addExpression('ISNULL(r.updated)', 'is_null_updated');
+    
+    // Order by NULL status first, then updated date, then vid
+    $query->orderBy('is_null_updated', 'ASC'); // NULL values last (ISNULL returns 1 for NULL, 0 for not NULL, ASC puts 0 first, 1 last)
+    $query->orderBy('r.updated', 'DESC'); // Then sort by updated DESC (most recent first)
+    $query->orderBy('r.vid', 'DESC'); // Secondary sort by vid for consistent ordering
+    
+    // Add pager
+    $query = $query->extend('Drupal\Core\Database\Query\PagerSelectExtender')
+      ->limit(50);
+    
+    // Execute query and get vids
+    $vids = $query->execute()->fetchCol();
     $revision_count = count($vids);
 
     // Build title - use pack_reference_number if available.
@@ -195,14 +207,59 @@ class SentinelSampleRevisionOverviewForm extends FormBase {
         continue;
       }
 
-      // Get revision date from 'changed' field - format as YYYY-MM-DD HH:MM:SS like Drupal 7.
+      // Get revision date from 'updated' field - format as YYYY-MM-DD HH:MM:SS like Drupal 7.
+      // Always use 'updated' field for display to match the sorting.
+      // Get directly from database to ensure we get the actual value used for sorting.
+      $database = \Drupal::database();
+      $date_query = $database->select('sentinel_sample_revision', 'r')
+        ->fields('r', ['updated'])
+        ->condition('r.vid', $vid)
+        ->condition('r.pid', $sentinel_sample->id())
+        ->execute();
+      $db_updated = $date_query->fetchField();
+      
       $revision_date = '';
-      if ($revision->hasField('changed') && !$revision->get('changed')->isEmpty()) {
+      if ($db_updated && $db_updated !== '0000-00-00 00:00:00' && $db_updated !== NULL) {
+        try {
+          $timestamp = strtotime($db_updated);
+          if ($timestamp && $timestamp > 0) {
+            $revision_date = date('Y-m-d H:i:s', $timestamp);
+          }
+          else {
+            $revision_date = $db_updated;
+          }
+        }
+        catch (\Exception $e) {
+          $revision_date = $db_updated;
+        }
+      }
+      
+      // Fallback to entity field if database query didn't return a value
+      if (empty($revision_date) && $revision->hasField('updated') && !$revision->get('updated')->isEmpty()) {
+        $updated_value = $revision->get('updated')->value;
+        if ($updated_value && $updated_value !== '0000-00-00 00:00:00') {
+          try {
+            $timestamp = strtotime($updated_value);
+            if ($timestamp && $timestamp > 0) {
+              $revision_date = date('Y-m-d H:i:s', $timestamp);
+            }
+            else {
+              $revision_date = $updated_value;
+            }
+          }
+          catch (\Exception $e) {
+            $revision_date = $updated_value;
+          }
+        }
+      }
+      
+      // Only fallback to 'changed' field if updated is truly empty (not just old date).
+      if (empty($revision_date) && $revision->hasField('changed') && !$revision->get('changed')->isEmpty()) {
         $changed_value = $revision->get('changed')->value;
-        if ($changed_value) {
+        if ($changed_value && $changed_value !== '0000-00-00 00:00:00') {
           try {
             $timestamp = strtotime($changed_value);
-            if ($timestamp) {
+            if ($timestamp && $timestamp > 0) {
               $revision_date = date('Y-m-d H:i:s', $timestamp);
             }
             else {
@@ -215,13 +272,13 @@ class SentinelSampleRevisionOverviewForm extends FormBase {
         }
       }
       
-      // If no date, use created field.
+      // Final fallback to 'created' field only if both updated and changed are empty.
       if (empty($revision_date) && $revision->hasField('created') && !$revision->get('created')->isEmpty()) {
         $created_value = $revision->get('created')->value;
-        if ($created_value) {
+        if ($created_value && $created_value !== '0000-00-00 00:00:00') {
           try {
             $timestamp = strtotime($created_value);
-            if ($timestamp) {
+            if ($timestamp && $timestamp > 0) {
               $revision_date = date('Y-m-d H:i:s', $timestamp);
             }
             else {
