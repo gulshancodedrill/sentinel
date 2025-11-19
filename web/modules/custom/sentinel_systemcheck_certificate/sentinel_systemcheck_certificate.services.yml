@@ -1,0 +1,6 @@
+services:
+  sentinel_systemcheck_certificate.twig_extension:
+    class: Drupal\sentinel_systemcheck_certificate\TwigExtension\CertificateTwigExtension
+    tags:
+      - { name: twig.extension }
+

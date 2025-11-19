@@ -6,6 +6,7 @@ use DateTime;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Url;
 use Drupal\Core\Link;
+use Drupal\Core\Language\LanguageInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -67,6 +68,24 @@ class CertificateController extends ControllerBase {
     $vars['pdf'] = FALSE;
     $vars['show_download'] = true;
 
+    // Map language codes: gb -> en, de -> de, fr -> fr, it -> it
+    $lang_map = [
+      'gb' => 'en',
+      'de' => 'de',
+      'fr' => 'fr',
+      'it' => 'it',
+    ];
+    $lang_code = $vars['lang'] ?? 'gb';
+    $drupal_lang_code = $lang_map[$lang_code] ?? 'en';
+
+    // Set the language context for translations
+    $language_manager = \Drupal::languageManager();
+    $language = $language_manager->getLanguage($drupal_lang_code);
+    if ($language) {
+      $language_manager->setConfigOverrideLanguage($language);
+      $language_manager->getCurrentLanguage(LanguageInterface::TYPE_CONTENT);
+    }
+
     // Render the template directly to avoid render array constraints on objects.
     $twig = \Drupal::service('twig');
     $module_path = \Drupal::service('extension.list.module')->getPath('sentinel_systemcheck_certificate');
@@ -80,6 +99,9 @@ class CertificateController extends ControllerBase {
     return [
       '#type' => 'markup',
       '#markup' => $html,
+      '#cache' => [
+        'contexts' => ['languages:language_content'],
+      ],
     ];
   }
 

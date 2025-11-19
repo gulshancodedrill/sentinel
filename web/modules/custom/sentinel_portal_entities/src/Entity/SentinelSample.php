@@ -1704,48 +1704,51 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
    *   The country code (gb, de, fr, it).
    */
   public function getSampleCountry() {
-    return self::packGetCountryType($this->pack_reference_number->value);
+    $pack_ref = '';
+    if ($this->hasField('pack_reference_number') && !$this->get('pack_reference_number')->isEmpty()) {
+      $pack_ref = $this->get('pack_reference_number')->value;
+    }
+    return self::packGetCountryType($pack_ref);
   }
 
   /**
    * Get country type from pack reference number.
    *
+   * Based on pack reference number prefix:
+   * - 110 → German (de)
+   * - 120 → Italian (it)
+   * - 130 → French (fr)
+   * - else → English (gb)
+   *
    * @param string $pack_reference_number
    *   The pack reference number.
    *
    * @return string
-   *   The country code.
+   *   The country code (gb, de, fr, it).
    */
   public static function packGetCountryType($pack_reference_number = NULL) {
     if (empty($pack_reference_number)) {
       return 'gb';
     }
 
-    switch (substr($pack_reference_number, 0, 3)) {
-      case '120':
-        // Italian.
-        return 'it';
+    // Get first 3 characters of pack reference number
+    $prefix = substr($pack_reference_number, 0, 3);
 
-      case '210':
-        // Deliberate fall through.
+    switch ($prefix) {
       case '110':
         // German.
         return 'de';
+
+      case '120':
+        // Italian.
+        return 'it';
 
       case '130':
         // French.
         return 'fr';
 
-      case '001':
-        // United Kingdom of Great Britain and Northern Ireland.
-        // Deliberate fall through.
-      case '005':
-        // Deliberate fall through.
-      case '006':
-        // Deliberate fall through.
-      case '102':
-        // Deliberate fall through.
       default:
+        // Default to English (gb).
         return 'gb';
     }
   }
