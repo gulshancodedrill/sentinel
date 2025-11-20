@@ -40,6 +40,9 @@ function sentinel_systemcheck_vaillant_api_send($sample_entity) {
   $data = sentinel_systemcheck_vaillant_api_format_data($sample_entity);
   $data = array_merge($sample_data, $data);
   
+  // API expects data as an array of objects, not a single object
+  $payload = [$data];
+  
   try {
     $client = \Drupal::httpClient();
     $response = $client->post($endpoint, [
@@ -49,7 +52,7 @@ function sentinel_systemcheck_vaillant_api_send($sample_entity) {
         'Expires' => '0',
         'Content-Type' => 'application/json',
       ],
-      'json' => $data,
+      'json' => $payload,
       'timeout' => 15,
     ]);
 
@@ -96,8 +99,12 @@ function sentinel_systemcheck_vaillant_api_send($sample_entity) {
 function sentinel_systemcheck_vaillant_api_format_data($sample_entity) {
   $data = [];
 
-  $data['project_id'] = $sample_entity->get('project_id')->value ?? '';
-  $data['customer_id'] = $sample_entity->get('customer_id')->value ?? '';
+  // Ensure project_id and customer_id are integers, not strings
+  $project_id = $sample_entity->get('project_id')->value ?? '';
+  $data['project_id'] = !empty($project_id) ? (int) $project_id : 0;
+  
+  $customer_id = $sample_entity->get('customer_id')->value ?? '';
+  $data['customer_id'] = !empty($customer_id) ? (int) $customer_id : 0;
   $data['lab_reference'] = $sample_entity->get('pack_reference_number')->value ?? '';
   $data['notes'] = sentinel_systemcheck_vaillant_api_get_optional_value($sample_entity, 'notes');
   $data['boiler_serial_id'] = $sample_entity->get('boiler_id')->value ?? '';

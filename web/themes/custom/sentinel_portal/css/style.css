@@ -854,6 +854,7 @@ table.sticky-header thead {
 .pdf-report .pdf-report__logo-caption {
   display: inline-block;
   vertical-align: middle;
+  max-width: 120px;
 }
 
 .pdf-report .pdf-report__logo-caption {
