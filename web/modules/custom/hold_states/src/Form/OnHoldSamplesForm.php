@@ -45,9 +45,9 @@ class OnHoldSamplesForm extends FormBase {
 
     // Filters section
     $form['filters'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Filters'),
-      '#open' => TRUE,
+      '#attributes' => ['class' => ['form-item']],
     ];
 
     // Hold state filter
@@ -85,9 +85,9 @@ class OnHoldSamplesForm extends FormBase {
     // Bulk operations
     if (!empty($samples)) {
       $form['operations'] = [
-        '#type' => 'details',
+        '#type' => 'fieldset',
         '#title' => $this->t('Operations'),
-        '#open' => TRUE,
+        '#attributes' => ['class' => ['form-item']],
       ];
 
       $form['operations']['action'] = [

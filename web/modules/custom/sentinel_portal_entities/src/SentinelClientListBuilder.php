@@ -74,7 +74,7 @@ class SentinelClientListBuilder extends EntityListBuilder implements FormInterfa
 
     $header = $this->buildHeader();
     $query->tableSort($header);
-    $query->pager(50);
+    $query->pager(10);
 
     $ids = $query->execute();
     $entities = $storage->loadMultiple($ids);
