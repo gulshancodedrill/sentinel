@@ -1873,22 +1873,43 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
    * Determine if the sample overall result is PASS.
    */
   public function isPass(): bool {
+    if (!$this->hasField('pass_fail')) {
+      return FALSE;
+    }
+    $field = $this->get('pass_fail');
+    if ($field->isEmpty()) {
+      return FALSE;
+    }
     $value = $this->getFieldStringValue('pass_fail');
-    return $value !== NULL && (int) $value === 1;
+    return $value !== NULL && $value !== '' && (int) $value === 1;
   }
 
   /**
    * Determine if the sample overall result is FAIL.
    */
   public function isFail(): bool {
+    if (!$this->hasField('pass_fail')) {
+      return FALSE;
+    }
+    $field = $this->get('pass_fail');
+    if ($field->isEmpty()) {
+      return FALSE;
+    }
     $value = $this->getFieldStringValue('pass_fail');
-    return $value !== NULL && (int) $value === 0;
+    return $value !== NULL && $value !== '' && (int) $value === 0;
   }
 
   /**
    * Determine if the sample is still pending results.
    */
   public function isPending(): bool {
+    if (!$this->hasField('pass_fail')) {
+      return TRUE;
+    }
+    $field = $this->get('pass_fail');
+    if ($field->isEmpty()) {
+      return TRUE;
+    }
     $value = $this->getFieldStringValue('pass_fail');
     return $value === NULL || $value === '';
   }

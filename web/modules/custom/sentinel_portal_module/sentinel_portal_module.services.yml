@@ -7,3 +7,8 @@ services:
     tags:
       - { name: event_subscriber }
 
+  sentinel_portal_module.custom_error_page_subscriber:
+    class: Drupal\sentinel_portal_module\EventSubscriber\CustomErrorPageSubscriber
+    tags:
+      - { name: event_subscriber }
+
