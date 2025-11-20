@@ -187,6 +187,9 @@ class OnHoldSamplesForm extends FormBase {
       $query->addField($hold_state_alias, 'name', 'hold_state_name');
     }
 
+    // Sort by latest timestamp (changed field) descending
+    $query->orderBy('ss.changed', 'DESC');
+
     $pager = $query->extend(PagerSelectExtender::class)->limit(10);
     return $pager->execute()->fetchAll();
   }
