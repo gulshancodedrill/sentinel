@@ -2059,6 +2059,27 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
           ])
           ->condition('pid', $this->id())
           ->execute();
+
+        // Mirror the update on the latest revision record so that
+        // revision-based loads also reference the new file.
+        $latest_vid = $connection->select('sentinel_sample_revision', 'ssr')
+          ->fields('ssr', ['vid'])
+          ->condition('pid', $this->id())
+          ->orderBy('vid', 'DESC')
+          ->range(0, 1)
+          ->execute()
+          ->fetchField();
+
+        if ($latest_vid) {
+          $connection->update('sentinel_sample_revision')
+            ->fields([
+              'fileid' => (string) $file->id(),
+              'filename' => $file->getFilename(),
+            ])
+            ->condition('pid', $this->id())
+            ->condition('vid', $latest_vid)
+            ->execute();
+        }
         
         // Update the in-memory entity values to match database
         $this->set('fileid', (string) $file->id());
