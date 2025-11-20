@@ -45,9 +45,9 @@ class OnHoldSamplesForm extends FormBase {
 
     // Filters section
     $form['filters'] = [
-      '#type' => 'details',
+      '#type' => 'fieldset',
       '#title' => $this->t('Filters'),
-      '#open' => TRUE,
+      '#attributes' => ['class' => ['form-item']],
     ];
 
     // Hold state filter
@@ -85,9 +85,9 @@ class OnHoldSamplesForm extends FormBase {
     // Bulk operations
     if (!empty($samples)) {
       $form['operations'] = [
-        '#type' => 'details',
+        '#type' => 'fieldset',
         '#title' => $this->t('Operations'),
-        '#open' => TRUE,
+        '#attributes' => ['class' => ['form-item']],
       ];
 
       $form['operations']['action'] = [
@@ -186,6 +186,9 @@ class OnHoldSamplesForm extends FormBase {
     if ($hold_state_alias) {
       $query->addField($hold_state_alias, 'name', 'hold_state_name');
     }
+
+    // Sort by latest timestamp (changed field) descending
+    $query->orderBy('ss.changed', 'DESC');
 
     $pager = $query->extend(PagerSelectExtender::class)->limit(10);
     return $pager->execute()->fetchAll();

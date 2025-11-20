@@ -983,7 +983,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $connection = \Drupal::database();
     $query = $connection->select('sentinel_sample', 'ss')
       ->fields('ss', ['pid'])
-      ->orderBy('ss.pid', 'ASC');
+      ->orderBy('ss.changed', 'DESC');
 
     // Search Pack ID - filter on pack_reference_number
     if (!empty($filters['pack_reference_number'])) {
@@ -1077,6 +1077,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     }
 
     // Add pager with current query parameters preserved
+    // PagerSelectExtender automatically initializes the pager and handles out-of-range pages
     $query = $query->extend('Drupal\Core\Database\Query\PagerSelectExtender')->limit(25);
     
     // Preserve query parameters in pager links

@@ -77,6 +77,57 @@ class SentinelSampleStorage extends SqlContentEntityStorage {
   /**
    * {@inheritdoc}
    */
+  protected function buildQuery($ids, $revision_ids = FALSE) {
+    $query = $this->database->select($this->baseTable, 'base');
+
+    $query->addTag($this->entityTypeId . '_load_multiple');
+
+    if ($revision_ids) {
+      $query->join($this->revisionTable, 'revision', "[revision].[{$this->idKey}] = [base].[{$this->idKey}] AND [revision].[{$this->revisionKey}] IN (:revisionIds[])", [':revisionIds[]' => $revision_ids]);
+    }
+    elseif ($this->revisionTable) {
+      // Use LEFT JOIN instead of INNER JOIN to include entities without revisions
+      $query->leftJoin($this->revisionTable, 'revision', "[revision].[{$this->revisionKey}] = [base].[{$this->revisionKey}]");
+    }
+
+    // Add fields from the {entity} table.
+    $table_mapping = $this->getTableMapping();
+    $entity_fields = $table_mapping->getAllColumns($this->baseTable);
+
+    if ($this->revisionTable) {
+      // Add all fields from the {entity_revision} table.
+      $entity_revision_fields = $table_mapping->getAllColumns($this->revisionTable);
+      $entity_revision_fields = array_combine($entity_revision_fields, $entity_revision_fields);
+      // The ID field is provided by entity, so remove it.
+      unset($entity_revision_fields[$this->idKey]);
+
+      // Remove all fields from the base table that are also fields by the same
+      // name in the revision table.
+      $entity_field_keys = array_flip($entity_fields);
+      foreach ($entity_revision_fields as $name) {
+        if (isset($entity_field_keys[$name])) {
+          unset($entity_fields[$entity_field_keys[$name]]);
+        }
+      }
+      $query->fields('revision', $entity_revision_fields);
+
+      // Compare revision ID of the base and revision table, if equal then this
+      // is the default revision. Handle NULL case for entities without revisions.
+      $query->addExpression('CASE WHEN [revision].[' . $this->revisionKey . '] IS NULL THEN 0 WHEN [base].[' . $this->revisionKey . '] = [revision].[' . $this->revisionKey . '] THEN 1 ELSE 0 END', 'isDefaultRevision');
+    }
+
+    $query->fields('base', $entity_fields);
+
+    if ($ids) {
+      $query->condition("base.{$this->idKey}", $ids, 'IN');
+    }
+
+    return $query;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   protected function saveRevision(ContentEntityInterface $entity) {
     // Ensure vid is NULL for new revisions so auto-increment generates a new one.
     if ($entity->isNewRevision()) {

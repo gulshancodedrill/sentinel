@@ -61,7 +61,7 @@ class SentinelClientListBuilder extends EntityListBuilder implements FormInterfa
     $storage = $this->getStorage();
     $query = $storage->getQuery()
       ->accessCheck(FALSE)
-      ->sort('cid', 'DESC');
+      ->sort('updated', 'DESC');
 
     // Apply filters.
     $input = $form_state->getUserInput();
@@ -74,7 +74,7 @@ class SentinelClientListBuilder extends EntityListBuilder implements FormInterfa
 
     $header = $this->buildHeader();
     $query->tableSort($header);
-    $query->pager(50);
+    $query->pager(10);
 
     $ids = $query->execute();
     $entities = $storage->loadMultiple($ids);

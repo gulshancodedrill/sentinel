@@ -204,7 +204,7 @@ class SentinelSampleExportController extends ControllerBase {
   protected function getFilteredEntityIds(array $filters) {
     $query = $this->database->select('sentinel_sample', 'ss')
       ->fields('ss', ['pid'])
-      ->orderBy('ss.pid', 'ASC');
+      ->orderBy('ss.changed', 'DESC');
 
     // Apply same filters as list builder
     // Search Pack ID - filter on pack_reference_number
