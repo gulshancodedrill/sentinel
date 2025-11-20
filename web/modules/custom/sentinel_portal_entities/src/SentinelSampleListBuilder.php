@@ -990,13 +990,17 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       $query->condition('ss.pack_reference_number', '%' . $connection->escapeLike($filters['pack_reference_number']) . '%', 'LIKE');
     }
     
-    // The Sample Result - handle 'p' for pending (maps to 2)
-    if (isset($filters['pass_fail']) && $filters['pass_fail'] !== '') {
+    // The Sample Result - handle 'p' for pending (NULL only)
+    if (isset($filters['pass_fail']) && $filters['pass_fail'] !== '' && $filters['pass_fail'] !== 'All') {
       $pass_fail_value = $filters['pass_fail'];
       if ($pass_fail_value === 'p') {
-        $pass_fail_value = '2';
+        // Pending means NULL pass_fail (boolean field: 0=fail, 1=pass, NULL=pending)
+        // Use where() with raw SQL to ensure NULL check works correctly
+        $query->where('ss.pass_fail IS NULL');
       }
-      $query->condition('ss.pass_fail', $pass_fail_value, '=');
+      else {
+        $query->condition('ss.pass_fail', $pass_fail_value, '=');
+      }
     }
     
     // Pack Type (pack_reference_number_1) - apply combined pack type / prefix filters.
@@ -1129,41 +1133,44 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     }
 
     // Format pass_fail
-    $pass_fail_value = $entity->hasField('pass_fail') && !$entity->get('pass_fail')->isEmpty() ? $entity->get('pass_fail')->value : NULL;
-    $pass_fail_display = '-';
-    $pass_fail_class = 'sentinel-sample-result--unknown';
-    if ($pass_fail_value !== NULL && $pass_fail_value !== '') {
-      $normalized = strtoupper(trim((string) $pass_fail_value));
-      switch ($normalized) {
-        case '1':
-        case 'PASS':
-        case 'PASSED':
-          $pass_fail_display = 'PASSED';
-          $pass_fail_class = 'sentinel-sample-result--passed';
-          break;
+    $pass_fail_field = $entity->hasField('pass_fail') ? $entity->get('pass_fail') : NULL;
+    $is_empty = $pass_fail_field === NULL || $pass_fail_field->isEmpty();
+    
+    $pass_fail_display = 'PENDING';
+    $pass_fail_class = 'lozenge--pending';
+    
+    if (!$is_empty) {
+      $pass_fail_value = $pass_fail_field->value;
+      if ($pass_fail_value !== NULL && $pass_fail_value !== '') {
+        $normalized = strtoupper(trim((string) $pass_fail_value));
+        switch ($normalized) {
+          case '1':
+          case 'PASS':
+          case 'PASSED':
+            $pass_fail_display = 'PASSED';
+            $pass_fail_class = 'lozenge--passed';
+            break;
 
-        case '0':
-        case 'FAIL':
-        case 'FAILED':
-          $pass_fail_display = 'FAILED';
-          $pass_fail_class = 'sentinel-sample-result--failed';
-          break;
+          case '0':
+          case 'FAIL':
+          case 'FAILED':
+            $pass_fail_display = 'FAILED';
+            $pass_fail_class = 'lozenge--failed';
+            break;
 
-        case 'PENDING':
-        case 'PEND':
-        case '2':
-          $pass_fail_display = 'PENDING';
-          $pass_fail_class = 'sentinel-sample-result--pending';
-          break;
+          case 'PENDING':
+          case 'PEND':
+          case '2':
+            $pass_fail_display = 'PENDING';
+            $pass_fail_class = 'lozenge--pending';
+            break;
 
-        default:
-          $pass_fail_display = strtoupper($pass_fail_value);
-          $pass_fail_class = 'sentinel-sample-result--unknown';
-          break;
+          default:
+            $pass_fail_display = strtoupper($pass_fail_value);
+            $pass_fail_class = 'lozenge--pending';
+            break;
+        }
       }
-    } else {
-      $pass_fail_display = 'PENDING';
-      $pass_fail_class = 'sentinel-sample-result--pending';
     }
 
     // Format dates
@@ -1176,7 +1183,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       'entity.sentinel_sample.canonical',
       ['sentinel_sample' => $entity->id()]
     )->toString();
-    $row['pass_fail'] = Markup::create('<span class="sentinel-sample-result ' . $pass_fail_class . '">' . $pass_fail_display . '</span>');
+    $row['pass_fail'] = Markup::create('<span class="' . $pass_fail_class . '">' . $pass_fail_display . '</span>');
     $pack_type_value = '-';
     $pack_reference = $entity->get('pack_reference_number')->value;
     if (!empty($pack_reference)) {

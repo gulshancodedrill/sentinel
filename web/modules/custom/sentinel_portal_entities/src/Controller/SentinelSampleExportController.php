@@ -212,13 +212,17 @@ class SentinelSampleExportController extends ControllerBase {
       $query->condition('ss.pack_reference_number', '%' . $this->database->escapeLike($filters['pack_reference_number']) . '%', 'LIKE');
     }
     
-    // The Sample Result - handle 'p' for pending (maps to 2)
-    if (isset($filters['pass_fail']) && $filters['pass_fail'] !== '') {
+    // The Sample Result - handle 'p' for pending (NULL only)
+    if (isset($filters['pass_fail']) && $filters['pass_fail'] !== '' && $filters['pass_fail'] !== 'All') {
       $pass_fail_value = $filters['pass_fail'];
       if ($pass_fail_value === 'p') {
-        $pass_fail_value = '2';
+        // Pending means NULL pass_fail (boolean field: 0=fail, 1=pass, NULL=pending)
+        // Use where() with raw SQL to ensure NULL check works correctly
+        $query->where('ss.pass_fail IS NULL');
       }
-      $query->condition('ss.pass_fail', $pass_fail_value, '=');
+      else {
+        $query->condition('ss.pass_fail', $pass_fail_value, '=');
+      }
     }
     
     // Pack Type (pack_reference_number_1) - apply combined pack type / prefix filters.
