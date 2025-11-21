@@ -89,7 +89,7 @@ sentinel_portal.sample_export_csv_download:
     _admin_route: FALSE
 
 sentinel_portal.samples_test:
-  path: '/portal/samples-test'
+  path: '/portal/samples'
   defaults:
     _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleTestListController::buildPage'
     _title: 'Submitted Packs'
