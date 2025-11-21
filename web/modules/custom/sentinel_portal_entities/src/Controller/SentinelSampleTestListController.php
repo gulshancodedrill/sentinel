@@ -242,11 +242,11 @@ class SentinelSampleTestListController extends ControllerBase {
       ],
     ];
 
-    // Apply button - positioned after all filters
+    // Apply and Reset buttons - positioned after all filters
     $form['filters']['submit_wrapper'] = [
       '#type' => 'container',
       '#attributes' => [
-        'style' => 'flex: 0 0 auto; display: flex; align-items: flex-end;',
+        'style' => 'flex: 0 0 auto; display: flex; align-items: flex-end; gap: 10px;',
       ],
     ];
     $form['filters']['submit_wrapper']['submit'] = [
@@ -255,6 +255,17 @@ class SentinelSampleTestListController extends ControllerBase {
       '#attributes' => [
         'class' => ['button', 'button--primary'],
         'style' => 'white-space: nowrap; height: 34px;',
+      ],
+    ];
+    
+    // Reset button - clears all filters
+    $form['filters']['submit_wrapper']['reset'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Reset'),
+      '#url' => Url::fromRoute('sentinel_portal.samples_test'),
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary'],
+        'style' => 'white-space: nowrap; height: 34px; display: inline-block; padding: 6px 12px; text-decoration: none;',
       ],
     ];
 
