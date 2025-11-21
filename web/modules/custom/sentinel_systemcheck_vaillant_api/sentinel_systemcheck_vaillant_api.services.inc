@@ -20,7 +20,7 @@ use GuzzleHttp\Exception\RequestException;
 function sentinel_systemcheck_vaillant_api_send($sample_entity) {
   // Get endpoint - try environment variable first, then config.
   $endpoint = getenv('VAILLANT_API_ENDPOINT') ?: (isset($_ENV['VAILLANT_API_ENDPOINT']) ? $_ENV['VAILLANT_API_ENDPOINT'] : NULL);
-  
+ 
   if (empty($endpoint)) {
     $config = \Drupal::config('sentinel_systemcheck_vaillant_api.settings');
     $endpoint = $config->get('endpoint');
@@ -36,15 +36,45 @@ function sentinel_systemcheck_vaillant_api_send($sample_entity) {
   }
 
   $sample_data = [];
-  $sample_data['api_key'] = sentinel_systemcheck_vaillant_api_get_key();
+  $api_key = sentinel_systemcheck_vaillant_api_get_key();
+  
+  // Debug: Check what we're getting
+  $config_debug = \Drupal::config('sentinel_systemcheck_vaillant_api.settings');
+  $config_value = $config_debug->get('api_key');
+  $raw_config = $config_debug->getRawData();
+  
+  \Drupal::logger('vaillant_api')->notice('API Key Debug - Function returned: @func, Config get: @config, Raw: @raw', [
+    '@func' => var_export($api_key, TRUE),
+    '@config' => var_export($config_value, TRUE),
+    '@raw' => var_export($raw_config['api_key'] ?? 'NOT SET', TRUE),
+  ]);
+  
+  // Ensure API key is set - if empty, throw exception
+  if (empty($api_key)) {
+    throw new \Exception('Vaillant API key is not configured. Please set it at /admin/config/system/sentinel-vaillant-api or via VAILLANT_API environment variable.');
+  }
+  
+  $sample_data['api_key'] = $api_key;
   $data = sentinel_systemcheck_vaillant_api_format_data($sample_entity);
   $data = array_merge($sample_data, $data);
   
-  // API expects data as an array of objects, not a single object
-  $payload = [$data];
+  // API expects a single object (not an array) - matching D7 behavior and Postman tests
+  $payload = $data;
+  
+  // Debug: Verify API key is in payload
+  \Drupal::logger('vaillant_api')->notice('Payload API Key: @key', [
+    '@key' => var_export($payload['api_key'] ?? 'NOT IN PAYLOAD', TRUE),
+  ]);
   
   try {
     $client = \Drupal::httpClient();
+    
+    // Debug: Log the actual JSON being sent
+    $json_payload = json_encode($payload);
+    \Drupal::logger('vaillant_api')->notice('Sending JSON payload: @json', [
+      '@json' => $json_payload,
+    ]);
+    
     $response = $client->post($endpoint, [
       'headers' => [
         'Cache-Control' => 'no-cache, no-store, must-revalidate',
@@ -55,8 +85,15 @@ function sentinel_systemcheck_vaillant_api_send($sample_entity) {
       'json' => $payload,
       'timeout' => 15,
     ]);
-
+    
     $status_code = $response->getStatusCode();
+    $response_body = $response->getBody()->getContents();
+    //dd($response_body);
+    // Debug: Log the response
+    \Drupal::logger('vaillant_api')->notice('API Response - Status: @status, Body: @body', [
+      '@status' => $status_code,
+      '@body' => $response_body,
+    ]);
     
     if ($status_code === 200) {
       \Drupal::messenger()->addStatus(t('Report sent to Vaillant API.'));
@@ -72,15 +109,40 @@ function sentinel_systemcheck_vaillant_api_send($sample_entity) {
   }
   catch (RequestException $e) {
     $message = $e->getMessage();
+   
     if ($e->hasResponse()) {
       try {
-        $response_data = Json::decode($e->getResponse()->getBody());
+        $response_body = $e->getResponse()->getBody()->getContents();
+        $response_data = Json::decode($response_body);
+        
+        // Log the full error response for debugging
+        \Drupal::logger('vaillant_api')->error('API Error Response: @body', [
+          '@body' => $response_body,
+        ]);
+        
         if (isset($response_data['message'])) {
           $message = $response_data['message'];
+        }
+        // Check for error array in response
+        if (isset($response_data['error']) && is_array($response_data['error'])) {
+          $error_messages = [];
+          foreach ($response_data['error'] as $error) {
+            if (is_array($error) && isset($error['error_description'])) {
+              $error_messages[] = $error['error_description'];
+            } elseif (is_string($error)) {
+              $error_messages[] = $error;
+            }
+          }
+          if (!empty($error_messages)) {
+            $message = implode('; ', $error_messages);
+          }
         }
       }
       catch (\Exception $decode_exception) {
         // Could not decode response, use original message.
+        \Drupal::logger('vaillant_api')->error('Could not decode API error response: @error', [
+          '@error' => $decode_exception->getMessage(),
+        ]);
       }
     }
     throw new \Exception($message);
@@ -175,15 +237,26 @@ function sentinel_systemcheck_vaillant_api_format_data($sample_entity) {
  */
 function sentinel_systemcheck_vaillant_api_get_key() {
   // Try environment variable first (same approach as D7 settings.php).
-  $api_key = getenv('VAILLANT_API') ?: (isset($_ENV['VAILLANT_API']) ? $_ENV['VAILLANT_API'] : NULL);
-  
-  // If not in environment, check configuration.
-  if (empty($api_key)) {
-    $config = \Drupal::config('sentinel_systemcheck_vaillant_api.settings');
-    $api_key = $config->get('api_key');
+  $api_key = getenv('VAILLANT_API');
+  if (!$api_key && isset($_ENV['VAILLANT_API'])) {
+    $api_key = $_ENV['VAILLANT_API'];
   }
   
-  return $api_key ?? '';
+  // If not in environment, check configuration.
+  if (!$api_key) {
+    $config = \Drupal::config('sentinel_systemcheck_vaillant_api.settings');
+    // Get the raw data to ensure we get the actual value
+    $raw_data = $config->getRawData();
+    if (isset($raw_data['api_key']) && $raw_data['api_key'] !== NULL && $raw_data['api_key'] !== '') {
+      $api_key = $raw_data['api_key'];
+    } else {
+      // Fallback to get() method
+      $api_key = $config->get('api_key');
+    }
+  }
+  
+  // Return the API key as string, or empty string if not found
+  return $api_key ? trim((string) $api_key) : '';
 }
 
 /**
