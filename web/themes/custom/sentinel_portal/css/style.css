@@ -1260,3 +1260,21 @@ a.nav-link.admin-area {
 #ui-datepicker-div {
   z-index: 2000 !important;
 }
+
+form#views-exposed-form-test-page .views-submit-button, form#views-exposed-form-test-page .views-reset-button {
+    margin-top: 0 !important;
+    position: relative;
+    bottom: 30px;
+}
+@media (max-width: 1071px) {
+	form#views-exposed-form-test-page .views-submit-button, form#views-exposed-form-test-page .views-reset-button {
+	    position: unset;
+	}
+}
+
+.sentinel-sample-actions a.mbtn:active,
+.sentinel-sample-actions a.mbtn:focus{
+    color: #fff;
+    background: rgb(85, 26, 139);
+}
+ 

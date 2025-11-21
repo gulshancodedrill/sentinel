@@ -87,6 +87,16 @@ sentinel_portal.sample_export_csv_download:
     _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
   options:
     _admin_route: FALSE
+
+sentinel_portal.samples_test:
+  path: '/portal/samples-test'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_entities\Controller\SentinelSampleTestListController::buildPage'
+    _title: 'Submitted Packs'
+  requirements:
+    _custom_access: '\Drupal\sentinel_portal_module\SentinelPortalModule::portalRoleAccess'
+  options:
+    _admin_route: FALSE
 entity.sentinel_sample.version_history:
   path: '/portal/admin/samples/manage/{sentinel_sample}/revisions'
   defaults:
