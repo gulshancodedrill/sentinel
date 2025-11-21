@@ -1277,4 +1277,12 @@ form#views-exposed-form-test-page .views-submit-button, form#views-exposed-form-
     color: #fff;
     background: rgb(85, 26, 139);
 }
- 
+/* Show only on frontpage */
+.path-frontpage .portal-tile-t {
+  display: block;
+}
+
+/* Hide on all other pages */
+.portal-tile-t {
+  display: none;
+}
