@@ -133,3 +133,27 @@ function sentinel_portal_preprocess_menu_items(&$items) {
     }
   }
 }
+
+/**
+ * Implements hook_preprocess_html().
+ *
+ * Add body classes for custom routes.
+ */
+function sentinel_portal_preprocess_html(&$variables) {
+  $route_name = \Drupal::routeMatch()->getRouteName();
+  
+  // Add body class based on route name
+  if ($route_name) {
+    // Convert route name to a CSS-friendly class name
+    // e.g., 'sentinel_portal.samples_test' becomes 'route-sentinel-portal-samples-test'
+    $route_class = 'route-' . str_replace(['.', '_'], '-', $route_name);
+    $variables['attributes']['class'][] = $route_class;
+    
+    // Also add a simplified class for specific routes
+    if (strpos($route_name, 'sentinel_portal.') === 0) {
+      $simple_class = str_replace('sentinel_portal.', 'route-', $route_name);
+      $simple_class = str_replace('_', '-', $simple_class);
+      $variables['attributes']['class'][] = $simple_class;
+    }
+  }
+}

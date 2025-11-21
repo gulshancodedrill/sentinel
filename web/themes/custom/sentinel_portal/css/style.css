@@ -1286,3 +1286,10 @@ form#views-exposed-form-test-page .views-submit-button, form#views-exposed-form-
 .portal-tile-t {
   display: none;
 }
+
+form.views-exposed-form.submitted-filters .views-exposed-widgets {display: flex !important;flex-wrap: wrap !important;align-items: flex-start !important;grid-gap: 0 15px !important;}
+form.views-exposed-form.submitted-filters .views-exposed-widgets .js-form-item {width: calc(20% - 15px);}
+form.views-exposed-form.submitted-filters .views-exposed-widgets button.button.button--primary {margin: 0 !important;}
+.route-sentinel-portal-samples-test .portal-welcome{
+  display:none;
+  }
