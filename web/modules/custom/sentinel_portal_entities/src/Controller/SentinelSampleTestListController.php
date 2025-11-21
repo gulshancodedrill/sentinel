@@ -438,6 +438,12 @@ class SentinelSampleTestListController extends ControllerBase {
       // Secondary sort by created and pid
       $query->orderBy('ss.created', 'DESC');
       $query->orderBy('ss.pid', 'DESC');
+    } elseif ($order === 'date_received' || $order === 'date_booked') {
+      // Sort by date_received (date_booked in database)
+      $query->orderBy('ss.date_booked', $sort_direction);
+      // Secondary sort by created and pid
+      $query->orderBy('ss.created', 'DESC');
+      $query->orderBy('ss.pid', 'DESC');
     } else {
       // Default sorting - latest first
       $query->orderBy('ss.created', 'DESC');
@@ -455,23 +461,59 @@ class SentinelSampleTestListController extends ControllerBase {
     
     $results = $pager->execute();
 
-    // Build Date Reported header with sorting link
+    // Build Date Received header with sorting link
     $current_order = $filters['order'] ?? '';
     $current_sort = strtolower($filters['sort'] ?? 'desc');
+    
+    // Date Received sorting
+    $date_received_sort = ($current_order === 'date_received' || $current_order === 'date_booked') ? $current_sort : 'desc';
+    $next_sort_received = ($date_received_sort === 'desc') ? 'asc' : 'desc';
+    
+    $sort_query_received = $request->query->all();
+    $sort_query_received['order'] = 'date_received';
+    $sort_query_received['sort'] = $next_sort_received;
+    
+    $date_received_header = Link::createFromRoute(
+      $this->t('Date received'),
+      'sentinel_portal.samples_test',
+      [],
+      [
+        'query' => $sort_query_received,
+        'attributes' => [
+          'class' => ['sort-link'],
+        ],
+      ]
+    )->toString();
+    
+    // Add sort indicator icon for Date Received
+    if ($current_order === 'date_received' || $current_order === 'date_booked') {
+      if ($current_sort === 'asc') {
+        $sort_icon_received = '<i class="fa fa-sort-up" aria-hidden="true"></i>';
+      } else {
+        $sort_icon_received = '<i class="fa fa-sort-down" aria-hidden="true"></i>';
+      }
+      $date_received_header = str_replace('</a>', ' ' . $sort_icon_received . '</a>', $date_received_header);
+    } else {
+      // Show unsorted icon when not sorting by this column
+      $sort_icon_received = '<i class="fa fa-sort" aria-hidden="true" style="opacity: 0.3;"></i>';
+      $date_received_header = str_replace('</a>', ' ' . $sort_icon_received . '</a>', $date_received_header);
+    }
+    
+    // Build Date Reported header with sorting link
     $date_reported_sort = ($current_order === 'date_reported_1' || $current_order === 'date_reported') ? $current_sort : 'desc';
-    $next_sort = ($date_reported_sort === 'desc') ? 'asc' : 'desc';
+    $next_sort_reported = ($date_reported_sort === 'desc') ? 'asc' : 'desc';
     
     // Build query parameters for sorting link
-    $sort_query = $request->query->all();
-    $sort_query['order'] = 'date_reported_1';
-    $sort_query['sort'] = $next_sort;
+    $sort_query_reported = $request->query->all();
+    $sort_query_reported['order'] = 'date_reported_1';
+    $sort_query_reported['sort'] = $next_sort_reported;
     
     $date_reported_header = Link::createFromRoute(
       $this->t('Date Reported'),
       'sentinel_portal.samples_test',
       [],
       [
-        'query' => $sort_query,
+        'query' => $sort_query_reported,
         'attributes' => [
           'class' => ['sort-link'],
         ],
@@ -481,21 +523,21 @@ class SentinelSampleTestListController extends ControllerBase {
     // Add sort indicator icon if currently sorting by this column
     if ($current_order === 'date_reported_1' || $current_order === 'date_reported') {
       if ($current_sort === 'asc') {
-        $sort_icon = '<i class="fa fa-sort-up" aria-hidden="true"></i>';
+        $sort_icon_reported = '<i class="fa fa-sort-up" aria-hidden="true"></i>';
       } else {
-        $sort_icon = '<i class="fa fa-sort-down" aria-hidden="true"></i>';
+        $sort_icon_reported = '<i class="fa fa-sort-down" aria-hidden="true"></i>';
       }
-      $date_reported_header = str_replace('</a>', ' ' . $sort_icon . '</a>', $date_reported_header);
+      $date_reported_header = str_replace('</a>', ' ' . $sort_icon_reported . '</a>', $date_reported_header);
     } else {
       // Show unsorted icon when not sorting by this column
-      $sort_icon = '<i class="fa fa-sort" aria-hidden="true" style="opacity: 0.3;"></i>';
-      $date_reported_header = str_replace('</a>', ' ' . $sort_icon . '</a>', $date_reported_header);
+      $sort_icon_reported = '<i class="fa fa-sort" aria-hidden="true" style="opacity: 0.3;"></i>';
+      $date_reported_header = str_replace('</a>', ' ' . $sort_icon_reported . '</a>', $date_reported_header);
     }
     
     $header = [
       $this->t('Pack reference number'),
       $this->t('System address'),
-      $this->t('Date received'),
+      ['data' => ['#markup' => $date_received_header]],
       ['data' => ['#markup' => $date_reported_header]],
       $this->t('Status'),
       $this->t('Certificate'),
