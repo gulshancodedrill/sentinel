@@ -33,37 +33,72 @@ class SentinelSampleStorage extends SqlContentEntityStorage {
    */
   protected function doSaveFieldItems(ContentEntityInterface $entity, array $names = []) {
     $full_save = empty($names);
-    $update = !$full_save || !$entity->isNew();
+    $is_new_entity = $entity->isNew();
     $revision_saved = FALSE;
     $new_vid = NULL;
 
-    // If this is a new revision, save it FIRST before updating base table.
-    // This ensures we have a valid vid before the base table update.
-    if ($full_save && $update && $entity->isNewRevision() && $this->revisionTable) {
+    // For new entities, we need to ensure vid is not NULL in the base table insert.
+    // Since we can't create a revision before we have a pid, we'll:
+    // 1. Set vid to 0 (default) temporarily and prevent parent from creating revision
+    // 2. Override the base table insert to explicitly include vid=0
+    // 3. Let parent insert base table (gets pid)
+    // 4. Create revision with pid
+    // 5. Update base table with real vid
+    $was_new_revision = FALSE;
+    if ($full_save && $is_new_entity && $this->revisionTable) {
+      // Ensure new entities get a new revision.
+      if ($entity->isNewRevision()) {
+        $was_new_revision = TRUE;
+      }
+      else {
+        $entity->setNewRevision(TRUE);
+        $was_new_revision = TRUE;
+      }
+      
+      // Temporarily set vid to 0 to avoid NULL constraint violation.
+      $revision_key = $this->getEntityType()->getKey('revision');
+      $entity->set($revision_key, 0);
+      
+      // Temporarily prevent parent from trying to create revision (we'll do it after base insert).
+      $entity->setNewRevision(FALSE);
+    }
+
+    // For existing entities with new revisions, save revision first.
+    if ($full_save && !$is_new_entity && $entity->isNewRevision() && $this->revisionTable) {
       // Save revision first to get the new vid.
       $new_vid = $this->saveRevision($entity);
       
-      // Also save to revision data table if it exists (contains most entity fields).
+      // Also save to revision data table if it exists.
       if ($this->revisionDataTable) {
         $this->saveToSharedTables($entity, $this->revisionDataTable, TRUE);
       }
       
       $revision_saved = TRUE;
-    }
-
-    // Call parent to handle base table and other fields.
-    // We need to temporarily mark revision as not new to prevent duplicate save.
-    if ($revision_saved) {
+      // Temporarily mark as not new revision to prevent duplicate save in parent.
       $entity->setNewRevision(FALSE);
+      // Set vid on entity so parent includes it in base table update.
+      $entity->set($this->getEntityType()->getKey('revision'), $new_vid);
     }
     
+    // Call parent to handle base table and other fields.
+    // The mapToStorageRecord override will ensure vid is included.
     parent::doSaveFieldItems($entity, $names);
     
-    // Restore new revision flag if we saved it.
-    if ($revision_saved) {
+    // For new entities, create revision after base table insert (now we have pid).
+    if ($full_save && $is_new_entity && $this->revisionTable && $entity->id() && $was_new_revision) {
+      // Restore new revision flag.
       $entity->setNewRevision(TRUE);
-      // Ensure base table vid is updated to the new revision.
-      if ($new_vid && $entity->isDefaultRevision()) {
+      
+      // Save revision to get the new vid.
+      $new_vid = $this->saveRevision($entity);
+      
+      // Also save to revision data table if it exists.
+      if ($this->revisionDataTable) {
+        $this->saveToSharedTables($entity, $this->revisionDataTable, TRUE);
+      }
+      
+      // Update base table with the real vid.
+      if ($new_vid) {
         $this->database->update($this->baseTable)
           ->fields([$this->revisionKey => $new_vid])
           ->condition($this->idKey, $entity->id())
@@ -72,6 +107,54 @@ class SentinelSampleStorage extends SqlContentEntityStorage {
         $entity->set($this->getEntityType()->getKey('revision'), $new_vid);
       }
     }
+    
+    // Restore new revision flag if we temporarily disabled it.
+    if ($revision_saved) {
+      $entity->setNewRevision(TRUE);
+      // Ensure base table vid is set correctly.
+      if ($new_vid && $entity->id()) {
+        $current_vid = $this->database->select($this->baseTable, 'base')
+          ->fields('base', [$this->revisionKey])
+          ->condition($this->idKey, $entity->id())
+          ->execute()
+          ->fetchField();
+        
+        if ($current_vid != $new_vid) {
+          $this->database->update($this->baseTable)
+            ->fields([$this->revisionKey => $new_vid])
+            ->condition($this->idKey, $entity->id())
+            ->execute();
+        }
+        $entity->set($this->getEntityType()->getKey('revision'), $new_vid);
+      }
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function mapToStorageRecord(ContentEntityInterface $entity, $table_name = NULL) {
+    $record = parent::mapToStorageRecord($entity, $table_name);
+    
+    // For base table inserts of new entities, ensure vid is included.
+    if (!isset($table_name) || $table_name === $this->baseTable) {
+      $revision_key = $this->getEntityType()->getKey('revision');
+      
+      // If vid is not in the record, ensure it's set (to 0 for new entities to avoid NULL).
+      if (!isset($record->{$revision_key})) {
+        if ($entity->hasField($revision_key) && !$entity->get($revision_key)->isEmpty()) {
+          $vid_value = $entity->get($revision_key)->value;
+          // Include vid even if it's 0 (to avoid NULL constraint violation).
+          $record->{$revision_key} = $vid_value !== NULL ? $vid_value : 0;
+        }
+        // For new entities, if vid is not set on entity, set it to 0.
+        elseif ($entity->isNew()) {
+          $record->{$revision_key} = 0;
+        }
+      }
+    }
+    
+    return $record;
   }
 
   /**
