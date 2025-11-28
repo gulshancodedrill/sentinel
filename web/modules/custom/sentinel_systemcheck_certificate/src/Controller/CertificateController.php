@@ -13,6 +13,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
 use Drupal\file\Entity\File;
+use Drupal\file\FileInterface;
 
 /**
  * Controller for certificate-related pages.
@@ -277,6 +278,7 @@ class CertificateController extends ControllerBase {
     $sample_entity = \Drupal::entityTypeManager()->getStorage('sentinel_sample')->load($sample_id);
 
     if ($sample_entity) {
+      // Delete existing file if it exists.
       $fileid = $sample_entity->get('fileid')->value;
 
       if ($fileid) {
@@ -287,14 +289,41 @@ class CertificateController extends ControllerBase {
         }
       }
 
+      // Clear the fileid and filename fields on the entity before regenerating.
+      // This ensures the SavePdf method will properly attach the new file.
+      $sample_entity->set('fileid', NULL);
+      $sample_entity->set('filename', NULL);
+
       try {
-        if (method_exists($sample_entity, 'SavePdf') && is_object($sample_entity->SavePdf())) {
-          $this->messenger()->addStatus($this->t('A new PDF certificate has been generated'));
+        // Generate and save the new PDF file.
+        if (method_exists($sample_entity, 'SavePdf')) {
+          $file = $sample_entity->SavePdf();
+          
+          if ($file instanceof FileInterface) {
+            // Verify the file was attached to the sample.
+            // SavePdf() updates the database directly, but we should ensure
+            // the entity is properly updated in memory.
+            $sample_entity->set('fileid', (string) $file->id());
+            $sample_entity->set('filename', $file->getFilename());
+            
+            // Save the entity to ensure all changes are persisted.
+            $sample_entity->save();
+            
+            $this->messenger()->addStatus($this->t('A new PDF certificate has been generated and attached to the sample.'));
+          } else {
+            $this->messenger()->addError($this->t('A problem occurred whilst trying to generate a new file. The PDF could not be created.'));
+          }
         } else {
-          $this->messenger()->addError($this->t('A problem occurred whilst trying to generate a new file'));
+          $this->messenger()->addError($this->t('A problem occurred whilst trying to generate a new file. The SavePdf method is not available.'));
         }
       } catch (\Exception $e) {
-        $this->messenger()->addError($this->t('A problem occurred whilst trying to generate a new file'));
+        \Drupal::logger('sentinel_systemcheck_certificate')->error('Error regenerating PDF for sample @id: @message', [
+          '@id' => $sample_id,
+          '@message' => $e->getMessage(),
+        ]);
+        $this->messenger()->addError($this->t('A problem occurred whilst trying to generate a new file: @message', [
+          '@message' => $e->getMessage(),
+        ]));
       }
 
       $url = Url::fromRoute('entity.sentinel_sample.canonical', ['sentinel_sample' => $sample_id]);
