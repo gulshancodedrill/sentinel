@@ -603,7 +603,56 @@ table.sticky-header thead {
 .view-pdf-logic form .js-form-item {
     padding-right: 1rem;
 }
+.page-content {
+  padding: 2em;
+}
+.constrain {
+  width: 100%;
+  max-width: 75rem;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.content > h1.title {
+  text-align: left;
+}
+ 
+
+@media (min-width: 75rem) {
+  .page-content {
+    padding-right: 0;
+  }
+}
+
  @media (min-width: 48em) {
+     .page-main {
+    display: -webkit-flex;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-flex-direction: row;
+    -ms-flex-direction: row;
+    flex-direction: row;
+    -webkit-justify-content: flex-start;
+    -ms-flex-pack: start;
+    justify-content: flex-start;
+    -webkit-align-items: stretch;
+    -ms-flex-align: stretch;
+    align-items: stretch;
+    -webkit-flex: 1;
+    -ms-flex: 1;
+    flex: 1;
+  }
+    .page-content {
+    position: relative;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-flex: 1 1 60%;
+    -ms-flex: 1 1 60%;
+    flex: 1 1 60%;
+    -webkit-order: 2;
+    -ms-flex-order: 2;
+    order: 2;
+  }
   .layout-main-wrapper main#content {
        position: relative;
        overflow-x: hidden;
@@ -875,6 +924,7 @@ table.sticky-header thead {
 .pdf-report h2,
 .pdf-report h3 {
   font-weight: 700 !important;
+  margin-bottom:0;
 }
 
 .pdf-report h1 {
@@ -1042,7 +1092,8 @@ body.path-view-my-results #page-wrapper > footer,
 body.path-view-my-results .breadcrumb,
 body.path-view-my-results .region-sidebar-first,
 body.path-view-my-results .region-sidebar-second,
-body.path-view-my-results #block-sentinelportal-theme-system-main h1 {
+/*body.path-view-my-results #block-sentinelportal-theme-system-main h1 */
+{
   display: none !important;
 }
 #block-sentinelportal-theme-system-main .sentinel-portal-main h1{display:none}
@@ -1293,3 +1344,34 @@ form.views-exposed-form.submitted-filters .views-exposed-widgets button.button.b
 .route-sentinel-portal-samples-test .portal-welcome{
   display:none;
   }
+ 
+table{border: 1px solid #D8D8D8;min-width: 100%;
+text-align: left;margin: 0;
+} 
+.pdf-report table td[align="right"] {
+  text-align: right;
+}
+.pdf-report table td[align="center"] {
+  text-align: center;
+}
+.test-table-records tr th {
+    text-align: center;
+}
+table, .pdf-report table tr td{font-size: 0.3cm;}
+
+.table-centered.test-table-records {
+  font-size: 0.24cm;
+}
+
+.pdf-report .table-centered.test-table-records, .pdf-report .table-centered.test-table-records td {
+  font-size: 0.24cm;
+}
+.pdf-report small {
+  font-size: 0.24cm;
+}
+.sentinel-sample-address .list-group-item {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+ 
