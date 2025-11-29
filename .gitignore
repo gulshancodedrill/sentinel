@@ -1,56 +1,86 @@
-# This file contains default .gitignore rules. To use it, copy it to .gitignore,
-# and it will cause files like your settings.php and user-uploaded files to be
-# excluded from Git version control. This is a common strategy to avoid
-# accidentally including private information in public repositories and patch
-# files.
-#
-# Because .gitignore can be specific to your site, this file has a different
-# name; updating Drupal core will not override your custom .gitignore file.
+# -----------------------------------------------------
+# Composer-managed directories (IGNORE)
+# -----------------------------------------------------
 
-# Ignore core when managing all of a project's dependencies with Composer
-# including Drupal core.
-# core
-
-# Ignore dependencies that are managed with Composer.
-# Generally you should only ignore the root vendor directory. It's important
-# that core/assets/vendor and any other vendor directories within contrib or
-# custom module, theme, etc., are not ignored unless you purposely do so.
 /vendor/
+/web/core/
+/web/modules/contrib/
+/web/themes/contrib/
+/web/profiles/contrib/
 
-# Ignore configuration files that may contain sensitive information.
+# -----------------------------------------------------
+# Custom code (DO NOT IGNORE)
+/web/modules/custom/
+/web/themes/custom/
+/web/profiles/custom/
+
+# -----------------------------------------------------
+# Drupal site settings (sensitive)
+# -----------------------------------------------------
+
+/web/sites/*/settings.php
 /web/sites/*/settings*.php
 /web/sites/*/services*.yml
 
-# Ignore paths that contain user-generated content.
-/web/sites/*/files
-/web/sites/*/private
+# Default files (prevent modifications being tracked)
+web/sites/default/default.settings.php
+web/sites/default/default.services.yml
+
+# -----------------------------------------------------
+# Uploaded user content
+# -----------------------------------------------------
+
+/web/sites/*/files/
+/web/sites/*/private/
+
+# Private key files
 /web/private.key
 /web/public.key
 
-# If you prefer to store your .gitignore file in the sites/ folder, comment
-# or delete the previous settings and uncomment the following ones, instead.
+# -----------------------------------------------------
+# Backups & zip dumps
+# -----------------------------------------------------
 
-# Ignore configuration files that may contain sensitive information.
-# */settings*.php
+*.sql
+*.sql.gz
+*.sql.zip
+*.tar.gz
+*.zip
 
-# Ignore paths that contain user-generated content.
-# */files
-# */private
+# -----------------------------------------------------
+# Log files
+# -----------------------------------------------------
 
-# Ignore multi-site test environment.
-# simpletest
-
-/web/sites/default/default.settings.php
-/web/sites/default/default.services.yml
-/web/sites/default/settings.php
-/web/sites/default/services.ymlsentinel31oct2025.sql
-import_sentinel_stats.php
-import_stats_batch.php
-web/modules/custom/sentinel_data_import/csv/
-test
-.htaccess
 error_log
-web/.well-known.zip
-web/drupal-web.zip
-web/files.zip
-web/phpinfo.php
+*.log
+
+# -----------------------------------------------------
+# DDEV environment
+# -----------------------------------------------------
+
+/.ddev/.import-temp/
+/.ddev/db_snapshots/
+/.ddev/.downloads/
+/.ddev/commands/web/*
+
+# Ignore contrib module DDEV commands
+web/modules/**/.ddev/
+
+# -----------------------------------------------------
+# Misc system files
+# -----------------------------------------------------
+
+.DS_Store
+Thumbs.db
+*.bak
+*.old
+*.tmp
+
+# -----------------------------------------------------
+# Project-specific ignores
+# -----------------------------------------------------
+
+/test
+index.html
+phpinfo.php
+sentinelportal_drupalsentinel.sql

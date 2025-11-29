@@ -1,0 +1,11 @@
+# Turn on rewrite engine
+RewriteEngine On
+
+# Redirect root requests to /web
+RewriteCond %{REQUEST_URI} !^/web/
+RewriteRule ^(.*)$ /web/$1 [L]
+
+# Optional: Prevent direct access to hidden files
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
