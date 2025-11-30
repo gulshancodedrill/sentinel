@@ -55,29 +55,78 @@ class AddressImporter {
     }
 
     $storage = $this->entityTypeManager->getStorage('address');
-    if ($storage->load($id)) {
-      $this->logger->info('Address @id already exists, skipping.', ['@id' => $id]);
-      return;
+    
+    // Check if address exists - if so, update it; otherwise create new
+    /** @var \Drupal\address\Entity\AddressInterface|null $address */
+    $address = $storage->load($id);
+    $is_update = $address !== NULL;
+    
+    if ($is_update) {
+      $this->logger->info('Address @id already exists, will update.', ['@id' => $id]);
+    }
+    else {
+      $this->logger->info('Address @id does not exist, will create new.', ['@id' => $id]);
     }
 
-    $address_values = [
-      'id' => $id,
-      'type' => $bundle,
-    ];
-
-    $field_address = $this->buildAddressFieldValues($item, $bundle);
-    if (!empty($field_address)) {
-      $address_values['field_address'] = [$field_address];
-    }
-
+    // For updates, include empty values to allow clearing fields
+    // For creates, exclude empty values
+    $field_address = $this->buildAddressFieldValues($item, $bundle, $is_update);
+    
     try {
-      /** @var \Drupal\address\Entity\AddressInterface $address */
-      $address = $storage->create($address_values);
-      $address->enforceIsNew();
-      $address->save();
+      if ($is_update) {
+        // Update existing address
+        // Always update field_address, even if empty (to clear fields)
+        if ($address->hasField('field_address')) {
+          // Check if all address values are empty (excluding country_code which defaults to GB)
+          $has_values = FALSE;
+          foreach ($field_address as $key => $value) {
+            if ($key !== 'country_code' && $value !== NULL && $value !== '') {
+              $has_values = TRUE;
+              break;
+            }
+          }
+          
+          if ($has_values || !empty($field_address)) {
+            // Set address with values (including empty ones for updates)
+            $address->set('field_address', [$field_address]);
+          }
+          else {
+            // All values are empty, clear the field
+            $address->set('field_address', NULL);
+          }
+        }
+        $address->save();
+        
+        $this->logger->notice('Updated address @id (@bundle).', [
+          '@id' => $address->id(),
+          '@bundle' => $bundle,
+        ]);
+      }
+      else {
+        // Create new address
+        $address_values = [
+          'id' => $id,
+          'type' => $bundle,
+        ];
+        
+        // Only set field_address if it has values (skip empty for new entities)
+        if (!empty($field_address)) {
+          $address_values['field_address'] = [$field_address];
+        }
+        
+        /** @var \Drupal\address\Entity\AddressInterface $address */
+        $address = $storage->create($address_values);
+        $address->enforceIsNew();
+        $address->save();
+        
+        $this->logger->notice('Imported address @id (@bundle).', [
+          '@id' => $address->id(),
+          '@bundle' => $bundle,
+        ]);
+      }
     }
     catch (EntityStorageException $e) {
-      $this->logger->error('Failed to import address @id: @message', [
+      $this->logger->error('Failed to ' . ($is_update ? 'update' : 'import') . ' address @id: @message', [
         '@id' => $id,
         '@message' => $e->getMessage(),
       ]);
@@ -85,7 +134,7 @@ class AddressImporter {
     }
 
     $linked = $this->linkSamples($address->id(), $bundle, $item);
-    $this->logger->notice('Imported address @id (@bundle) and linked @count samples.', [
+    $this->logger->notice(($is_update ? 'Updated' : 'Imported') . ' address @id (@bundle) and linked @count samples.', [
       '@id' => $address->id(),
       '@bundle' => $bundle,
       '@count' => $linked,
@@ -94,8 +143,19 @@ class AddressImporter {
 
   /**
    * Build address field values from the queued row.
+   *
+   * @param array $item
+   *   The CSV row data.
+   * @param string $bundle
+   *   The address bundle type.
+   * @param bool $include_empty
+   *   If TRUE, include empty values in the result (for updates to clear fields).
+   *   If FALSE, filter out empty values (for creates).
+   *
+   * @return array
+   *   Address field values.
    */
-  protected function buildAddressFieldValues(array $item, string $bundle): array {
+  protected function buildAddressFieldValues(array $item, string $bundle, bool $include_empty = FALSE): array {
     $country = strtoupper(trim((string) ($item['country'] ?? '')));
     if ($country === '') {
       $country = 'GB';
@@ -120,10 +180,15 @@ class AddressImporter {
       'family_name' => $this->cleanValue($item['last_name'] ?? ''),
     ];
 
-    // Remove empty values.
-    return array_filter($values, static function ($value) {
-      return $value !== NULL && $value !== '';
-    });
+    // For updates, include empty values to allow clearing fields.
+    // For creates, remove empty values.
+    if (!$include_empty) {
+      $values = array_filter($values, static function ($value) {
+        return $value !== NULL && $value !== '';
+      });
+    }
+
+    return $values;
   }
 
   /**

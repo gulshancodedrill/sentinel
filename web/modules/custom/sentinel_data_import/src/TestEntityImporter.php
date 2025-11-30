@@ -240,14 +240,23 @@ class TestEntityImporter {
     }
 
     $storage = $this->entityTypeManager->getStorage('test_entity');
-
-    if ($storage->load($id)) {
-      $this->logger->info('Test entity @id already exists, skipping.', ['@id' => $id]);
-      return;
+    
+    // Clear cache before loading to ensure we get the latest entity
+    $storage->resetCache([$id]);
+    
+    // Check if entity exists - if so, update it; otherwise create new
+    $entity = $storage->load($id);
+    $is_update = $entity !== NULL;
+    
+    if ($is_update) {
+      $this->logger->info('Found existing test_entity @id, will update.', ['@id' => $id]);
+    }
+    else {
+      $this->logger->info('No existing test_entity @id found, will create new.', ['@id' => $id]);
     }
 
     $created = isset($item['created']) && $item['created'] !== '' ? (int) $item['created'] : $this->time->getRequestTime();
-    $changed = isset($item['changed']) && $item['changed'] !== '' ? (int) $item['changed'] : $created;
+    $changed = isset($item['changed']) && $item['changed'] !== '' ? (int) $item['changed'] : $this->time->getRequestTime();
     $langcode = $this->mapLanguage($item['language'] ?? 'und');
 
     $values = [
@@ -264,19 +273,108 @@ class TestEntityImporter {
         continue;
       }
       $raw = $item[$column];
-      if ($raw === '' || $raw === NULL) {
-        continue;
+      // For updates, include empty values to clear fields; for creates, skip empty
+      if ($is_update || ($raw !== '' && $raw !== NULL)) {
+        $this->applyFieldValues($values, $definition['fields'], $raw, $definition['type']);
       }
-      $this->applyFieldValues($values, $definition['fields'], $raw, $definition['type']);
     }
 
     try {
-      $entity = $storage->create($values);
-      $entity->save();
-      $this->logger->info('Imported test entity @id.', ['@id' => $id]);
+      if ($is_update) {
+        // Update existing entity
+        $updated_fields = [];
+        
+        // Update basic fields
+        if (isset($values['type']) && $entity->bundle() !== $values['type']) {
+          // Type change not typically allowed, but log it
+          $this->logger->warning('Cannot change type of test_entity @id from @old to @new.', [
+            '@id' => $id,
+            '@old' => $entity->bundle(),
+            '@new' => $values['type'],
+          ]);
+        }
+        
+        if (isset($values['uid'])) {
+          $current_uid = $entity->get('uid')->target_id ?? 0;
+          $new_uid = is_array($values['uid']) ? ($values['uid']['value'] ?? 0) : (int) $values['uid'];
+          if ($current_uid != $new_uid) {
+            $entity->set('uid', $new_uid);
+            $updated_fields[] = 'uid';
+          }
+        }
+        
+        if (isset($values['langcode']) && $entity->language()->getId() !== $values['langcode']) {
+          $entity->set('langcode', $values['langcode']);
+          $updated_fields[] = 'langcode';
+        }
+        
+        // Update mapped fields from values array
+        foreach ($values as $fieldName => $fieldValue) {
+          // Skip core entity fields that are handled separately
+          if (in_array($fieldName, ['id', 'type', 'created', 'changed', 'langcode', 'uid'], TRUE)) {
+            continue;
+          }
+          
+          if (!$entity->hasField($fieldName)) {
+            continue;
+          }
+          
+          // Get current value
+          $field_item = $entity->get($fieldName);
+          $current_value = $field_item->isEmpty() ? NULL : $field_item->value;
+          
+          // Get new value
+          $new_value = is_array($fieldValue) ? ($fieldValue['value'] ?? NULL) : $fieldValue;
+          
+          // Normalize empty strings to NULL for comparison
+          if ($new_value === '') {
+            $new_value = NULL;
+          }
+          if ($current_value === '') {
+            $current_value = NULL;
+          }
+          
+          // Update if value has changed
+          if ($current_value != $new_value) {
+            if ($new_value === NULL || $new_value === '') {
+              $entity->set($fieldName, NULL);
+            }
+            else {
+              $entity->set($fieldName, $fieldValue);
+            }
+            $updated_fields[] = $fieldName;
+          }
+        }
+        
+        // Always update changed timestamp
+        $entity->set('changed', $changed);
+        
+        // Create new revision on update (if entity supports revisions)
+        if ($entity->getEntityType()->isRevisionable()) {
+          $entity->setNewRevision(TRUE);
+        }
+        
+        $entity->save();
+        
+        $this->logger->notice('Updated test_entity @id. Updated fields: @fields', [
+          '@id' => $id,
+          '@fields' => implode(', ', $updated_fields) ?: 'none (no changes)',
+        ]);
+      }
+      else {
+        // Create new entity
+        // Only set created timestamp if not provided
+        if (!isset($values['created']) || $values['created'] === $this->time->getRequestTime()) {
+          $values['created'] = $created;
+        }
+        
+        $entity = $storage->create($values);
+        $entity->save();
+        $this->logger->notice('Imported test_entity @id.', ['@id' => $id]);
+      }
     }
     catch (EntityStorageException $e) {
-      $this->logger->error('Failed to import test entity @id: @message', [
+      $this->logger->error('Failed ' . ($is_update ? 'updating' : 'importing') . ' test_entity @id: @message', [
         '@id' => $id,
         '@message' => $e->getMessage(),
       ]);

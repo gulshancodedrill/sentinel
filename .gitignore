@@ -84,3 +84,7 @@ Thumbs.db
 index.html
 phpinfo.php
 sentinelportal_drupalsentinel.sql
+
+
+/web/modules/custom/sentinel_data_import/csv/address_entities_d7.csv
+/web/modules/custom/sentinel_data_import/csv/file_managed_d7.csv

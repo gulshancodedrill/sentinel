@@ -7,6 +7,7 @@ use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\sentinel_data_import\AddressImporter;
+use Drupal\sentinel_data_import\ConditionEntityImporter;
 use Drupal\sentinel_data_import\FileManagedImporter;
 use Drupal\sentinel_data_import\SentinelSampleImporter;
 use Drupal\sentinel_data_import\TestEntityImporter;
@@ -30,6 +31,7 @@ class SentinelDataImportCommands extends DrushCommands {
     protected TestEntityImporter $testEntityImporter,
     protected AddressImporter $addressImporter,
     protected SentinelSampleImporter $sentinelSampleImporter,
+    protected ConditionEntityImporter $conditionEntityImporter,
   ) {
     parent::__construct();
   }
@@ -47,6 +49,7 @@ class SentinelDataImportCommands extends DrushCommands {
       $container->get('sentinel_data_import.test_entity_importer'),
       $container->get('sentinel_data_import.address_importer'),
       $container->get('sentinel_data_import.sentinel_sample_importer'),
+      $container->get('sentinel_data_import.condition_entity_importer'),
     );
   }
 
@@ -567,6 +570,162 @@ class SentinelDataImportCommands extends DrushCommands {
       '@file' => $csv_path,
       '@processed' => $processed,
     ]));
+  }
+
+  /**
+   * Enqueue legacy condition entity records from a CSV export.
+   *
+   * @param string $csv_path
+   *   Absolute path to the CSV (use "default" for module CSV).
+   * @param array $options
+   *   CLI options.
+   *
+   * @command sentinel-data-import:enqueue-condition-entities
+   *
+   * @option start
+   *   Zero-based row index to start from (default 0).
+   * @option limit
+   *   Maximum rows to enqueue (0 = no limit).
+   *
+   * @validate-module-enabled sentinel_data_import
+   */
+  public function enqueueConditionEntities(string $csv_path, array $options = ['start' => 0, 'limit' => 0]): void {
+    $csv_path = trim($csv_path);
+    $queue = $this->queueFactory->get('sentinel_data_import.condition_entity');
+
+    if ($csv_path === '' || $csv_path === 'default') {
+      $module_path = $this->moduleExtensionList->getPath('sentinel_data_import');
+      $csv_path = DRUPAL_ROOT . '/' . trim($module_path . '/csv/condition_entities_d7.csv', '/');
+    }
+    elseif ($csv_path[0] !== '/') {
+      $csv_path = DRUPAL_ROOT . '/' . ltrim($csv_path, '/');
+    }
+
+    $csv_path = $this->fileSystem->realpath($csv_path) ?: $csv_path;
+    if (!is_readable($csv_path)) {
+      throw new \RuntimeException(sprintf('CSV file not readable: %s', $csv_path));
+    }
+
+    $start = (int) ($options['start'] ?? 0);
+    $limit = (int) ($options['limit'] ?? 0);
+
+    $file = new \SplFileObject($csv_path, 'r');
+    $file->setFlags(\SplFileObject::READ_CSV | \SplFileObject::SKIP_EMPTY);
+
+    $headers = $file->fgetcsv();
+    if ($headers === FALSE) {
+      throw new \RuntimeException('Unable to read CSV header.');
+    }
+    $headers = array_map('trim', $headers);
+
+    $required_headers = [
+      'id',
+      'type',
+      'uid',
+      'created',
+      'changed',
+      'language',
+      'event_number',
+      'event_element',
+      'event_string',
+      'event_individual_comment',
+      'event_individual_recommendation',
+      'number_of_white_spaces',
+      'condition_event_result_tid',
+    ];
+    $missing_headers = array_diff($required_headers, $headers);
+    if (!empty($missing_headers)) {
+      throw new \RuntimeException(sprintf('CSV missing required columns: %s', implode(', ', $missing_headers)));
+    }
+
+    $processed = 0;
+    $enqueued = 0;
+    $skipped = 0;
+
+    foreach ($file as $row_index => $row) {
+      if ($row === [NULL] || $row === FALSE) {
+        continue;
+      }
+      if ($row_index - 1 < $start) {
+        continue;
+      }
+      if ($limit > 0 && $enqueued >= $limit) {
+        break;
+      }
+
+      $record = [];
+      foreach ($headers as $position => $column) {
+        if ($column === '') {
+          continue;
+        }
+        $raw = $row[$position] ?? '';
+        $record[$column] = $this->normalizeCsvValue(is_string($raw) ? $raw : (string) $raw);
+      }
+
+      $id = isset($record['id']) ? (int) $record['id'] : 0;
+      if ($id <= 0 || ($record['type'] ?? '') === '') {
+        $skipped++;
+        continue;
+      }
+      $record['id'] = $id;
+
+      $queue->createItem($record);
+      $processed++;
+      $enqueued++;
+    }
+
+    $this->logger()->success(dt('Processed @processed rows, enqueued @enqueued condition entities (skipped @skipped).', [
+      '@processed' => $processed,
+      '@enqueued' => $enqueued,
+      '@skipped' => $skipped,
+    ]));
+  }
+
+  /**
+   * Process the condition entity import queue.
+   *
+   * @command sentinel-data-import:process-condition-entities
+   * @aliases sdi-pce
+   */
+  public function processConditionEntities(): void {
+    $queue_name = 'sentinel_data_import.condition_entity';
+    $queue_worker = \Drupal::service('plugin.manager.queue_worker')->createInstance($queue_name);
+    $queue = $this->queueFactory->get($queue_name);
+    
+    $processed = 0;
+    $errors = 0;
+    $start_time = time();
+    
+    $this->logger()->notice('Processing condition entity import queue...');
+    
+    while ($item = $queue->claimItem()) {
+      try {
+        $queue_worker->processItem($item->data);
+        $queue->deleteItem($item);
+        $processed++;
+        
+        if ($processed % 10 === 0) {
+          $elapsed = time() - $start_time;
+          $rate = $elapsed > 0 ? round($processed / $elapsed, 2) : 0;
+          $this->logger()->notice("Processed {$processed} items ({$rate} items/sec)");
+        }
+      }
+      catch (\Exception $e) {
+        $errors++;
+        $this->logger()->error('Error processing condition entity item: ' . $e->getMessage());
+        $queue->deleteItem($item);
+      }
+    }
+    
+    if ($processed > 0) {
+      $this->logger()->success(dt('Processed @processed condition entities (@errors errors).', [
+        '@processed' => $processed,
+        '@errors' => $errors,
+      ]));
+    }
+    else {
+      $this->logger()->notice('No items in condition entity import queue.');
+    }
   }
 
   /**

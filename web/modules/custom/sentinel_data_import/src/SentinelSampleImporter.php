@@ -161,21 +161,32 @@ class SentinelSampleImporter {
     }
 
     $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    if ($storage->load($pid)) {
-      $this->logger->info('Sentinel sample @pid already exists, skipping.', ['@pid' => $pid]);
-      return;
+    
+    // Clear cache before loading to ensure we get the latest entity
+    $storage->resetCache([$pid]);
+    
+    // Check if entity exists - if so, update it; otherwise create new
+    /** @var \Drupal\sentinel_portal_entities\Entity\SentinelSample|null $entity */
+    $entity = $storage->load($pid);
+    $is_update = $entity !== NULL;
+    
+    if ($is_update) {
+      $this->logger->info('Found existing sentinel_sample @pid, will update.', ['@pid' => $pid]);
+    }
+    else {
+      $this->logger->info('No existing sentinel_sample @pid found, will create new.', ['@pid' => $pid]);
     }
 
-    $values = [
-      'pid' => $pid,
-    ];
+    // Build values array from CSV data
+    $values = [];
 
     foreach (self::STRING_FIELDS as $field) {
       if (!array_key_exists($field, $item)) {
         continue;
       }
       $normalized = $this->normalizeText($item[$field]);
-      if ($normalized !== '') {
+      // For updates, include empty values to clear fields; for creates, skip empty
+      if ($is_update || $normalized !== '') {
         $values[$field] = ['value' => $normalized];
       }
     }
@@ -185,10 +196,10 @@ class SentinelSampleImporter {
         continue;
       }
       $raw = $item[$field];
-      if ($raw === '' || $raw === NULL) {
-        continue;
+      // For updates, include NULL/empty to clear fields; for creates, skip empty
+      if ($is_update || ($raw !== '' && $raw !== NULL)) {
+        $values[$field] = ['value' => $raw !== '' && $raw !== NULL ? (int) $raw : NULL];
       }
-      $values[$field] = ['value' => (int) $raw];
     }
 
     foreach (self::BOOLEAN_FIELDS as $field) {
@@ -203,34 +214,89 @@ class SentinelSampleImporter {
         continue;
       }
       $normalized = $this->normalizeDate($item[$field]);
-      if ($normalized !== NULL) {
+      // For updates, include NULL to clear fields; for creates, skip NULL
+      if ($is_update || $normalized !== NULL) {
         $values[$field] = ['value' => $normalized];
       }
     }
 
-    // Ensure created/changed values exist even if the CSV was empty.
-    if (empty($values['created'])) {
-      $values['created'] = ['value' => $this->formatTimestamp($this->time->getRequestTime())];
-    }
-    if (empty($values['changed'])) {
-      $values['changed'] = ['value' => $this->formatTimestamp($this->time->getRequestTime())];
-    }
-    if (!empty($values['updated']) && empty($values['changed'])) {
-      $values['changed'] = $values['updated'];
-    }
-
     try {
-      /** @var \Drupal\sentinel_portal_entities\Entity\SentinelSample $entity */
-      $entity = $storage->create($values);
-      $entity->enforceIsNew();
+      if ($is_update) {
+        // Update existing entity
+        // Apply values to existing entity
+        $updated_fields = [];
+        foreach ($values as $field_name => $field_value) {
+          if ($entity->hasField($field_name)) {
+            // Get current value for comparison
+            $current_value = $entity->get($field_name)->value ?? NULL;
+            $new_value = is_array($field_value) ? ($field_value['value'] ?? NULL) : $field_value;
+            
+            // Normalize empty strings to NULL for comparison
+            if ($new_value === '') {
+              $new_value = NULL;
+            }
+            if ($current_value === '') {
+              $current_value = NULL;
+            }
+            
+            // Update if value has changed
+            if ($current_value != $new_value) {
+              // If new value is NULL or empty string, set to empty
+              if ($new_value === NULL || $new_value === '') {
+                $entity->set($field_name, NULL);
+              }
+              else {
+                $entity->set($field_name, $field_value);
+              }
+              $updated_fields[] = $field_name;
+            }
+          }
+        }
 
-      $this->applyAddressReferences($entity, $item);
-      $entity->save();
+        // Always update changed timestamp
+        $changed_value = ['value' => $this->formatTimestamp($this->time->getRequestTime())];
+        if ($entity->hasField('changed')) {
+          $entity->set('changed', $changed_value);
+        }
 
-      $this->logger->notice('Imported sentinel_sample @pid.', ['@pid' => $pid]);
+        // Create new revision on update (required by storage)
+        $entity->setNewRevision(TRUE);
+
+        $this->applyAddressReferences($entity, $item);
+        $entity->save();
+
+        $this->logger->notice('Updated sentinel_sample @pid. Updated fields: @fields', [
+          '@pid' => $pid,
+          '@fields' => implode(', ', $updated_fields) ?: 'none (no changes)',
+        ]);
+      }
+      else {
+        // Create new entity
+        $values['pid'] = $pid;
+
+        // Ensure created/changed values exist even if the CSV was empty.
+        if (empty($values['created'])) {
+          $values['created'] = ['value' => $this->formatTimestamp($this->time->getRequestTime())];
+        }
+        if (empty($values['changed'])) {
+          $values['changed'] = ['value' => $this->formatTimestamp($this->time->getRequestTime())];
+        }
+        if (!empty($values['updated']) && empty($values['changed'])) {
+          $values['changed'] = $values['updated'];
+        }
+
+        /** @var \Drupal\sentinel_portal_entities\Entity\SentinelSample $entity */
+        $entity = $storage->create($values);
+        $entity->enforceIsNew();
+
+        $this->applyAddressReferences($entity, $item);
+        $entity->save();
+
+        $this->logger->notice('Imported sentinel_sample @pid.', ['@pid' => $pid]);
+      }
     }
     catch (EntityStorageException $e) {
-      $this->logger->error('Failed importing sentinel_sample @pid: @message', [
+      $this->logger->error('Failed ' . ($is_update ? 'updating' : 'importing') . ' sentinel_sample @pid: @message', [
         '@pid' => $pid,
         '@message' => $e->getMessage(),
       ]);
