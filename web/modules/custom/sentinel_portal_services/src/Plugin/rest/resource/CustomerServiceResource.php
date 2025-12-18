@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpFoundation\Response;
 
+
 /**
  * Provides a Customer Service Resource.
  *
@@ -42,9 +43,15 @@ class CustomerServiceResource extends ResourceBase {
     $name = trim($request->query->get('name') ?? '');
     $company = trim($request->query->get('company') ?? '');
 
+   // Log API call.
+   \Drupal::logger('sentinel_portal_services')->info('API GET /sentinel/customerservice called - Email: @email, Name: @name', [
+    '@email' => isset($email) ? $email : " ",
+    '@name' => isset($name) ? $name : " ",
+  ]);
     // Validate the API key
     $client_data = $this->getClientByApiKey($key);
     if (!$client_data) {
+      \Drupal::logger('sentinel_portal_services')->warning('API GET /sentinel/customerservice - Invalid API key');
       throw new BadRequestHttpException('API key is invalid');
     }
 
@@ -70,6 +77,7 @@ class CustomerServiceResource extends ResourceBase {
       }
 
       if (!$this->validateEmail($email)) {
+        \Drupal::logger('sentinel_portal_services')->warning('API GET /sentinel/customerservice - Invalid email validation');
         $response_data = [
           'status' => 406,
           'message' => 'Not acceptable',
@@ -89,12 +97,22 @@ class CustomerServiceResource extends ResourceBase {
     $storage = $entity_type_manager->getStorage('sentinel_client');
 
     // Query for existing client by email
-    $query = $storage->getQuery()
+    $database = \Drupal::database();
+     $query = $storage->getQuery()
       ->condition('email', $email)
-      ->condition('api_key', '', '=')
       ->accessCheck(FALSE);
 
     $result = $query->execute();
+
+   // Execute and fetch the results
+  // $result = $query->execute()->fetchAll();
+  //  $query = $storage->getQuery()
+    //  ->condition('email', $email)
+  //    ->condition('api_key', '', '=')
+   //   ->accessCheck(FALSE);
+
+  //  $result = $query->execute();
+   // dd($result);
 
     if (empty($result)) {
       // Client doesn't exist, create new one
@@ -127,7 +145,7 @@ class CustomerServiceResource extends ResourceBase {
     $return_array = [
       'name' => $client->get('name')->value ?? '',
       'email' => $client->get('email')->value ?? '',
-      'customer_id' => method_exists($client, 'getUcr') ? $client->getUcr() : ($client->get('ucr')->value ?? ''),
+      'customer_id' => method_exists($client, 'getUcr') ? (string) $client->getUcr() : (string) ($client->get('ucr')->value ?? ''),
     ];
 
     if (!empty($company)) {

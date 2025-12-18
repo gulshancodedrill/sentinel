@@ -44,24 +44,38 @@ class SampleServiceResource extends ResourceBase {
     $key = $request->query->get('key');
     $pack_reference_number = $request->query->get('pack_reference_number');
     $ucr = $request->query->get('ucr');
-
+    
+    \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice Get called - Pack: @pack_ref', [
+      '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " "
+    ]);
+    
     // Validate the API key
     $client_data = $this->getClientByApiKey($key);
     if (!$client_data) {
+              \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice Get - Status: Invalid API key');
+
       throw new BadRequestHttpException('API key is invalid');
     }
 
     // Validate pack reference number
     if (empty($pack_reference_number)) {
+              \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice Get - Status: Validation failed - pack_reference_number is missing');
+
       throw new BadRequestHttpException('pack_reference_number is missing');
     }
 
     if (function_exists('valid_pack_reference_number') && !valid_pack_reference_number($pack_reference_number)) {
+          \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice Get - Status: Validation failed - pack_reference_number is not valid - Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
       throw new BadRequestHttpException('pack_reference_number is not valid');
     }
 
     // Validate UCR (required)
     if (empty($ucr)) {
+         \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice Get - Status: Validation failed - ucr is missing - Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
       throw new BadRequestHttpException('ucr is missing');
     }
 
@@ -71,12 +85,16 @@ class SampleServiceResource extends ResourceBase {
 
     if (method_exists($client, 'validateUcr')) {
       $ucr_int = (int) $ucr;
+      
       if (!$client->validateUcr($ucr_int)) {
         $generated_ucr = $client->generateUcr($ucr_int);
         if ($client->validateUcr($generated_ucr)) {
           $ucr = $generated_ucr;
         }
         else {
+          \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice Get - Status: Validation failed - ucr is not valid, Pack: @pack_ref', [
+            '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+          ]);
           throw new BadRequestHttpException('UCR is not valid');
         }
       }
@@ -115,6 +133,11 @@ class SampleServiceResource extends ResourceBase {
       // Normalize the response to match Drupal 7 format
       $normalized_data = $this->normalizeResponseData($return_array);
 
+      // Log successful retrieval.
+      \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice GET - Status: Sample found, Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
+
       $response_data = [
         'status' => '200',
         'message' => $normalized_data,
@@ -125,7 +148,10 @@ class SampleServiceResource extends ResourceBase {
       
       return $response;
     }
-
+    // Log sample not found.
+    \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice GET - Status: Sample not found - Pack: @pack_ref', [
+      '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+    ]);
     throw new NotFoundHttpException('Sample not found');
   }
 
@@ -146,24 +172,39 @@ class SampleServiceResource extends ResourceBase {
     }
 
     $key = $request->query->get('key') ?? ($data['key'] ?? '');
+    $pack_reference_number = $data['pack_reference_number'] ?? '';
+
+    // Log API call received.
+    \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice POST called - Pack: @pack_ref', [
+      '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+    ]);
 
     // Validate the API key
     $client_data = $this->getClientByApiKey($key);
     if (!$client_data) {
+      \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Invalid API key');
       throw new BadRequestHttpException('API key is invalid');
     }
 
     // Validate pack reference number
     if (!isset($data['pack_reference_number'])) {
+      \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Validation failed - pack_reference_number is missing');
+
       throw new BadRequestHttpException('pack_reference_number is missing');
     }
 
     if (function_exists('valid_pack_reference_number') && !valid_pack_reference_number($data['pack_reference_number'])) {
+      \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Validation failed - pack_reference_number is not valid - Pack: @pack_ref', [
+        '@pack_ref' => $data['pack_reference_number'],
+      ]);
       throw new BadRequestHttpException('pack_reference_number is not valid');
     }
 
     // Validate UCR
     if (!isset($data['ucr'])) {
+      \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Validation failed - ucr is missing - Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
       throw new BadRequestHttpException('ucr is missing');
     }
 
@@ -179,6 +220,9 @@ class SampleServiceResource extends ResourceBase {
           $data['ucr'] = $generated_ucr;
         }
         else {
+          \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Validation failed - ucr is not valid, Pack: @pack_ref', [
+            '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+          ]);
           throw new BadRequestHttpException('ucr is not valid');
         }
       }
@@ -287,10 +331,17 @@ class SampleServiceResource extends ResourceBase {
       $sample_entity = $sample_storage->load($existing_id);
 
       if (!$sample_entity) {
+
+        \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Sample not found for update, Pack: @pack_ref', [
+          '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+        ]);
         throw new NotFoundHttpException('Sample not found.');
       }
 
       if ($global_access == FALSE && method_exists($sample_entity, 'isReported') && $sample_entity->isReported()) {
+        \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Sample already reported, cannot update, Pack: @pack_ref', [
+          '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+        ]);
         throw new BadRequestHttpException('Sample has already been reported and cannot be updated. Please contact Sentinel.');
       }
 
@@ -311,6 +362,10 @@ class SampleServiceResource extends ResourceBase {
 
       $sample_update = TRUE;
       $message = 'Sample updated';
+
+      \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice POST - Status: Sample updated, Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
     }
     else {
       // CREATE new sample - validate required fields
@@ -327,6 +382,10 @@ class SampleServiceResource extends ResourceBase {
           ];
         }
 
+        \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Validation failed - Pack: @pack_ref', [
+          '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+        ]);
+
         $response_data = [
           'status' => Response::HTTP_NOT_ACCEPTABLE,
           'message' => $e->getMessage(),
@@ -341,6 +400,9 @@ class SampleServiceResource extends ResourceBase {
       
       // Check if pack reference already exists (shouldn't at this point)
       if (!empty($sample['pack_reference_number']) && SentinelSampleEntityHelper::loadSampleByPackReference($sample['pack_reference_number'])) {
+        \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Access denied - Pack already exists: @pack_ref', [
+          '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+        ]);
         throw new BadRequestHttpException('Access denied.');
       }
 
@@ -357,6 +419,11 @@ class SampleServiceResource extends ResourceBase {
 
       $sample_update = FALSE;
       $message = 'Sample created';
+
+       // Log sample creation.
+       \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice POST - Status: Sample created, Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
     }
 
     $date_reported_original = $sample_entity_original ? ($sample_entity_original->get('date_reported')->value ?? NULL) : NULL;
@@ -380,6 +447,11 @@ class SampleServiceResource extends ResourceBase {
         ];
       }
 
+       // Log completion with errors.
+       \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Sample created with errors - Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
+
       $response_data = [
         'status' => '200',
         'message' => $message . ' (with errors).',
@@ -387,6 +459,11 @@ class SampleServiceResource extends ResourceBase {
       ];
     }
     else {
+
+      \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice POST - Status: Sample created successfully - Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
+      
       $response_data = [
         'status' => '200',
         'message' => $message . '.',
@@ -518,9 +595,7 @@ class SampleServiceResource extends ResourceBase {
       }
     }
     catch (\Throwable $throwable) {
-      \Drupal::logger('sentinel_portal_services')->error('Failed ensuring API sample addresses: @message', [
-        '@message' => $throwable->getMessage(),
-      ]);
+      \Drupal::logger('sentinel_portal_services')->error('Failed ensuring API sample addresses');
       throw $throwable;
     }
   }

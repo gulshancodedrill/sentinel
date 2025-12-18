@@ -867,7 +867,7 @@ function sentinel_portal_queue_send_email_with_attachment(array $email_payload, 
   $mailer = sentinel_portal_queue_get_mailer();
 
   $site_config = \Drupal::config('system.site');
-  $from_address = $site_config->get('mail') ?: 'noreply@sentinel.com';
+  $from_address = $site_config->get('mail') ?: 'noreply@portal.sentinelprotects.com';
   $from_name = $site_config->get('name') ?: 'Sentinel';
 
   $email = new Email();

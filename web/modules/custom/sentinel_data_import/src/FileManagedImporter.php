@@ -221,6 +221,7 @@ class FileManagedImporter {
         ]);
       }
       else {
+<<<<<<< HEAD
         // Create new file entity
         // If source file exists, write it; otherwise create entity with URI only
         if ($has_source_file && $data !== NULL) {
@@ -274,6 +275,110 @@ class FileManagedImporter {
         
         $file->save();
         
+=======
+        // Create new file entity with preserved fid
+        // Use direct database insert to preserve the original fid from D7
+        $connection = \Drupal::database();
+        
+        // Check if fid already exists
+        $existing = $connection->select('file_managed', 'f')
+          ->fields('f', ['fid'])
+          ->condition('fid', $fid)
+          ->execute()
+          ->fetchField();
+        
+        if (!$existing) {
+          // Prepare file data
+          $uid = isset($item['uid']) && !empty($item['uid']) ? (int) $item['uid'] : 1;
+          $filename = isset($item['filename']) && $item['filename'] !== '' ? $item['filename'] : basename($destination_uri);
+          $filemime = isset($item['filemime']) && $item['filemime'] !== '' ? $item['filemime'] : '';
+          $filesize = isset($item['filesize']) ? (int) $item['filesize'] : 0;
+          $status = isset($item['status']) ? (int) $item['status'] : 1;
+          $timestamp = isset($item['timestamp']) && !empty($item['timestamp']) ? (int) $item['timestamp'] : time();
+          
+          // Generate UUID for the entity
+          $uuid_service = \Drupal::service('uuid');
+          $uuid = $uuid_service->generate();
+          
+          // Insert directly into database to preserve fid
+          $connection->insert('file_managed')
+            ->fields([
+              'fid' => $fid,
+              'uuid' => $uuid,
+              'langcode' => 'en',
+              'uid' => $uid,
+              'filename' => $filename,
+              'uri' => $destination_uri,
+              'filemime' => $filemime,
+              'filesize' => $filesize,
+              'status' => $status,
+              'created' => $timestamp,
+              'changed' => $timestamp,
+            ])
+            ->execute();
+          
+          // Clear entity cache
+          $storage->resetCache([$fid]);
+        }
+        
+        // Load the file entity
+        $storage->resetCache([$fid]);
+        $file = $storage->load($fid);
+        
+        if (!$file) {
+          // Fallback: create normally if direct insert failed
+          $this->logger->warning('Direct insert failed for fid @fid, creating with auto-increment ID.', ['@fid' => $fid]);
+          if ($has_source_file && $data !== NULL) {
+            $file = $this->fileRepository->writeData($data, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
+          }
+          else {
+            $file = File::create([
+              'uri' => $destination_uri,
+            ]);
+          }
+        }
+        else {
+          // File was created with preserved fid, now write content if available
+          if ($has_source_file && $data !== NULL) {
+            // Write file content using file repository
+            $this->fileRepository->writeData($data, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
+            
+            // Update filesize if needed
+            $actual_size = strlen($data);
+            if ($file->getSize() != $actual_size) {
+              $file->set('filesize', $actual_size);
+            }
+          }
+          
+          // Update file properties from CSV data
+          if (isset($item['uid']) && !empty($item['uid'])) {
+            $file->setOwnerId((int) $item['uid']);
+          }
+          
+          if (isset($item['filemime']) && $item['filemime'] !== '' && $item['filemime'] !== NULL) {
+            $file->setMimeType($item['filemime']);
+          }
+          
+          if (isset($item['filename']) && $item['filename'] !== '' && $item['filename'] !== NULL) {
+            $file->setFilename($item['filename']);
+          }
+          
+          // Set status
+          if (array_key_exists('status', $item)) {
+            $file->setPermanent((int) $item['status'] === 1);
+          }
+          
+          // Set timestamps
+          if (isset($item['timestamp']) && !empty($item['timestamp'])) {
+            $timestamp = (int) $item['timestamp'];
+            $file->set('created', $timestamp);
+            $file->set('changed', $timestamp);
+          }
+          
+          $file->save();
+        }
+        
+>>>>>>> bea6a653 (live changes uploaded on git)
         $this->logger->notice('Created file @fid (@uri).', [
           '@fid' => $file->id(),
           '@uri' => $destination_uri,

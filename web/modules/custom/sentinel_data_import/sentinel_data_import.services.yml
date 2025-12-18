@@ -25,9 +25,19 @@ services:
       - '@entity_type.manager'
       - '@logger.factory'
       - '@datetime.time'
+<<<<<<< HEAD
   sentinel_data_import.condition_entity_importer:
     class: Drupal\sentinel_data_import\ConditionEntityImporter
     arguments:
       - '@entity_type.manager'
       - '@logger.factory'
       - '@datetime.time'
+=======
+  # Commented out - class does not exist
+  # sentinel_data_import.condition_entity_importer:
+  #   class: Drupal\sentinel_data_import\ConditionEntityImporter
+  #   arguments:
+  #     - '@entity_type.manager'
+  #     - '@logger.factory'
+  #     - '@datetime.time'
+>>>>>>> bea6a653 (live changes uploaded on git)

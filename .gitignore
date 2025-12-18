@@ -87,4 +87,23 @@ sentinelportal_drupalsentinel.sql
 
 
 /web/modules/custom/sentinel_data_import/csv/address_entities_d7.csv
+<<<<<<< HEAD
 /web/modules/custom/sentinel_data_import/csv/file_managed_d7.csv
+=======
+/web/modules/custom/sentinel_data_import/csv/file_managed_d7.csv
+# Ignore CSV import files in sentinel_data_import
+web/modules/custom/sentinel_data_import/csv/
+
+web/debug.php
+web/debug1.php
+web/jaytest.php
+
+scripts/file_managed_d7.csv
+scripts/file_managed_d7.csv-6m
+scripts/file_managed_d7_excluding_last_2_years_part1.csv
+scripts/file_managed_d7_excluding_last_2_years_part2.csv
+scripts/file_managed_d7_excluding_last_2_years_part3.csv
+.htaccess
+.user.ini
+php.ini
+>>>>>>> bea6a653 (live changes uploaded on git)

@@ -43,6 +43,8 @@ class HeartbeatResource extends ResourceBase {
    */
   public function get() {
     // Return current date/time - matches D7 format exactly
+        \Drupal::logger('sentinel_portal_services')->info('API GET /sentinel/heartbeat called');
+
     $current_time = date('Y-m-d H:i:s');
 
     $response_data = [
