@@ -221,61 +221,6 @@ class FileManagedImporter {
         ]);
       }
       else {
-<<<<<<< HEAD
-        // Create new file entity
-        // If source file exists, write it; otherwise create entity with URI only
-        if ($has_source_file && $data !== NULL) {
-          $file = $this->fileRepository->writeData($data, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
-        }
-        else {
-          // Create file entity with URI but without file content
-          // The file will be available when the actual file is placed in the directory
-          $file = File::create([
-            'uri' => $destination_uri,
-          ]);
-          
-          // Note: Drupal file entities use auto-incrementing IDs, so the new file
-          // will have its own generated ID, not necessarily the fid from CSV.
-          // This is expected behavior.
-        }
-        
-        // Set file properties (for both new and existing files created without content)
-        $file->setOwnerId(isset($item['uid']) && !empty($item['uid']) ? (int) $item['uid'] : 1);
-        
-        if (isset($item['filemime']) && $item['filemime'] !== '' && $item['filemime'] !== NULL) {
-          $file->setMimeType($item['filemime']);
-        }
-        
-        if (isset($item['filename']) && $item['filename'] !== '' && $item['filename'] !== NULL) {
-          $file->setFilename($item['filename']);
-        }
-        else {
-          $file->setFilename(basename($destination_uri));
-        }
-        
-        // Set status
-        if (array_key_exists('status', $item)) {
-          $file->setPermanent((int) $item['status'] === 1);
-        }
-        else {
-          $file->setPermanent(TRUE);
-        }
-        
-        // Set timestamps
-        if (isset($item['timestamp']) && !empty($item['timestamp'])) {
-          $timestamp = (int) $item['timestamp'];
-          $file->set('created', $timestamp);
-          $file->set('changed', $timestamp);
-        }
-        else {
-          $now = time();
-          $file->set('created', $now);
-          $file->set('changed', $now);
-        }
-        
-        $file->save();
-        
-=======
         // Create new file entity with preserved fid
         // Use direct database insert to preserve the original fid from D7
         $connection = \Drupal::database();
@@ -378,7 +323,6 @@ class FileManagedImporter {
           $file->save();
         }
         
->>>>>>> bea6a653 (live changes uploaded on git)
         $this->logger->notice('Created file @fid (@uri).', [
           '@fid' => $file->id(),
           '@uri' => $destination_uri,
@@ -403,4 +347,3 @@ class FileManagedImporter {
   }
 
 }
-
