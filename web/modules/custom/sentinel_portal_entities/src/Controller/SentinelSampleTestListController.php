@@ -447,17 +447,17 @@ class SentinelSampleTestListController extends ControllerBase {
       // Sort by date_reported
       $query->orderBy('ss.date_reported', $sort_direction);
       // Secondary sort by created and pid
-      $query->orderBy('ss.created', 'DESC');
+      $query->orderBy('ss.date_reported', 'DESC');
       $query->orderBy('ss.pid', 'DESC');
     } elseif ($order === 'date_received' || $order === 'date_booked') {
       // Sort by date_received (date_booked in database)
       $query->orderBy('ss.date_booked', $sort_direction);
       // Secondary sort by created and pid
-      $query->orderBy('ss.created', 'DESC');
+      $query->orderBy('ss.date_reported', 'DESC');
       $query->orderBy('ss.pid', 'DESC');
     } else {
       // Default sorting - latest first
-      $query->orderBy('ss.created', 'DESC');
+      $query->orderBy('ss.date_reported', 'DESC');
       $query->orderBy('ss.pid', 'DESC');
     }
 
@@ -574,7 +574,7 @@ class SentinelSampleTestListController extends ControllerBase {
 
       // Date received (date_booked)
       $date_booked = $row->date_booked ?? '';
-      $date_received = $date_booked ? date('d/m/Y', strtotime($date_booked)) : '-';
+      $date_received = $date_booked ? date('d/m/Y', strtotime($date_booked)) : 'Not yet received';
 
       // Date reported
       $date_reported = $row->date_reported ?? '';

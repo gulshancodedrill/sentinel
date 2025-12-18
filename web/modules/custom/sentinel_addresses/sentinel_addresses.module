@@ -44,8 +44,8 @@ function sentinel_addresses_get_addresses_not_updated() {
 
   // Query for samples that need address formatting.
   $query = $database->select('sentinel_sample', 'ss');
-  $query->addField('ss', 'id', 'pid');
-  $query->leftJoin('other_sentinel_addresses_mapping', 'sm', 'sm.sample_pid = ss.id');
+  $query->addField('ss', 'pid', 'pid');
+  $query->leftJoin('other_sentinel_addresses_mapping', 'sm', 'sm.sample_pid = ss.pid');
   $query->isNull('sm.address_id');
 
   // Don't process any addresses created before the module was turned on.

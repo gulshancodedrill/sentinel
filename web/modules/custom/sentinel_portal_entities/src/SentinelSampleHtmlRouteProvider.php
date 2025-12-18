@@ -27,6 +27,11 @@ class SentinelSampleHtmlRouteProvider extends AdminHtmlRouteProvider {
   protected function getEditFormRoute(EntityTypeInterface $entity_type) {
     $route = parent::getEditFormRoute($entity_type);
     if ($route) {
+      // Remove the default _entity_access requirement and use our custom access check instead.
+      $route->setRequirements([
+        '_custom_access' => '\Drupal\sentinel_portal_entities\Controller\SentinelSampleAccess::accessEdit',
+        'sentinel_sample' => '\d+',
+      ]);
       $route->setOption('_admin_route', FALSE);
     }
     return $route;
@@ -51,7 +56,11 @@ class SentinelSampleHtmlRouteProvider extends AdminHtmlRouteProvider {
     if ($route) {
       $route->setDefault('_controller', '\Drupal\sentinel_portal_entities\Controller\SentinelSampleViewController::view');
       $route->setDefault('_title_callback', '\Drupal\sentinel_portal_entities\Controller\SentinelSampleViewController::title');
-      $route->setRequirement('_custom_access', '\Drupal\sentinel_portal_entities\Controller\SentinelSampleAccess::access');
+      // Remove the default _entity_access requirement and use our custom access check instead.
+      $route->setRequirements([
+        '_custom_access' => '\Drupal\sentinel_portal_entities\Controller\SentinelSampleAccess::access',
+        'sentinel_sample' => '\d+',
+      ]);
       $route->setOption('_admin_route', FALSE);
     }
     return $route;
