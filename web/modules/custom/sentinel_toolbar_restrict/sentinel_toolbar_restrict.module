@@ -1,0 +1,70 @@
+<?php
+
+/**
+ * @file
+ * Restricts the Drupal admin toolbar to specific user IDs only.
+ */
+
+/**
+ * Implements hook_page_top_alter().
+ *
+ * Hide the admin toolbar for all users except the allowed user IDs.
+ */
+function sentinel_toolbar_restrict_page_top_alter(array &$page_top) {
+  // Define the allowed user IDs who can see the toolbar.
+  // Change these to your desired user IDs.
+  $allowed_user_ids = [20216,20201,16]; // Replace with your actual user IDs
+
+  $current_user = \Drupal::currentUser();
+  $current_uid = (int) $current_user->id();
+
+  // Normalize allowed user IDs to integers for comparison.
+  $allowed_user_ids = array_map('intval', $allowed_user_ids);
+
+  // Debug logging (remove after testing).
+  \Drupal::logger('sentinel_toolbar_restrict')->debug('Toolbar access check: User @uid, Allowed: @allowed, Has access: @has_access', [
+    '@uid' => $current_uid,
+    '@allowed' => implode(', ', $allowed_user_ids),
+    '@has_access' => in_array($current_uid, $allowed_user_ids, TRUE) ? 'YES' : 'NO',
+  ]);
+
+  // If the current user is not in the allowed list, hide the toolbar.
+  if (!in_array($current_uid, $allowed_user_ids, TRUE)) {
+    // Remove the toolbar from page_top if it exists.
+    if (isset($page_top['toolbar'])) {
+      $page_top['toolbar']['#access'] = FALSE;
+      \Drupal::logger('sentinel_toolbar_restrict')->debug('Toolbar hidden for user @uid', ['@uid' => $current_uid]);
+    }
+  }
+  else {
+    \Drupal::logger('sentinel_toolbar_restrict')->debug('Toolbar allowed for user @uid', ['@uid' => $current_uid]);
+  }
+}
+
+/**
+ * Implements hook_page_attachments_alter().
+ *
+ * Alternative method to hide toolbar via CSS/JS if needed.
+ */
+function sentinel_toolbar_restrict_page_attachments_alter(array &$attachments) {
+  // Define the allowed user IDs who can see the toolbar.
+  $allowed_user_ids = [20216,20201,16]; // Replace with your actual user IDs
+
+  $current_user = \Drupal::currentUser();
+  $current_uid = (int) $current_user->id();
+
+  // Normalize allowed user IDs to integers for comparison.
+  $allowed_user_ids = array_map('intval', $allowed_user_ids);
+
+  // If the current user is not in the allowed list, hide the toolbar with CSS.
+  if (!in_array($current_uid, $allowed_user_ids, TRUE)) {
+    $attachments['#attached']['html_head'][] = [
+      [
+        '#tag' => 'style',
+        '#value' => '#toolbar-administration { display: none !important; } body.toolbar-tray-open { padding-top: 0 !important; } body.toolbar-horizontal.toolbar-tray-open { padding-top: 0 !important; }',
+      ],
+      'sentinel_toolbar_restrict_hide_toolbar',
+    ];
+  }
+}
+
