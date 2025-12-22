@@ -10,7 +10,6 @@ services:
       - '@sentinel_data_import.test_entity_importer'
       - '@sentinel_data_import.address_importer'
       - '@sentinel_data_import.sentinel_sample_importer'
-      - '@sentinel_data_import.condition_entity_importer'
     tags:
       - { name: drush.command }
 

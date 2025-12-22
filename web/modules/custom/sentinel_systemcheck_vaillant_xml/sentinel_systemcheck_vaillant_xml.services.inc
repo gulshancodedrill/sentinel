@@ -67,7 +67,10 @@ function sentinel_systemcheck_vaillant_xml_generate($sample) {
     $xml .= '<DateTested></DateTested>';
   }
 
-  $pass_fail = $sample->get('pass_fail')->value ?? 0;
+  $pass_fail = 0;
+  if ($sample->hasField('pass_fail') && !$sample->get('pass_fail')->isEmpty()) {
+    $pass_fail = (int) ($sample->get('pass_fail')->value ?? 0);
+  }
   switch ($pass_fail) {
     case 0:
       $xml .= '<Result>F</Result>';
@@ -179,7 +182,10 @@ function sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample_entity) 
     return FALSE;
   }
 
-  $pass_fail = $sample_entity->get('pass_fail')->value ?? 0;
+  $pass_fail = 0;
+  if ($sample_entity->hasField('pass_fail') && !$sample_entity->get('pass_fail')->isEmpty()) {
+    $pass_fail = (int) ($sample_entity->get('pass_fail')->value ?? 0);
+  }
   $is_pass = ($pass_fail == 1);
   
   $pack_ref = strip_tags($sample_entity->get('pack_reference_number')->value ?? '');

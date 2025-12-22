@@ -7,7 +7,6 @@ use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\sentinel_data_import\AddressImporter;
-use Drupal\sentinel_data_import\ConditionEntityImporter;
 use Drupal\sentinel_data_import\FileManagedImporter;
 use Drupal\sentinel_data_import\SentinelSampleImporter;
 use Drupal\sentinel_data_import\TestEntityImporter;
@@ -31,7 +30,6 @@ class SentinelDataImportCommands extends DrushCommands {
     protected TestEntityImporter $testEntityImporter,
     protected AddressImporter $addressImporter,
     protected SentinelSampleImporter $sentinelSampleImporter,
-    protected ConditionEntityImporter $conditionEntityImporter,
   ) {
     parent::__construct();
   }
@@ -49,7 +47,6 @@ class SentinelDataImportCommands extends DrushCommands {
       $container->get('sentinel_data_import.test_entity_importer'),
       $container->get('sentinel_data_import.address_importer'),
       $container->get('sentinel_data_import.sentinel_sample_importer'),
-      $container->get('sentinel_data_import.condition_entity_importer'),
     );
   }
 

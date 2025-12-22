@@ -1,0 +1,5 @@
+access sentinel endpoint:
+  title: 'Access sentinel_customerservice endpoint'
+  description: 'Allow users to access the /sentinel endpoint.'
+  restrict: FALSE
+

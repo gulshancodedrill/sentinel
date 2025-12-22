@@ -1,0 +1,8 @@
+services:
+  sentinel_csv_processor.csv_processor:
+    class: Drupal\sentinel_csv_processor\CsvProcessor
+    arguments:
+      - '@logger.factory'
+      - '@file_system'
+      - '@config.factory'
+

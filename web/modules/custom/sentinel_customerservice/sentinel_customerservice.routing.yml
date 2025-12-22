@@ -1,0 +1,7 @@
+sentinel_customerservice.main:
+  path: '/sentinel'
+  defaults:
+    _controller: '\Drupal\sentinel_customerservice\Controller\SentinelController::main'
+    _title: 'Sentinel Main API'
+  requirements:
+    _permission: 'access content'

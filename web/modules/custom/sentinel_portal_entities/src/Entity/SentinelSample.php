@@ -2001,6 +2001,59 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
   }
 
   /**
+   * Delete existing PDF file and clear file references from the sample.
+   *
+   * This method deletes the managed file entity, the physical file,
+   * and clears the fileid and filename fields, allowing a new PDF to be generated.
+   */
+  public function deleteExistingPdf(): void {
+    $fileid = $this->getFieldStringValue('fileid');
+    $filename = $this->getFieldStringValue('filename');
+    $file_system = \Drupal::service('file_system');
+    
+    // Delete the managed file entity if it exists.
+    if ($fileid) {
+      $file_entity = \Drupal::entityTypeManager()->getStorage('file')->load($fileid);
+      
+      if ($file_entity instanceof FileInterface) {
+        // Get the URI before deleting the entity.
+        $file_uri = $file_entity->getFileUri();
+        
+        // Delete the file entity (this also handles file usage).
+        $file_entity->delete();
+        
+        \Drupal::logger('sentinel_portal_entities')->info('Deleted existing PDF file entity (fid @fid) for sample @id.', [
+          '@fid' => $fileid,
+          '@id' => $this->id(),
+        ]);
+      }
+    }
+    
+    // Also check for physical files in storage directories and delete them.
+    if ($filename) {
+      $locations = [
+        $this->getCurrentPdfDirectory() . $filename,
+        $this->getLegacyPdfDirectory() . $filename,
+      ];
+      
+      foreach ($locations as $uri) {
+        $real_path = $file_system->realpath($uri);
+        if ($real_path && file_exists($real_path)) {
+          @unlink($real_path);
+          \Drupal::logger('sentinel_portal_entities')->info('Deleted physical PDF file @path for sample @id.', [
+            '@path' => $real_path,
+            '@id' => $this->id(),
+          ]);
+        }
+      }
+    }
+    
+    // Clear the fileid and filename fields on the entity.
+    $this->set('fileid', NULL);
+    $this->set('filename', NULL);
+  }
+
+  /**
    * Generate and persist a PDF certificate for this sample.
    */
   public function SavePdf() {
@@ -2227,24 +2280,40 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
 
   /**
    * Ensure a directory exists within the private file system.
+   *
+   * @throws \RuntimeException
+   *   If the directory cannot be created or is not writable.
    */
   protected function ensureDirectory(string $uri): void {
     $file_system = \Drupal::service('file_system');
     $result = $file_system->prepareDirectory($uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
-    $realpath = $file_system->realpath($uri) ?: 'unresolved';
+    $realpath = $file_system->realpath($uri);
 
     if (!$result) {
-      \Drupal::logger('sentinel_portal_entities')->warning('Unable to prepare directory @uri (resolved path: @real).', [
-        '@uri' => $uri,
-        '@real' => $realpath,
-      ]);
+      $error_message = sprintf(
+        'Unable to prepare directory %s (resolved path: %s). This may be caused by a problem with file or directory permissions.',
+        $uri,
+        $realpath ?: 'unresolved'
+      );
+      \Drupal::logger('sentinel_portal_entities')->error($error_message);
+      throw new \RuntimeException($error_message);
     }
-    else {
-      \Drupal::logger('sentinel_portal_entities')->info('Prepared directory @uri (resolved path: @real).', [
-        '@uri' => $uri,
-        '@real' => $realpath,
-      ]);
+
+    // Verify the directory actually exists and is writable.
+    if (!$realpath || !is_dir($realpath) || !is_writable($realpath)) {
+      $error_message = sprintf(
+        'Directory %s was created but is not accessible or writable (resolved path: %s). Please check file permissions.',
+        $uri,
+        $realpath ?: 'unresolved'
+      );
+      \Drupal::logger('sentinel_portal_entities')->error($error_message);
+      throw new \RuntimeException($error_message);
     }
+
+    \Drupal::logger('sentinel_portal_entities')->info('Prepared directory @uri (resolved path: @real).', [
+      '@uri' => $uri,
+      '@real' => $realpath,
+    ]);
   }
 
   /**

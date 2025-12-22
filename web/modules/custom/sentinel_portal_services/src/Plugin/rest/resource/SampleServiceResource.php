@@ -208,22 +208,37 @@ class SampleServiceResource extends ResourceBase {
       throw new BadRequestHttpException('ucr is missing');
     }
 
+    // Initialize entity_type_manager (needed later in the code).
     $entity_type_manager = \Drupal::entityTypeManager();
-    $storage = $entity_type_manager->getStorage('sentinel_client');
-    $client = $storage->create([]);
+    
+    // Allow ucr = "pending" as a special case (for CSV processing when pack reference not found).
+    $is_pending_ucr = ($data['ucr'] === 'pending' || $data['ucr'] === 'Pending' || $data['ucr'] === 'PENDING');
+    
+    if ($is_pending_ucr) {
+      // Set ucr to "pending" (normalize to lowercase).
+      $data['ucr'] = 'pending';
+      \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice POST - Accepting ucr=pending for Pack: @pack_ref', [
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
+    }
+    else {
+      // Normal UCR validation for numeric values.
+      $storage = $entity_type_manager->getStorage('sentinel_client');
+      $client = $storage->create([]);
 
-    if (method_exists($client, 'validateUcr')) {
-      $provided_ucr = (int) $data['ucr'];
-      if (!$client->validateUcr($provided_ucr)) {
-        $generated_ucr = $client->generateUcr($provided_ucr);
-        if ($client->validateUcr($generated_ucr)) {
-          $data['ucr'] = $generated_ucr;
-        }
-        else {
-          \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Validation failed - ucr is not valid, Pack: @pack_ref', [
-            '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
-          ]);
-          throw new BadRequestHttpException('ucr is not valid');
+      if (method_exists($client, 'validateUcr')) {
+        $provided_ucr = (int) $data['ucr'];
+        if (!$client->validateUcr($provided_ucr)) {
+          $generated_ucr = $client->generateUcr($provided_ucr);
+          if ($client->validateUcr($generated_ucr)) {
+            $data['ucr'] = $generated_ucr;
+          }
+          else {
+            \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Validation failed - ucr is not valid, Pack: @pack_ref', [
+              '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+            ]);
+            throw new BadRequestHttpException('ucr is not valid');
+          }
         }
       }
     }
@@ -248,14 +263,28 @@ class SampleServiceResource extends ResourceBase {
       // Validate datetime fields
       if (in_array($field_name, ['date_installed', 'date_sent', 'date_booked', 'date_processed', 'date_reported'])) {
         if ($data_item == '') {
+          \Drupal::logger('sentinel_portal_services')->debug('API: Date field @field is empty, skipping', [
+            '@field' => $field_name,
+          ]);
           continue;
         }
 
         $formatted_date = SentinelSampleValidation::validateDate($data_item);
         if ($formatted_date === FALSE) {
+          \Drupal::logger('sentinel_portal_services')->warning('API: Date field @field validation failed - Original value: @value', [
+            '@field' => $field_name,
+            '@value' => $data_item,
+          ]);
           $errors[$field_name] = SentinelSampleValidation::formatErrorMessage($field_name, 'has an invalid date.');
           continue;
         }
+        
+        \Drupal::logger('sentinel_portal_services')->debug('API: Date field @field validated - Original: @original, Formatted: @formatted', [
+          '@field' => $field_name,
+          '@original' => $data_item,
+          '@formatted' => $formatted_date,
+        ]);
+        
         $sample[$field_name] = $formatted_date;
         continue;
       }
@@ -297,8 +326,8 @@ class SampleServiceResource extends ResourceBase {
       $sample[$field_name] = $data_item;
     }
 
-    // Fix UCR (remove luhn number)
-    if (isset($sample['ucr'])) {
+    // Fix UCR (remove luhn number) - skip if ucr is "pending"
+    if (isset($sample['ucr']) && $sample['ucr'] !== 'pending') {
       $sample['ucr'] = floor($sample['ucr'] / 10);
     }
 
@@ -427,15 +456,130 @@ class SampleServiceResource extends ResourceBase {
     }
 
     $date_reported_original = $sample_entity_original ? ($sample_entity_original->get('date_reported')->value ?? NULL) : NULL;
-    $is_reported = method_exists($sample_entity, 'isReported') ? $sample_entity->isReported() : FALSE;
+    
+    \Drupal::logger('sentinel_portal_services')->info('API: Starting queue check - Operation: @op, Pack: @pack_ref, Date reported original: @date_original', [
+      '@op' => $sample_update ? 'UPDATE' : 'CREATE',
+      '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      '@date_original' => $date_reported_original ?? 'NULL',
+    ]);
 
-    if ($is_reported) {
+    // Check if any result fields were provided in the incoming data - if so, recalculate pass/fail values.
+    $result_fields = [
+      'ph_result', 'boron_result', 'molybdenum_result', 'sys_cond_result',
+      'mains_cond_result', 'mains_calcium_result', 'sys_calcium_result',
+      'iron_result', 'copper_result', 'aluminium_result', 'manganese_result', 'nitrate_result',
+    ];
+    
+    // Check if any result fields are present in the incoming $sample array.
+    $result_fields_updated = FALSE;
+    $found_result_fields = [];
+    foreach ($result_fields as $field_name) {
+      if (isset($sample[$field_name]) && $sample[$field_name] !== NULL && $sample[$field_name] !== '') {
+        $result_fields_updated = TRUE;
+        $found_result_fields[] = $field_name . '=' . $sample[$field_name];
+      }
+    }
+
+    \Drupal::logger('sentinel_portal_services')->info('API: Result fields check - Updated: @updated, Found fields: @fields', [
+      '@updated' => $result_fields_updated ? 'YES' : 'NO',
+      '@fields' => !empty($found_result_fields) ? implode(', ', $found_result_fields) : 'NONE',
+    ]);
+
+    // Recalculate pass/fail values if result fields were updated.
+    if ($result_fields_updated) {
+      \Drupal::logger('sentinel_portal_services')->info('API: Recalculating pass/fail values - Operation: @op, Pack: @pack_ref', [
+        '@op' => $sample_update ? 'UPDATE' : 'CREATE',
+        '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+      ]);
+      
       self::recalculateSampleResults($sample_entity);
 
+      // Reload entity to get fresh values after recalculation.
+      $sample_entity = $sample_storage->load($sample_entity->id());
+      
+      // Check isReported() AFTER recalculation, as recalculation may have populated required fields.
+      $is_reported = method_exists($sample_entity, 'isReported') ? $sample_entity->isReported() : FALSE;
       $date_reported_current = $sample_entity->get('date_reported')->value ?? NULL;
-      if ($date_reported_current && $date_reported_current !== $date_reported_original && function_exists('sentinel_portal_queue_create_item')) {
-        sentinel_portal_queue_create_item($sample_entity, 'sendreport');
+      
+      // Get all required result fields to log their values.
+      $required_fields_log = [];
+      foreach ($result_fields as $field_name) {
+        $value = $sample_entity->get($field_name)->value ?? NULL;
+        $required_fields_log[] = $field_name . '=' . ($value !== NULL ? $value : 'NULL');
       }
+      
+      \Drupal::logger('sentinel_portal_services')->info('API: After recalculation - Is reported: @reported, Date reported current: @date_current, Date reported original: @date_original, Required fields: @fields', [
+        '@reported' => $is_reported ? 'YES' : 'NO',
+        '@date_current' => $date_reported_current ?? 'NULL',
+        '@date_original' => $date_reported_original ?? 'NULL',
+        '@fields' => implode(', ', $required_fields_log),
+      ]);
+      
+      // Create queue item if sample is reported and date_reported is set.
+      // For new samples (CREATE), create queue item if reported.
+      // For existing samples (UPDATE), create queue item if reported and date_reported was set/changed.
+      if ($is_reported) {
+        \Drupal::logger('sentinel_portal_services')->info('API: Sample is reported - checking date_reported conditions', []);
+        
+        if ($date_reported_current) {
+          \Drupal::logger('sentinel_portal_services')->info('API: date_reported is set - checking if queue should be created', []);
+          
+          $should_create_queue = FALSE;
+          if (!$sample_update) {
+            // New sample - create queue item if reported.
+            $should_create_queue = TRUE;
+            \Drupal::logger('sentinel_portal_services')->info('API: New sample (CREATE) - will create queue item', []);
+          }
+          else {
+            // Existing sample - create queue item if date_reported changed or was NULL before.
+            if ($date_reported_original === NULL) {
+              $should_create_queue = TRUE;
+              \Drupal::logger('sentinel_portal_services')->info('API: Existing sample (UPDATE) - date_reported was NULL, will create queue item', []);
+            }
+            elseif ($date_reported_current !== $date_reported_original) {
+              $should_create_queue = TRUE;
+              \Drupal::logger('sentinel_portal_services')->info('API: Existing sample (UPDATE) - date_reported changed from @old to @new, will create queue item', [
+                '@old' => $date_reported_original,
+                '@new' => $date_reported_current,
+              ]);
+            }
+            else {
+              \Drupal::logger('sentinel_portal_services')->warning('API: Existing sample (UPDATE) - date_reported unchanged (@date), will NOT create queue item', [
+                '@date' => $date_reported_current,
+              ]);
+            }
+          }
+          
+          if ($should_create_queue) {
+            if (function_exists('sentinel_portal_queue_create_item')) {
+              \Drupal::logger('sentinel_portal_services')->info('API: Calling sentinel_portal_queue_create_item - Pack: @pack_ref, PID: @pid', [
+                '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+                '@pid' => $sample_entity->id(),
+              ]);
+              
+              $queue_result = sentinel_portal_queue_create_item($sample_entity, 'sendreport');
+              
+              \Drupal::logger('sentinel_portal_services')->info('API: Queue item creation result: @result, Pack: @pack_ref, PID: @pid', [
+                '@result' => $queue_result ? 'SUCCESS' : 'FAILED',
+                '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
+                '@pid' => $sample_entity->id(),
+              ]);
+            }
+            else {
+              \Drupal::logger('sentinel_portal_services')->error('API: sentinel_portal_queue_create_item function does not exist!', []);
+            }
+          }
+        }
+        else {
+          \Drupal::logger('sentinel_portal_services')->warning('API: Sample is reported but date_reported is NULL - will NOT create queue item', []);
+        }
+      }
+      else {
+        \Drupal::logger('sentinel_portal_services')->warning('API: Sample is NOT reported (isReported() returned FALSE) - will NOT create queue item', []);
+      }
+    }
+    else {
+      \Drupal::logger('sentinel_portal_services')->debug('API: No result fields updated - skipping recalculation and queue check', []);
     }
 
     if (count($errors) > 0) {
@@ -448,7 +592,8 @@ class SampleServiceResource extends ResourceBase {
       }
 
        // Log completion with errors.
-       \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: Sample created with errors - Pack: @pack_ref', [
+       \Drupal::logger('sentinel_portal_services')->warning('API: sentinel_sampleservice POST - Status: @message (with errors) - Pack: @pack_ref', [
+        '@message' => $message,
         '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
       ]);
 
@@ -459,8 +604,9 @@ class SampleServiceResource extends ResourceBase {
       ];
     }
     else {
-
-      \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice POST - Status: Sample created successfully - Pack: @pack_ref', [
+      // Use $message variable which contains either "Sample created" or "Sample updated"
+      \Drupal::logger('sentinel_portal_services')->info('API: sentinel_sampleservice POST - Status: @message successfully - Pack: @pack_ref', [
+        '@message' => $message,
         '@pack_ref' => isset($pack_reference_number) ? $pack_reference_number : " ",
       ]);
       

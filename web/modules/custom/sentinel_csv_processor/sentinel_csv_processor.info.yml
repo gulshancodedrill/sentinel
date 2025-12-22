@@ -1,0 +1,11 @@
+name: 'Sentinel CSV Processor'
+type: module
+description: 'Provides a comprehensive CSV processing system for reading, writing, and manipulating CSV files.'
+package: 'Sentinel'
+core_version_requirement: ^11
+dependencies:
+  - drupal:file
+  - drupal:system
+  - drupal:user
+  - drupal:datetime
+

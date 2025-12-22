@@ -670,12 +670,25 @@ function _sentinel_portal_queue_process_email($sample_entity, $type) {
 
 /**
  * Build the PDF attachment metadata for a sample.
+ *
+ * When called from queue processing, this will delete any existing PDF
+ * and generate a new one to ensure the latest data is included.
  */
 function sentinel_portal_queue_get_pdf_info($sample_entity) {
   if (!method_exists($sample_entity, 'GetPDF')) {
     return FALSE;
   }
 
+  // Delete existing PDF file if it exists, so we can generate a fresh one.
+  // This ensures the PDF contains the latest sample data when sent via queue.
+  if (method_exists($sample_entity, 'deleteExistingPdf')) {
+    $sample_entity->deleteExistingPdf();
+    \Drupal::logger('sentinel_portal_queue')->info('Deleted existing PDF for sample @id before generating new one for queue processing.', [
+      '@id' => method_exists($sample_entity, 'id') ? $sample_entity->id() : 'unknown',
+    ]);
+  }
+
+  // Generate a new PDF (GetPDF will call SavePdf if no file exists).
   $uri = $sample_entity->GetPDF();
   if (empty($uri)) {
     return FALSE;
@@ -733,19 +746,31 @@ function sentinel_portal_queue_get_sample_value($sample_entity, string $field) {
  * Build the subject, body and recipients for the send results email.
  */
 function sentinel_portal_queue_build_email_payload($sample_entity) {
-  $installer_email = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_email');
-  $company_email = sentinel_portal_queue_get_sample_value($sample_entity, 'company_email');
-
-  $raw_recipients = $installer_email ?: $company_email;
-  if (empty($raw_recipients)) {
-    return FALSE;
+  // Check if UCR is pending first.
+  $ucr = sentinel_portal_queue_get_sample_value($sample_entity, 'ucr');
+  $ucr_pending = ($ucr === 'pending' || strtolower($ucr) === 'pending');
+  
+  // If UCR is pending, send email to admin instead of installer/company.
+  if ($ucr_pending) {
+    $site_config = \Drupal::config('system.site');
+    $admin_email = $site_config->get('mail') ?: 'admin@sentinelprotects.com';
+    $recipients = [$admin_email];
   }
+  else {
+    $installer_email = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_email');
+    $company_email = sentinel_portal_queue_get_sample_value($sample_entity, 'company_email');
 
-  $normalized = str_replace(';', ',', $raw_recipients);
-  $recipients = array_filter(array_map('trim', explode(',', $normalized)));
-  if (empty($recipients)) {
-          return FALSE;
-        }
+    $raw_recipients = $installer_email ?: $company_email;
+    if (empty($raw_recipients)) {
+      return FALSE;
+    }
+
+    $normalized = str_replace(';', ',', $raw_recipients);
+    $recipients = array_filter(array_map('trim', explode(',', $normalized)));
+    if (empty($recipients)) {
+      return FALSE;
+    }
+  }
 
   $pack_reference = sentinel_portal_queue_get_sample_value($sample_entity, 'pack_reference_number') ?? 'Unknown';
   $system_address = 'Unknown';
@@ -768,7 +793,7 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
     $subject = sprintf('Sentinel System Check Report: %s - %s - %s', strip_tags($pack_reference), $pass_label, strip_tags($system_address));
   }
 
-  $message_html = sentinel_portal_queue_build_message_html($sample_entity, $country, $is_pass, $sample_type);
+  $message_html = sentinel_portal_queue_build_message_html($sample_entity, $country, $is_pass, $sample_type, $ucr_pending);
   $message_plain = MailFormatHelper::htmlToText($message_html);
 
   return [
@@ -781,13 +806,40 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
 
 /**
  * Build the HTML body for the send results email.
+ *
+ * @param object $sample_entity
+ *   The sample entity.
+ * @param string $country
+ *   The country code.
+ * @param bool $is_pass
+ *   Whether the sample passed.
+ * @param string $sample_type
+ *   The sample type.
+ * @param bool $ucr_pending
+ *   Whether the UCR is pending.
+ *
+ * @return string
+ *   The HTML message.
  */
-function sentinel_portal_queue_build_message_html($sample_entity, string $country, bool $is_pass, string $sample_type): string {
+function sentinel_portal_queue_build_message_html($sample_entity, string $country, bool $is_pass, string $sample_type, bool $ucr_pending = FALSE): string {
   $company_name = sentinel_portal_queue_get_sample_value($sample_entity, 'company_name') ?? 'Customer';
   $company_name = Html::escape($company_name);
   $installer_name = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_name') ?? $company_name;
   $installer_name = Html::escape($installer_name);
 
+  // If UCR is pending, always use English message and send to admin.
+  if ($ucr_pending) {
+    return '<p>Dear Admin,</p>'
+      . '<p>Please find attached a report on a recently submitted sample.</p>'
+      . '<p><strong>Note:</strong> This sample was created with pending details. This sample is not linked to any user account, and the UCR (Unique Customer Reference) is also set to pending.</p>'
+      . '<p>We need to sync this sample later when we have the correct details for it. You can find this sample at <a href="https://www.sentinelprotects.com/portal/sync/samples">www.sentinelprotects.com/portal/sync/samples</a>.</p>'
+      . '<p>The attached report provides a report direct from the Sentinel Laboratory on the condition of the central heating water and the level of Sentinel X100 Inhibitor present in the sample submitted by an unknown user. It also provides a brief analysis of the mains water.</p>'
+      . '<p>Based on the findings, Sentinel have provided recommendations to ensure the system water allows the central heating systems to operate at optimum efficiency with a minimum of scale and corrosion deposits.</p>'
+      . '<p>Regards,</p>'
+      . '<p>Sentinel Laboratory</p>';
+  }
+
+  // Normal email flow for non-pending UCR samples.
   switch ($country) {
     case 'it':
       return '<p>Gentile cliente,</p>'
@@ -847,6 +899,19 @@ function sentinel_portal_queue_build_message_html($sample_entity, string $countr
       . '<p>Please find attached a report on your recently submitted sample.</p>'
       . '<p>As you will see, it has been allocated a FAIL designation and additional action is necessary &ndash; a summary of our recommendations is given in the report.</p>'
       . '<p>If further advice is required, please contact 01928 588330.</p>'
+      . '<p>Regards,</p>'
+      . '<p>Sentinel Laboratory</p>';
+  }
+
+  // If UCR is pending, modify the email message.
+  if ($ucr_pending) {
+    return '<p>Dear ' . $installer_name . ',</p>'
+      . '<p>Please find attached a report on your recently submitted sample.</p>'
+      . '<p><strong>Note:</strong> This sample was processed with a pending UCR (Unique Customer Reference). Please ensure your UCR is correctly registered in your account settings to ensure proper tracking and future sample processing.</p>'
+      . '<p>The attached report provides a report direct from the Sentinel Laboratory on the condition of the central heating water and the level of Sentinel X100 Inhibitor present in the sample you submitted. It also provides a brief analysis of the mains water.</p>'
+      . '<p>Based on the findings, Sentinel have provided recommendations to ensure the system water allows the central heating systems to operate at optimum efficiency with a minimum of scale and corrosion deposits.</p>'
+      . '<p>Further information on Sentinel products can be obtained through our website www.sentinelprotects.com.</p>'
+      . '<p>If you have any questions regarding your UCR or account settings, please contact us.</p>'
       . '<p>Regards,</p>'
       . '<p>Sentinel Laboratory</p>';
   }

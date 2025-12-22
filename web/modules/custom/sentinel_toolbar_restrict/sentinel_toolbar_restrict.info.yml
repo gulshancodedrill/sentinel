@@ -1,0 +1,6 @@
+name: 'Sentinel Toolbar Restrict'
+type: module
+description: 'Restricts the Drupal admin toolbar to specific user IDs only'
+core_version_requirement: ^11
+package: Custom
+

@@ -823,6 +823,17 @@ table.sticky-header thead {
      background-color: #006EB9;
    }
    
+   .lozenge--processing {
+     display: inline-block;
+     padding: 0.4em 0.6em;
+     min-width: 7em;
+     border-radius: 100em;
+     color: white;
+     font-weight: 700;
+     text-align: center;
+     background-color: #ffc107;
+   }
+   
    .responsive-overflow {
      display: block;
      overflow-x: auto;
