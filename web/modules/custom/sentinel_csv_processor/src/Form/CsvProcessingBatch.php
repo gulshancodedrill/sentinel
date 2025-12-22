@@ -285,6 +285,19 @@ class CsvProcessingBatch {
     // Map CSV rows to API fields.
     $api_data = self::mapRowsToApiFields($rows, $site);
     
+    // Validate that we have actual test result data (not all NULL/empty).
+    if (!self::validateApiData($api_data)) {
+      $error_message = t('No valid test result data found in CSV for site @site. All result fields are NULL or empty.', ['@site' => $site]);
+      \Drupal::logger('sentinel_csv_processor')->error('Validation failed for site @site: @message', [
+        '@site' => $site,
+        '@message' => $error_message,
+      ]);
+      return [
+        'success' => FALSE,
+        'error' => $error_message,
+      ];
+    }
+    
     // If UCR is pending, set installer_email to system email.
     if ($is_pending) {
       $system_email = \Drupal::config('system.site')->get('mail');
@@ -648,6 +661,51 @@ class CsvProcessingBatch {
     }
 
     return NULL;
+  }
+
+  /**
+   * Validates that API data contains at least some test result values.
+   *
+   * Checks if all essential result fields are NULL, empty, or only default '0' values.
+   *
+   * @param array $api_data
+   *   The mapped API data.
+   *
+   * @return bool
+   *   TRUE if data is valid (has at least one non-empty result), FALSE otherwise.
+   */
+  protected static function validateApiData(array $api_data) {
+    // List of essential test result fields to check.
+    // Exclude: pack_reference_number, date fields, installer_email, ucr (these are metadata).
+    $result_fields = [
+      'ph_result',
+      'boron_result',
+      'molybdenum_result',
+      'sys_cond_result',
+      'mains_cond_result',
+      'mains_calcium_result',
+      'sys_calcium_result',
+      'iron_result',
+      'copper_result',
+      'aluminium_result',
+      'manganese_result',
+      'nitrate_result',
+      'appearance_result',
+    ];
+
+    // Check if at least one result field has a non-empty, non-zero value.
+    foreach ($result_fields as $field) {
+      if (isset($api_data[$field])) {
+        $value = trim((string) $api_data[$field]);
+        // Consider it valid if it's not empty and not just '0' (default fallback).
+        if ($value !== '' && $value !== '0' && $value !== 'null' && strtolower($value) !== 'pending') {
+          return TRUE;
+        }
+      }
+    }
+
+    // All result fields are NULL, empty, or only default '0' values.
+    return FALSE;
   }
 
   /**
