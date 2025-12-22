@@ -123,6 +123,14 @@ class SentinelSampleRevisionOverviewForm extends FormBase {
     
     // Execute query and get vids
     $vids = $query->execute()->fetchCol();
+    
+    // Filter out NULL and invalid revision IDs to prevent array_flip() errors.
+    $vids = array_filter($vids, function($vid) {
+      return $vid !== NULL && (is_string($vid) || is_int($vid));
+    });
+    // Re-index array after filtering.
+    $vids = array_values($vids);
+    
     $revision_count = count($vids);
 
     // Build title - use pack_reference_number if available.

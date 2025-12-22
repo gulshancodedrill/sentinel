@@ -116,6 +116,13 @@ class SentinelSampleRevisionCompareController extends ControllerBase {
     $query->orderBy('r.vid', 'DESC'); // Secondary sort by vid for consistent ordering
     
     $revision_ids = $query->execute()->fetchCol();
+    
+    // Filter out NULL and invalid revision IDs to prevent array_flip() errors.
+    $revision_ids = array_filter($revision_ids, function($vid) {
+      return $vid !== NULL && (is_string($vid) || is_int($vid));
+    });
+    // Re-index array after filtering.
+    $revision_ids = array_values($revision_ids);
 
     // Get revision dates.
     $source_date = $this->getRevisionDate($source);

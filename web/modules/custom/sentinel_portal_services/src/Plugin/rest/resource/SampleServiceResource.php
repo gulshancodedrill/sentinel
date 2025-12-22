@@ -495,7 +495,15 @@ class SampleServiceResource extends ResourceBase {
       self::recalculateSampleResults($sample_entity);
 
       // Reload entity to get fresh values after recalculation.
-      $sample_entity = $sample_storage->load($sample_entity->id());
+      // Use the latest revision ID to ensure we get the most recent data.
+      $latest_revision_id = $sample_storage->getLatestRevisionId($sample_entity->id());
+      if ($latest_revision_id) {
+        $sample_entity = $sample_storage->loadRevision($latest_revision_id);
+      }
+      else {
+        // Fallback to regular load if latest revision ID is not available.
+        $sample_entity = $sample_storage->load($sample_entity->id());
+      }
       
       // Check isReported() AFTER recalculation, as recalculation may have populated required fields.
       $is_reported = method_exists($sample_entity, 'isReported') ? $sample_entity->isReported() : FALSE;
