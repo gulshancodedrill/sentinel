@@ -129,20 +129,26 @@ class SentinelSampleViewController extends ControllerBase {
         )
       )->toString();
 
-      $pdf_uri = $this->getExistingPdfUri($sample);
-      $pdf_url = NULL;
-      if ($pdf_uri) {
-        $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($pdf_uri);
-        $pdf_url .= (str_contains($pdf_url, '?') ? '&' : '?') . 'itok=' . $sample->getPdfToken();
-        $links[] = Link::fromTextAndUrl(
-          $this->t('Download PDF'),
-          Url::fromUri($pdf_url, [
-            'attributes' => [
-              'class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf'],
-              'download' => '',
-            ],
-          ])
-        )->toString();
+      // Match the logic from /portal/samples list page
+      $fileid = NULL;
+      if ($sample->hasField('fileid') && !$sample->get('fileid')->isEmpty()) {
+        $fileid = (int) $sample->get('fileid')->value;
+      }
+      
+      if ($fileid) {
+        $file = File::load($fileid);
+        if ($file instanceof File) {
+          $pdf_url = \Drupal::service('file_url_generator')->generateAbsoluteString($file->getFileUri());
+          $links[] = Link::fromTextAndUrl(
+            $this->t('Download PDF'),
+            Url::fromUri($pdf_url, [
+              'attributes' => [
+                'class' => ['mbtn', 'mbtn-6', 'mbtn-6c', 'link-download', 'icon-pdf'],
+                'download' => '',
+              ],
+            ])
+          )->toString();
+        }
       }
    
       $links[] = Link::fromTextAndUrl(

@@ -1,0 +1,24 @@
+sentinel_csv_processor.upload_form:
+  path: '/csv-processor/upload'
+  defaults:
+    _form: '\Drupal\sentinel_csv_processor\Form\CsvUploadForm'
+    _title: 'Upload CSV Files'
+  requirements:
+    _custom_access: 'sentinel_csv_processor_csv_upload_access'
+
+sentinel_csv_processor.file_list_form:
+  path: '/csv-processor/files'
+  defaults:
+    _form: '\Drupal\sentinel_csv_processor\Form\CsvFileListForm'
+    _title: 'SOCOTEC CSV Files'
+  requirements:
+    _custom_access: 'sentinel_csv_processor_csv_upload_access'
+
+sentinel_csv_processor.data_preview:
+  path: '/csv-processor/preview'
+  defaults:
+    _form: '\Drupal\sentinel_csv_processor\Form\CsvDataPreviewForm'
+    _title: 'Preview CSV Data'
+  requirements:
+    _custom_access: 'sentinel_csv_processor_csv_upload_access'
+

@@ -5,3 +5,34 @@
  * Sentinel CSV Processor module.
  */
 
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\File\FileSystemInterface;
+
+/**
+ * Access callback for CSV upload form - allows admin and Socotec User roles.
+ *
+ * @param \Drupal\Core\Session\AccountInterface $account
+ *   The user account.
+ *
+ * @return \Drupal\Core\Access\AccessResultInterface
+ *   The access result.
+ */
+function sentinel_csv_processor_csv_upload_access(AccountInterface $account) {
+  $roles = $account->getRoles();
+  
+  // Check for administrator role (admin).
+  if (in_array('administrator', $roles)) {
+    return AccessResult::allowed()->addCacheContexts(['user.roles']);
+  }
+  
+  // Check for Socotec User role (case-insensitive check).
+  $allowed_roles = ['socotec user', 'socotec_user', 'Socotec User'];
+  foreach ($roles as $role) {
+    if (in_array(strtolower($role), array_map('strtolower', $allowed_roles))) {
+      return AccessResult::allowed()->addCacheContexts(['user.roles']);
+    }
+  }
+  
+  return AccessResult::forbidden()->addCacheContexts(['user.roles']);
+}

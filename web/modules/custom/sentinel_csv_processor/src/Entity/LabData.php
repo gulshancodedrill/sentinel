@@ -7,7 +7,6 @@ use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
-use Drupal\datetime\Plugin\Field\FieldType\DateTimeItemInterface;
 
 /**
  * Defines the Lab Data entity.
@@ -36,10 +35,9 @@ class LabData extends ContentEntityBase implements ContentEntityInterface {
   public function preSave(EntityStorageInterface $storage) {
     parent::preSave($storage);
 
-    // Set upload date if not set.
-    if ($this->isNew() && $this->get('upload_date')->isEmpty()) {
-      $now = new \DateTime('now', new \DateTimeZone(DateTimeItemInterface::STORAGE_TIMEZONE));
-      $this->set('upload_date', $now->format('Y-m-d H:i:s'));
+    // Set uploaded timestamp if not set.
+    if ($this->isNew() && $this->get('uploaded')->isEmpty()) {
+      $this->set('uploaded', \Drupal::time()->getRequestTime());
     }
 
     // Set default status to 'pending' if not set.
@@ -78,15 +76,21 @@ class LabData extends ContentEntityBase implements ContentEntityInterface {
       ->setDisplayConfigurable('form', TRUE)
       ->setDisplayConfigurable('view', TRUE);
 
-    // Upload date field - date and time when the file was uploaded.
-    $fields['upload_date'] = BaseFieldDefinition::create('datetime')
-      ->setLabel(t('Upload Date'))
-      ->setDescription(t('The date and time when the file was uploaded.'))
-      ->setSettings([
-        'datetime_type' => 'datetime',
-      ])
+    // Uploaded field - timestamp when the file was uploaded.
+    $fields['uploaded'] = BaseFieldDefinition::create('timestamp')
+      ->setLabel(t('Uploaded'))
+      ->setDescription(t('The timestamp when the file was uploaded.'))
       ->setRequired(TRUE)
-      ->setDefaultValueCallback(static::class . '::getCurrentDateTimeDefault')
+      ->setDefaultValueCallback(static::class . '::getCurrentTimestampDefault')
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+
+    // Processed field - timestamp when the file was processed (nullable).
+    $fields['processed'] = BaseFieldDefinition::create('timestamp')
+      ->setLabel(t('Processed'))
+      ->setDescription(t('The timestamp when the file was processed. NULL if not yet processed.'))
+      ->setRequired(FALSE)
+      ->setDefaultValue(NULL)
       ->setDisplayConfigurable('form', TRUE)
       ->setDisplayConfigurable('view', TRUE);
 
@@ -124,11 +128,10 @@ class LabData extends ContentEntityBase implements ContentEntityInterface {
   }
 
   /**
-   * Default value callback for datetime fields.
+   * Default value callback for timestamp fields.
    */
-  public static function getCurrentDateTimeDefault(): array {
-    $now = new \DateTime('now', new \DateTimeZone(DateTimeItemInterface::STORAGE_TIMEZONE));
-    return [$now->format('Y-m-d H:i:s')];
+  public static function getCurrentTimestampDefault(): int {
+    return \Drupal::time()->getRequestTime();
   }
 
   /**

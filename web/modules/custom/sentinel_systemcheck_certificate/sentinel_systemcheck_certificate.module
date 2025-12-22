@@ -362,16 +362,23 @@ function sentinel_systemcheck_certificate_calculate_excess_cloride_result($mains
  *   The original sample entity.
  */
 function _calculate_sentinel_sample_result($result_object, $sentinel_sample) {
+  if (!is_object($sentinel_sample) || !($sentinel_sample instanceof \Drupal\Core\Entity\ContentEntityInterface)) {
+    return;
+  }
+
   $existing_pass_fail = NULL;
-  if (is_object($sentinel_sample) && method_exists($sentinel_sample, 'hasField') && $sentinel_sample->hasField('pass_fail')) {
+  if ($sentinel_sample->hasField('pass_fail')) {
     $existing_pass_fail = _get_field_value($sentinel_sample, 'pass_fail');
   }
 
-  if ($existing_pass_fail !== NULL) {
-    $sentinel_sample->pass_fail = (int) $existing_pass_fail;
-  }
-  else {
-    $sentinel_sample->pass_fail = 1;
+  // Set initial pass_fail value.
+  if ($sentinel_sample->hasField('pass_fail')) {
+    if ($existing_pass_fail !== NULL) {
+      $sentinel_sample->set('pass_fail', (int) $existing_pass_fail);
+    }
+    else {
+      $sentinel_sample->set('pass_fail', 1);
+    }
   }
 
   $total_fail = FALSE;
@@ -408,19 +415,27 @@ function _calculate_sentinel_sample_result($result_object, $sentinel_sample) {
     if ($status === 'fail') {
       $total_fail = TRUE;
       if (method_exists($sentinel_sample, 'isLegacy') && $sentinel_sample->isLegacy() == FALSE && isset($mappings[$key])) {
-        $sentinel_sample->{$mappings[$key]} = 0;
+        $field_name = $mappings[$key];
+        if ($sentinel_sample->hasField($field_name)) {
+          $sentinel_sample->set($field_name, 0);
+        }
       }
     }
 
     if ($status === 'pass' || $status === 'warning') {
       if (method_exists($sentinel_sample, 'isLegacy') && $sentinel_sample->isLegacy() == FALSE && isset($mappings[$key])) {
-        $sentinel_sample->{$mappings[$key]} = 1;
+        $field_name = $mappings[$key];
+        if ($sentinel_sample->hasField($field_name)) {
+          $sentinel_sample->set($field_name, 1);
+        }
       }
     }
   }
 
   if ($total_fail === TRUE) {
-    $sentinel_sample->pass_fail = 0;
+    if ($sentinel_sample->hasField('pass_fail')) {
+      $sentinel_sample->set('pass_fail', 0);
+    }
   }
 }
 

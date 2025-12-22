@@ -180,7 +180,10 @@ function sentinel_systemcheck_vaillant_api_format_data($sample_entity) {
   $data['county'] = $sample_entity->get('county')->value ?? '';
   $data['postcode'] = $sample_entity->get('postcode')->value ?? '';
 
-  $pass_fail = $sample_entity->get('pass_fail')->value ?? 0;
+  $pass_fail = 0;
+  if ($sample_entity->hasField('pass_fail') && !$sample_entity->get('pass_fail')->isEmpty()) {
+    $pass_fail = (int) ($sample_entity->get('pass_fail')->value ?? 0);
+  }
   switch ($pass_fail) {
     case 0:
       $data['result'] = 'F';
