@@ -2,7 +2,9 @@
 
 namespace Drupal\sentinel_csv_processor\Form;
 
+use Drupal\Core\Url;
 use Drupal\sentinel_csv_processor\Entity\LabData;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 /**
  * Batch processing for CSV files.
@@ -809,6 +811,10 @@ class CsvProcessingBatch {
     else {
       \Drupal::messenger()->addError(t('An error occurred during batch processing.'));
     }
+
+    // Redirect to CSV file list page after batch completion.
+    $url = Url::fromUri('internal:/csv-processor/files')->setAbsolute()->toString();
+    return new RedirectResponse($url);
   }
 
 }
