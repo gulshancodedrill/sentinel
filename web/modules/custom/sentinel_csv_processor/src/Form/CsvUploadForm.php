@@ -277,6 +277,7 @@ class CsvUploadForm extends FormBase {
           'filename' => $filename,
           'status' => 'pending',
           'refname' => isset($data['refname']) && $data['refname'] ? (string) $data['refname'] : NULL,
+          'process_type' => 'manual',
         ]);
 
         $lab_data->save();

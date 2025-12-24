@@ -36,3 +36,268 @@ function sentinel_csv_processor_csv_upload_access(AccountInterface $account) {
   
   return AccessResult::forbidden()->addCacheContexts(['user.roles']);
 }
+
+/**
+ * Implements hook_cron().
+ *
+ * Scans the automate-csvs directory and enqueues files for processing.
+ */
+function sentinel_csv_processor_cron() {
+  // Log immediately to confirm hook is being called.
+  \Drupal::logger('sentinel_csv_processor')->info('Cron hook called - START.');
+  
+  // Check if we ran recently (within last 3 minutes) to prevent duplicate runs.
+  // This prevents our hook from running too frequently even if automated_cron triggers often.
+  $state = \Drupal::state();
+  $last_run = $state->get('sentinel_csv_processor.cron_last_run', 0);
+  $current_time = \Drupal::time()->getRequestTime();
+  $min_interval = 180; // 3 minutes minimum between runs (reduced from 10 to allow more frequent checks).
+  
+  if (($current_time - $last_run) < $min_interval) {
+    // Skip this run - too soon since last execution.
+    \Drupal::logger('sentinel_csv_processor')->info('Skipping cron run - only @seconds seconds since last run (minimum @min_interval).', [
+      '@seconds' => $current_time - $last_run,
+      '@min_interval' => $min_interval,
+    ]);
+    return;
+  }
+  
+  \Drupal::logger('sentinel_csv_processor')->info('Cron hook proceeding - last run was @seconds seconds ago.', [
+    '@seconds' => $current_time - $last_run,
+  ]);
+  
+  // Record that we're starting (even if we fail, we don't want to retry immediately).
+  $state->set('sentinel_csv_processor.cron_last_run', $current_time);
+
+  // Set a maximum execution time for this cron hook (30 seconds).
+  $max_execution_time = 30;
+  $start_time = time();
+  @set_time_limit($max_execution_time);
+
+  try {
+    $file_system = \Drupal::service('file_system');
+    
+    // Use private:// URI for the automate directory.
+    $automate_dir_uri = 'private://lab_files/automate-csvs';
+    $base_directory_uri = 'private://lab_files';
+    
+    // Get real path from URI.
+    $automate_dir = $file_system->realpath($automate_dir_uri);
+    $base_directory = $file_system->realpath($base_directory_uri);
+
+    // Check timeout before proceeding.
+    if ((time() - $start_time) >= $max_execution_time) {
+      \Drupal::logger('sentinel_csv_processor')->warning('Cron hook timeout before processing.');
+      return;
+    }
+
+    // Ensure directories exist.
+    \Drupal::logger('sentinel_csv_processor')->info('Preparing directories...');
+    $file_system->prepareDirectory($automate_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    \Drupal::logger('sentinel_csv_processor')->info('Automate directory prepared.');
+    // Processing, archive, and failed directories should be inside automate-csvs.
+    $processing_dir_uri = $automate_dir_uri . '/processing';
+    $archive_dir_uri = $automate_dir_uri . '/archive';
+    $failed_dir_uri = $automate_dir_uri . '/failed';
+    $file_system->prepareDirectory($processing_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    \Drupal::logger('sentinel_csv_processor')->info('Processing directory prepared.');
+    $file_system->prepareDirectory($archive_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    \Drupal::logger('sentinel_csv_processor')->info('Archive directory prepared.');
+    $file_system->prepareDirectory($failed_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    \Drupal::logger('sentinel_csv_processor')->info('Failed directory prepared.');
+
+    // Check if directory exists.
+    if (!$automate_dir || !is_dir($automate_dir)) {
+      \Drupal::logger('sentinel_csv_processor')->warning('Automate CSV directory does not exist: @dir', [
+        '@dir' => $automate_dir_uri,
+      ]);
+      return;
+    }
+
+  // Get queue.
+  $queue = \Drupal::queue('automated_csv_processor');
+  $entity_storage = \Drupal::entityTypeManager()->getStorage('lab_data');
+
+  // Scan directory for CSV files.
+  \Drupal::logger('sentinel_csv_processor')->info('Scanning directory: @dir', ['@dir' => $automate_dir]);
+  $files = glob($automate_dir . '/*.csv');
+  \Drupal::logger('sentinel_csv_processor')->info('Glob found @count files.', ['@count' => count($files)]);
+  
+  if (empty($files)) {
+    \Drupal::logger('sentinel_csv_processor')->info('No CSV files found in automate-csvs directory.');
+    return;
+  }
+  
+  \Drupal::logger('sentinel_csv_processor')->info('Found @count CSV files in automate-csvs directory.', [
+    '@count' => count($files),
+  ]);
+
+  $enqueued_count = 0;
+  $skipped_count = 0;
+
+  // Limit the number of files processed per cron run to prevent overload.
+  $max_files_per_run = 10;
+  $files_processed = 0;
+
+  // Get processing directory path once (outside loop) - inside automate-csvs.
+  $processing_dir_uri = $automate_dir_uri . '/processing';
+  $processing_dir = $file_system->realpath($processing_dir_uri);
+  $processing_files = [];
+  if ($processing_dir && is_dir($processing_dir)) {
+    // Get list of files in processing directory once.
+    $processing_files = array_flip(array_map('basename', glob($processing_dir . '/*.csv')));
+  }
+
+  // Collect all filenames first for batch query.
+  $file_data = [];
+  foreach ($files as $file_path) {
+    if (!is_file($file_path)) {
+      continue;
+    }
+    $filename = basename($file_path);
+    $file_data[$filename] = [
+      'path' => $file_path,
+      'mtime' => filemtime($file_path),
+    ];
+  }
+
+  if (empty($file_data)) {
+    return;
+  }
+
+  // Batch query: get all existing lab_data entities for these filenames in one query.
+  \Drupal::logger('sentinel_csv_processor')->info('Querying database for @count filenames.', ['@count' => count($file_data)]);
+  $query = $entity_storage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('filename', array_keys($file_data), 'IN');
+  $existing_ids = $query->execute();
+  \Drupal::logger('sentinel_csv_processor')->info('Found @count existing entities.', ['@count' => count($existing_ids)]);
+
+  // Load all entities at once (batch load).
+  \Drupal::logger('sentinel_csv_processor')->info('Loading @count entities.', ['@count' => count($existing_ids)]);
+  $existing_entities = [];
+  if (!empty($existing_ids)) {
+    $existing_entities = $entity_storage->loadMultiple($existing_ids);
+    // Index by filename for quick lookup.
+    $existing_by_filename = [];
+    foreach ($existing_entities as $entity) {
+      $existing_by_filename[$entity->get('filename')->value] = $entity;
+    }
+    $existing_entities = $existing_by_filename;
+  }
+  \Drupal::logger('sentinel_csv_processor')->info('Loaded and indexed @count entities.', ['@count' => count($existing_entities)]);
+
+  // Process each file.
+  foreach ($file_data as $filename => $data) {
+    // Check timeout during processing.
+    if ((time() - $start_time) >= $max_execution_time) {
+      \Drupal::logger('sentinel_csv_processor')->warning('Cron hook timeout during file processing. Stopping early.');
+      break;
+    }
+
+    $file_path = $data['path'];
+    $file_mtime = $data['mtime'];
+
+    $should_process = TRUE;
+    $skip_reason = '';
+    
+    // Check if entity exists.
+    if (isset($existing_entities[$filename])) {
+      $lab_data = $existing_entities[$filename];
+      $stored_mtime = $lab_data->get('ftp_file_updated')->value;
+      $status = $lab_data->get('status')->value;
+      $process_type = $lab_data->get('process_type')->value;
+      
+      // Skip if already processed with matching modification date.
+      if ($stored_mtime && (int) $stored_mtime === (int) $file_mtime) {
+        $should_process = FALSE;
+        $skip_reason = 'matching mtime';
+        $skipped_count++;
+        \Drupal::logger('sentinel_csv_processor')->info('Skipping @file: @reason (stored: @stored, file: @file_mtime)', [
+          '@file' => $filename,
+          '@reason' => $skip_reason,
+          '@stored' => $stored_mtime,
+          '@file_mtime' => $file_mtime,
+        ]);
+        continue;
+      }
+      // Skip if currently being processed (status = processing and process_type = automate).
+      if ($status === 'processing' && $process_type === 'automate') {
+        $should_process = FALSE;
+        $skip_reason = 'currently processing';
+        $skipped_count++;
+        \Drupal::logger('sentinel_csv_processor')->info('Skipping @file: @reason', [
+          '@file' => $filename,
+          '@reason' => $skip_reason,
+        ]);
+        continue;
+      }
+    }
+
+    // Check if file is already in processing directory (quick lookup).
+    if (isset($processing_files[$filename])) {
+      $should_process = FALSE;
+      $skip_reason = 'in processing directory';
+      $skipped_count++;
+      \Drupal::logger('sentinel_csv_processor')->info('Skipping @file: @reason', [
+        '@file' => $filename,
+        '@reason' => $skip_reason,
+      ]);
+      continue;
+    }
+
+    if ($should_process) {
+      // Limit files processed per cron run.
+      if ($files_processed >= $max_files_per_run) {
+        \Drupal::logger('sentinel_csv_processor')->info('Reached maximum files per cron run (@max). Remaining files will be processed in next cron run.', [
+          '@max' => $max_files_per_run,
+        ]);
+        break;
+      }
+
+      // Enqueue file for processing.
+      $item_id = $queue->createItem([
+        'file_path' => $file_path,
+        'file_uri' => $automate_dir_uri . '/' . $filename,
+        'filename' => $filename,
+        'file_mtime' => $file_mtime,
+        'automate_dir_uri' => $automate_dir_uri,
+      ]);
+      
+      if ($item_id) {
+        $enqueued_count++;
+        $files_processed++;
+        \Drupal::logger('sentinel_csv_processor')->info('Enqueued file @file for automated processing (item ID: @id).', [
+          '@file' => $filename,
+          '@id' => $item_id,
+        ]);
+      }
+      else {
+        \Drupal::logger('sentinel_csv_processor')->error('Failed to enqueue file @file - createItem returned FALSE.', [
+          '@file' => $filename,
+        ]);
+      }
+    }
+  }
+
+    if ($enqueued_count > 0 || $skipped_count > 0) {
+      \Drupal::logger('sentinel_csv_processor')->info('Cron scan completed: @enqueued files enqueued, @skipped files skipped.', [
+        '@enqueued' => $enqueued_count,
+        '@skipped' => $skipped_count,
+      ]);
+    }
+  }
+  catch (\Exception $e) {
+    // Log the exception but don't let it prevent cron from completing.
+    \Drupal::logger('sentinel_csv_processor')->error('Exception in cron hook: @message', [
+      '@message' => $e->getMessage(),
+    ]);
+    // Don't re-throw - let cron complete normally.
+  }
+  catch (\Throwable $e) {
+    // Catch any other errors (PHP 7+).
+    \Drupal::logger('sentinel_csv_processor')->error('Error in cron hook: @message', [
+      '@message' => $e->getMessage(),
+    ]);
+  }
+}
