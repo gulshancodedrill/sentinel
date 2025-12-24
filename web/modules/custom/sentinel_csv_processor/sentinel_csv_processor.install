@@ -1,0 +1,49 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the sentinel_csv_processor module.
+ */
+
+use Drupal\Core\Database\Database;
+
+/**
+ * Add process_type and ftp_file_updated fields to lab_data table.
+ */
+function sentinel_csv_processor_update_8001(&$sandbox) {
+  $connection = Database::getConnection();
+  $schema = $connection->schema();
+  $table = 'lab_data';
+
+  if (!$schema->tableExists($table)) {
+    return t('Lab data table @table does not exist.', ['@table' => $table]);
+  }
+
+  // Add process_type field if it doesn't exist.
+  if (!$schema->fieldExists($table, 'process_type')) {
+    $schema->addField($table, 'process_type', [
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => FALSE,
+      'description' => 'Indicates how the file was processed: manual upload or automated from FTP directory.',
+    ]);
+    
+    // Set default value for existing records.
+    $connection->update($table)
+      ->fields(['process_type' => 'manual'])
+      ->isNull('process_type')
+      ->execute();
+  }
+
+  // Add ftp_file_updated field if it doesn't exist.
+  if (!$schema->fieldExists($table, 'ftp_file_updated')) {
+    $schema->addField($table, 'ftp_file_updated', [
+      'type' => 'int',
+      'not null' => FALSE,
+      'description' => 'The file modification timestamp when read from the automate-csvs directory.',
+    ]);
+  }
+
+  return t('Added process_type and ftp_file_updated fields to lab_data table.');
+}
+

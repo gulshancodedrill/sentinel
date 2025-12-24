@@ -104,6 +104,7 @@ class LabData extends ContentEntityBase implements ContentEntityInterface {
           'selected' => t('Selected'),
           'processing' => t('Processing'),
           'completed' => t('Completed'),
+          'success' => t('Success'),
           'failed' => t('Failed'),
         ],
       ])
@@ -121,6 +122,30 @@ class LabData extends ContentEntityBase implements ContentEntityInterface {
         'text_processing' => 0,
       ])
       ->setRequired(FALSE)
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+
+    // Process type field - indicates how the file was processed.
+    $fields['process_type'] = BaseFieldDefinition::create('list_string')
+      ->setLabel(t('Process Type'))
+      ->setDescription(t('Indicates how the file was processed: manual upload or automated from FTP directory.'))
+      ->setSettings([
+        'allowed_values' => [
+          'manual' => t('Manual'),
+          'automate' => t('Automated'),
+        ],
+      ])
+      ->setRequired(FALSE)
+      ->setDefaultValue('manual')
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+
+    // FTP file updated field - stores the file modification date from automate-csvs directory.
+    $fields['ftp_file_updated'] = BaseFieldDefinition::create('timestamp')
+      ->setLabel(t('FTP File Updated'))
+      ->setDescription(t('The file modification timestamp when read from the automate-csvs directory.'))
+      ->setRequired(FALSE)
+      ->setDefaultValue(NULL)
       ->setDisplayConfigurable('form', TRUE)
       ->setDisplayConfigurable('view', TRUE);
 

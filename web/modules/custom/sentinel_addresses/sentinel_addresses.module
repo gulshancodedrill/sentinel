@@ -17,8 +17,8 @@ function sentinel_addresses_views_api($module = NULL, $api = NULL) {
  */
 function sentinel_addresses_cron() {
   // Get a list of packs that we need to create address entities for.
-  $pids = sentinel_addresses_get_addresses_not_updated();
-
+ // $pids = sentinel_addresses_get_addresses_not_updated();
+$pids = [];
   foreach ($pids as $pid) {
     $queue = \Drupal::queue('sentinel_address_format_updates');
     if (!sentinel_addresses_does_queue_item_exist($pid)) {
