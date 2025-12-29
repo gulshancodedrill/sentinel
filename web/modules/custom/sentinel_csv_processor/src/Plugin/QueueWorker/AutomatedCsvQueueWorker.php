@@ -78,6 +78,8 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     ]);
 
     // Define base directory URIs - processing, archive, and failed should be inside automate-csvs.
+    // Note: uploads directory is also inside automate-csvs, but files are moved from uploads to processing
+    // by the cron hook before being enqueued, so the queue worker only deals with processing/archive/failed.
     $processing_base_dir_uri = $automate_dir_uri . '/processing';
     $archive_base_dir_uri = $automate_dir_uri . '/archive';
     $failed_base_dir_uri = $automate_dir_uri . '/failed';
