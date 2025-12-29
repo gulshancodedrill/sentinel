@@ -1231,55 +1231,60 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     $api_key = '99754106633f94d350db34d548d6091a';
     $api_url = '/sentinel/sampleservice?key=' . $api_key;
 
-    // Build full URL - fix for queue context.
-    // In queue context, \Drupal::request() and global $base_url may return 'default' host.
-    // We need to detect the actual base URL.
+    // Build full URL - check settings.php first, then fallback to request/server variables.
     $api_base_url = NULL;
     
-    // First, try to get from request stack (but may not work in queue context).
-    $request_stack = \Drupal::requestStack();
-    $request = $request_stack->getCurrentRequest();
+    // First priority: Check custom setting from settings.php.
+    $settings = \Drupal::service('settings');
+    $custom_base_url = $settings->get('sentinel_api_base_url', '');
+    if (!empty($custom_base_url)) {
+      $api_base_url = $custom_base_url;
+      \Drupal::logger('sentinel_csv_processor')->info('Using API base URL from settings.php: @url', [
+        '@url' => $api_base_url,
+      ]);
+    }
     
-    if ($request) {
-      $request_url = $request->getSchemeAndHttpHost();
-      // Only use if it's not 'default'.
-      if ($request_url && $request_url !== 'http://default' && $request_url !== 'https://default') {
-        $api_base_url = $request_url;
+    // Second priority: Try to get from current request (works in web context).
+    if (empty($api_base_url)) {
+      try {
+        $request = \Drupal::request();
+        if ($request) {
+          $request_url = $request->getSchemeAndHttpHost();
+          // Only use if it's a valid URL (not 'default').
+          if ($request_url && $request_url !== 'http://default' && $request_url !== 'https://default') {
+            $api_base_url = $request_url;
+          }
+        }
+      }
+      catch (\Exception $e) {
+        // Request not available in queue context, continue to fallbacks.
       }
     }
     
-    // If still not set or is 'default', try global $base_url from settings.php.
+    // Third priority: Use $_SERVER variables (available in CLI/cron context).
     if (empty($api_base_url)) {
-      global $base_url;
-      // Only use if it's not 'default'.
-      if (!empty($base_url) && $base_url !== 'http://default' && $base_url !== 'https://default') {
-        $api_base_url = $base_url;
-      }
-    }
-    
-    // If still not set, try to get from site config.
-    if (empty($api_base_url)) {
-      $site_config = \Drupal::config('system.site');
-      $config_base_url = $site_config->get('base_url');
-      if (!empty($config_base_url)) {
-        $api_base_url = $config_base_url;
-      }
-    }
-    
-    // Last resort: determine from environment.
-    // Check $_SERVER['HTTP_HOST'] or use sentinel.local for local development.
-    if (empty($api_base_url)) {
-      // Check HTTP_HOST from server variables.
+      // Try HTTP_HOST first (most reliable).
       if (isset($_SERVER['HTTP_HOST']) && $_SERVER['HTTP_HOST'] !== 'default') {
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $api_base_url = $scheme . '://' . $_SERVER['HTTP_HOST'];
       }
-      // If HTTP_HOST is 'default' or not set, use sentinel.local for local dev.
-      else {
-        // For local development, use sentinel.local
-        // For production, this should be set in settings.php or site config.
-        $api_base_url = 'http://sentinel.local';
+      // Try SERVER_NAME as fallback.
+      elseif (isset($_SERVER['SERVER_NAME']) && $_SERVER['SERVER_NAME'] !== 'default') {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $port = isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] != 80 && $_SERVER['SERVER_PORT'] != 443 
+          ? ':' . $_SERVER['SERVER_PORT'] 
+          : '';
+        $api_base_url = $scheme . '://' . $_SERVER['SERVER_NAME'] . $port;
       }
+    }
+    
+    // If still not set, log error and return failure.
+    if (empty($api_base_url)) {
+      \Drupal::logger('sentinel_csv_processor')->error('Cannot determine API base URL. Please set $settings[\'sentinel_api_base_url\'] in settings.php or ensure HTTP_HOST/SERVER_NAME are available.');
+      return [
+        'success' => FALSE,
+        'error' => 'Cannot determine API base URL. Please set $settings[\'sentinel_api_base_url\'] in settings.php.',
+      ];
     }
     
     // Remove trailing slash if present.
