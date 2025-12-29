@@ -77,10 +77,10 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       '@uri' => $automate_dir_uri,
     ]);
 
-    // Define directory URIs - processing, archive, and failed should be inside automate-csvs.
-    $processing_dir_uri = $automate_dir_uri . '/processing';
-    $archive_dir_uri = $automate_dir_uri . '/archive';
-    $failed_dir_uri = $automate_dir_uri . '/failed';
+    // Define base directory URIs - processing, archive, and failed should be inside automate-csvs.
+    $processing_base_dir_uri = $automate_dir_uri . '/processing';
+    $archive_base_dir_uri = $automate_dir_uri . '/archive';
+    $failed_base_dir_uri = $automate_dir_uri . '/failed';
 
     // Ensure parent directory (automate-csvs) exists first.
     $parent_path = $this->fileSystem->realpath($automate_dir_uri);
@@ -111,71 +111,26 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       return;
     }
     
-    // Ensure processing directory exists with proper permissions.
-    $processing_path = $this->fileSystem->realpath($processing_dir_uri);
-    if (!$processing_path || !is_dir($processing_path)) {
-      // Try to create it.
-      $processing_prepared = $this->fileSystem->prepareDirectory($processing_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
-      if (!$processing_prepared) {
-        // Try manual creation as fallback.
-        if ($processing_path && !is_dir($processing_path)) {
-          @mkdir($processing_path, 0775, TRUE);
-        }
-        $processing_path = $this->fileSystem->realpath($processing_dir_uri);
-        if (!$processing_path || !is_dir($processing_path)) {
-          \Drupal::logger('sentinel_csv_processor')->error('Failed to create processing directory: @dir (path: @path)', [
-            '@dir' => $processing_dir_uri,
-            '@path' => $processing_path ?: 'unknown',
-          ]);
-          return;
-        }
-      }
-    }
-    
-    // Verify processing directory is writable.
-    if (!is_writable($processing_path)) {
-      \Drupal::logger('sentinel_csv_processor')->error('Processing directory is not writable: @path', [
-        '@path' => $processing_path,
-      ]);
+    // Prepare processing directory with month/year subdirectory.
+    $processing_dir_uri = $this->prepareDirectoryWithMonthYear($processing_base_dir_uri);
+    if (!$processing_dir_uri) {
+      \Drupal::logger('sentinel_csv_processor')->error('Failed to prepare processing directory with month/year subdirectory.');
       return;
     }
-    // Ensure archive and failed directories exist.
-    $archive_prepared = $this->fileSystem->prepareDirectory($archive_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
-    if (!$archive_prepared) {
-      $archive_path = $this->fileSystem->realpath($archive_dir_uri);
-      if ($archive_path && !is_dir($archive_path)) {
-        @mkdir($archive_path, 0775, TRUE);
-      }
-      if (!$archive_path || !is_dir($archive_path)) {
-        \Drupal::logger('sentinel_csv_processor')->warning('Archive directory may not be ready: @dir', [
-          '@dir' => $archive_dir_uri,
-        ]);
-      }
+    
+    // Prepare archive and failed directories with month/year subdirectories (for later use).
+    $archive_dir_uri = $this->prepareDirectoryWithMonthYear($archive_base_dir_uri);
+    if (!$archive_dir_uri) {
+      \Drupal::logger('sentinel_csv_processor')->warning('Failed to prepare archive directory with month/year subdirectory. Will retry when moving file.');
     }
     
-    $failed_prepared = $this->fileSystem->prepareDirectory($failed_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
-    if (!$failed_prepared) {
-      $failed_path = $this->fileSystem->realpath($failed_dir_uri);
-      if ($failed_path && !is_dir($failed_path)) {
-        @mkdir($failed_path, 0775, TRUE);
-      }
-      if (!$failed_path || !is_dir($failed_path)) {
-        \Drupal::logger('sentinel_csv_processor')->warning('Failed directory may not be ready: @dir', [
-          '@dir' => $failed_dir_uri,
-        ]);
-      }
+    $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
+    if (!$failed_dir_uri) {
+      \Drupal::logger('sentinel_csv_processor')->warning('Failed to prepare failed directory with month/year subdirectory. Will retry when moving file.');
     }
 
-    // Move file to processing directory using URI.
+    // Move file to processing directory using URI with month/year subdirectory.
     $processing_uri = $processing_dir_uri . '/' . $filename;
-    
-    // Ensure processing directory is ready right before move (double-check).
-    if (!$this->fileSystem->prepareDirectory($processing_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
-      \Drupal::logger('sentinel_csv_processor')->error('Processing directory not ready before move: @dir', [
-        '@dir' => $processing_dir_uri,
-      ]);
-      return;
-    }
     
     // Use file_uri if provided, otherwise use file_path (real path).
     $source = $file_uri ?: $file_path;
@@ -249,6 +204,67 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       $max_execution_time = 120;
       $start_time = time();
       
+      // Check if filename already exists in database.
+      $storage = $this->entityTypeManager->getStorage('lab_data');
+      $query = $storage->getQuery()
+        ->accessCheck(FALSE)
+        ->condition('filename', $filename)
+        ->range(0, 1);
+      $existing_ids = $query->execute();
+      
+      if (!empty($existing_ids)) {
+        // Entity exists with this filename - check ftp_file_updated.
+        $existing_id = reset($existing_ids);
+        $connection = \Drupal::database();
+        $existing_data = $connection->select('lab_data', 'l')
+          ->fields('l', ['ftp_file_updated', 'id'])
+          ->condition('id', $existing_id)
+          ->execute()
+          ->fetchObject();
+        
+        $existing_ftp_updated = $existing_data->ftp_file_updated;
+        
+        // If ftp_file_updated matches file_mtime, this is a duplicate - move to failed.
+        if ($existing_ftp_updated == $file_mtime) {
+          \Drupal::logger('sentinel_csv_processor')->warning('Duplicate file detected: @file already processed with same modification time (@mtime). Moving to failed directory.', [
+            '@file' => $filename,
+            '@mtime' => $file_mtime,
+          ]);
+          
+          // Move file to failed directory.
+          $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
+          if ($failed_dir_uri) {
+            $failed_uri = $failed_dir_uri . '/' . $filename;
+            if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+              // Update existing lab_data entity to failed status.
+              $connection->update('lab_data')
+                ->fields([
+                  'path' => $failed_uri,
+                  'status' => 'failed',
+                  'process_type' => 'automatic',
+                  'processed' => \Drupal::time()->getRequestTime(),
+                ])
+                ->condition('id', $existing_id)
+                ->execute();
+              
+              \Drupal::logger('sentinel_csv_processor')->error('Duplicate file @file moved to failed directory. Status set to failed.', [
+                '@file' => $filename,
+              ]);
+            }
+          }
+          // Exit early - don't process duplicate file.
+          return;
+        }
+        else {
+          // ftp_file_updated is different or NULL - update existing entity.
+          \Drupal::logger('sentinel_csv_processor')->info('File @file exists but ftp_file_updated differs (@existing vs @new). Updating existing entity.', [
+            '@file' => $filename,
+            '@existing' => $existing_ftp_updated ?: 'NULL',
+            '@new' => $file_mtime,
+          ]);
+        }
+      }
+      
       // Extract refname from CSV before creating entity.
       $refname = $this->extractSiteFromCsv($processing_uri);
       
@@ -265,31 +281,76 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       
       $result = $this->processCsvFile($file_id, $processing_uri, $max_execution_time - (time() - $start_time));
 
+      // Ensure process_type is set to automatic using direct database update (entity field mapping may not work).
+      $connection = \Drupal::database();
+      $connection->update('lab_data')
+        ->fields(['process_type' => 'automatic'])
+        ->condition('id', $lab_data->id())
+        ->execute();
+      // Also set on entity object for consistency.
+      $lab_data->set('process_type', 'automatic');
+      $lab_data->save();
+
       if ($result['success']) {
-        // Move to archive on success.
-        $archive_uri = $archive_dir_uri . '/' . $filename;
-        if ($this->fileSystem->move($processing_uri, $archive_uri, FileSystemInterface::EXISTS_REPLACE)) {
-          \Drupal::logger('sentinel_csv_processor')->info('Successfully processed and archived file @file.', [
-            '@file' => $filename,
-          ]);
+        // CSV processing successful - move to archive directory immediately.
+        $archive_dir_uri = $this->prepareDirectoryWithMonthYear($archive_base_dir_uri);
+        if ($archive_dir_uri) {
+          $archive_uri = $archive_dir_uri . '/' . $filename;
+          if ($this->fileSystem->move($processing_uri, $archive_uri, FileSystemInterface::EXISTS_REPLACE)) {
+            // Reload entity to get latest values.
+            $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
+            // Update lab_data entity path, status, process_type, and processed timestamp.
+            $lab_data->set('path', $archive_uri);
+            $lab_data->set('process_type', 'automatic');
+            $lab_data->set('status', 'success');
+            $lab_data->set('processed', \Drupal::time()->getRequestTime());
+            $lab_data->save();
+            \Drupal::logger('sentinel_csv_processor')->info('CSV processing completed successfully for @file. Moved to archive directory. Updated lab_data path to @path, status to success.', [
+              '@file' => $filename,
+              '@path' => $archive_uri,
+            ]);
+          }
+          else {
+            \Drupal::logger('sentinel_csv_processor')->error('File @file processing succeeded but could not be moved to archive directory.', [
+              '@file' => $filename,
+            ]);
+          }
         }
         else {
-          \Drupal::logger('sentinel_csv_processor')->warning('File @file processed successfully but failed to move to archive.', [
+          \Drupal::logger('sentinel_csv_processor')->error('Failed to prepare archive directory with month/year subdirectory for file @file.', [
             '@file' => $filename,
           ]);
         }
       }
       else {
-        // Move to failed on error.
-        $failed_uri = $failed_dir_uri . '/' . $filename;
-        if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
-          \Drupal::logger('sentinel_csv_processor')->error('File @file processing failed. Moved to failed directory. Error: @error', [
-            '@file' => $filename,
-            '@error' => $result['error'] ?? 'Unknown error',
-          ]);
+        // CSV processing failed - move to failed directory immediately.
+        // Ensure failed directory with month/year subdirectory is ready.
+        $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
+        if ($failed_dir_uri) {
+          $failed_uri = $failed_dir_uri . '/' . $filename;
+          if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+            // Reload entity to get latest values.
+            $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
+            // Update lab_data entity path and ensure process_type and processed are set.
+            $lab_data->set('path', $failed_uri);
+            $lab_data->set('process_type', 'automatic');
+            $lab_data->set('processed', \Drupal::time()->getRequestTime());
+            $lab_data->set('status', 'failed');
+            $lab_data->save();
+            \Drupal::logger('sentinel_csv_processor')->error('File @file processing failed. Moved to failed directory. Error: @error. Updated lab_data path to @path.', [
+              '@file' => $filename,
+              '@error' => $result['error'] ?? 'Unknown error',
+              '@path' => $failed_uri,
+            ]);
+          }
+          else {
+            \Drupal::logger('sentinel_csv_processor')->error('File @file processing failed and could not be moved to failed directory.', [
+              '@file' => $filename,
+            ]);
+          }
         }
         else {
-          \Drupal::logger('sentinel_csv_processor')->error('File @file processing failed and could not be moved to failed directory.', [
+          \Drupal::logger('sentinel_csv_processor')->error('Failed to prepare failed directory with month/year subdirectory for file @file.', [
             '@file' => $filename,
           ]);
         }
@@ -297,17 +358,93 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     }
     catch (\Exception $e) {
       // Move to failed on exception.
-      $failed_uri = $failed_dir_uri . '/' . $filename;
-      if ($this->fileSystem->realpath($processing_uri) && file_exists($this->fileSystem->realpath($processing_uri))) {
-        if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
-          \Drupal::logger('sentinel_csv_processor')->error('Exception processing file @file. Moved to failed directory. Exception: @exception', [
-            '@file' => $filename,
-            '@exception' => $e->getMessage(),
-          ]);
+      // Ensure failed directory with month/year subdirectory is ready.
+      $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
+      if ($failed_dir_uri) {
+        $failed_uri = $failed_dir_uri . '/' . $filename;
+        if ($this->fileSystem->realpath($processing_uri) && file_exists($this->fileSystem->realpath($processing_uri))) {
+          if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+            // Update lab_data entity path if entity exists.
+            if (isset($lab_data) && $lab_data) {
+              // Reload entity to get latest values.
+              $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
+              $lab_data->set('path', $failed_uri);
+              $lab_data->set('process_type', 'automatic');
+              // Set processed timestamp.
+              $lab_data->set('processed', \Drupal::time()->getRequestTime());
+              $lab_data->set('status', 'failed');
+              $lab_data->save();
+            }
+            \Drupal::logger('sentinel_csv_processor')->error('Exception processing file @file. Moved to failed directory. Exception: @exception. Updated lab_data path to @path.', [
+              '@file' => $filename,
+              '@exception' => $e->getMessage(),
+              '@path' => $failed_uri,
+            ]);
+          }
         }
       }
       throw $e;
     }
+  }
+
+  /**
+   * Gets the month/year subdirectory path (e.g., "12-2025").
+   *
+   * @param int|null $timestamp
+   *   Optional timestamp. If not provided, uses current time.
+   *
+   * @return string
+   *   The month/year subdirectory path (e.g., "12-2025").
+   */
+  protected function getMonthYearSubdirectory($timestamp = NULL) {
+    if ($timestamp === NULL) {
+      $timestamp = \Drupal::time()->getRequestTime();
+    }
+    $month = (int) date('n', $timestamp); // 1-12, no leading zero
+    $year = (int) date('Y', $timestamp);
+    return $month . '-' . $year;
+  }
+
+  /**
+   * Prepares a directory with month/year subdirectory structure.
+   *
+   * @param string $base_dir_uri
+   *   The base directory URI (e.g., private://lab_files/automate-csvs/archive).
+   * @param int|null $timestamp
+   *   Optional timestamp. If not provided, uses current time.
+   *
+   * @return string|false
+   *   The full directory URI with month/year subdirectory, or FALSE on failure.
+   */
+  protected function prepareDirectoryWithMonthYear($base_dir_uri, $timestamp = NULL) {
+    $month_year = $this->getMonthYearSubdirectory($timestamp);
+    $full_dir_uri = $base_dir_uri . '/' . $month_year;
+    
+    $prepared = $this->fileSystem->prepareDirectory($full_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    if (!$prepared) {
+      $dir_path = $this->fileSystem->realpath($full_dir_uri);
+      if ($dir_path && !is_dir($dir_path)) {
+        @mkdir($dir_path, 0775, TRUE);
+      }
+      $dir_path = $this->fileSystem->realpath($full_dir_uri);
+      if (!$dir_path || !is_dir($dir_path)) {
+        \Drupal::logger('sentinel_csv_processor')->error('Failed to create directory with month/year: @dir', [
+          '@dir' => $full_dir_uri,
+        ]);
+        return FALSE;
+      }
+    }
+    
+    // Verify directory is writable.
+    $dir_path = $this->fileSystem->realpath($full_dir_uri);
+    if ($dir_path && !is_writable($dir_path)) {
+      \Drupal::logger('sentinel_csv_processor')->error('Directory is not writable: @dir', [
+        '@dir' => $full_dir_uri,
+      ]);
+      return FALSE;
+    }
+    
+    return $full_dir_uri;
   }
 
   /**
@@ -341,7 +478,7 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       // Update the file URI, modification time, refname, and status.
       $lab_data->set('path', $file_uri);
       $lab_data->set('ftp_file_updated', $file_mtime);
-      $lab_data->set('process_type', 'automate');
+      $lab_data->set('process_type', 'automatic');
       $lab_data->set('status', 'processing');
       // Update refname if provided and different.
       if ($refname !== NULL) {
@@ -352,6 +489,16 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
         $lab_data->set('uploaded', $current_time);
       }
       $lab_data->save();
+      
+      // Ensure process_type and ftp_file_updated are persisted using direct database update (entity field mapping may not work).
+      $connection = \Drupal::database();
+      $connection->update('lab_data')
+        ->fields([
+          'process_type' => 'automatic',
+          'ftp_file_updated' => $file_mtime,
+        ])
+        ->condition('id', $lab_data->id())
+        ->execute();
       
       \Drupal::logger('sentinel_csv_processor')->info('Updated existing lab_data entity for @file (refname: @refname, ftp_file_updated: @mtime)', [
         '@file' => $filename,
@@ -367,12 +514,22 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       'filename' => $filename,
       'path' => $file_uri,
       'ftp_file_updated' => $file_mtime,
-      'process_type' => 'automate',
+      'process_type' => 'automatic',
       'status' => 'processing',
       'refname' => $refname,
       'uploaded' => $current_time, // Set uploaded timestamp when creating new entity.
     ]);
     $lab_data->save();
+    
+    // Ensure process_type and ftp_file_updated are persisted using direct database update (entity field mapping may not work).
+    $connection = \Drupal::database();
+    $connection->update('lab_data')
+      ->fields([
+        'process_type' => 'automatic',
+        'ftp_file_updated' => $file_mtime,
+      ])
+      ->condition('id', $lab_data->id())
+      ->execute();
 
     \Drupal::logger('sentinel_csv_processor')->info('Created new lab_data entity for @file (refname: @refname, uploaded: @uploaded, ftp_file_updated: @mtime)', [
       '@file' => $filename,
@@ -576,18 +733,19 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       }
     }
 
-    // Update processed timestamp and status.
-    $lab_data->set('processed', \Drupal::time()->getRequestTime());
-    
+    // Keep status as 'processing' - will be updated to success/failed after sentinel_queue completes.
+    // Don't set processed timestamp yet - will be set when sentinel_queue completes.
+    // Status remains 'processing' until sentinel_queue finishes processing the results.
     if ($error_count === 0 && $processed_count > 0) {
-      $lab_data->set('status', 'success');
-      \Drupal::logger('sentinel_csv_processor')->info('Queue processing completed successfully. Status set to success for file @filename.', [
+      \Drupal::logger('sentinel_csv_processor')->info('CSV processing completed successfully. Status remains processing until sentinel_queue completes for file @filename.', [
         '@filename' => $filename,
       ]);
     }
     else {
+      // If CSV processing failed, we can mark as failed immediately.
       $lab_data->set('status', 'failed');
-      \Drupal::logger('sentinel_csv_processor')->error('Queue processing failed. Status set to failed for file @filename. Errors: @errors', [
+      $lab_data->set('processed', \Drupal::time()->getRequestTime());
+      \Drupal::logger('sentinel_csv_processor')->error('CSV processing failed. Status set to failed for file @filename. Errors: @errors', [
         '@filename' => $filename,
         '@errors' => $error_count,
       ]);
@@ -1186,4 +1344,3 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
 
 
 }
-

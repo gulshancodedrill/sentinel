@@ -301,3 +301,51 @@ function sentinel_csv_processor_cron() {
     ]);
   }
 }
+
+/**
+ * Implements hook_sentinel_sendresults().
+ *
+ * NOTE: This hook is no longer used for file movement logic.
+ * File movement is now handled directly in AutomatedCsvQueueWorker
+ * after automated_csv_processor completes (success -> archive, fail -> failed).
+ *
+ * @param object $sample_entity
+ *   The sentinel_sample entity that was processed.
+ */
+function sentinel_csv_processor_sentinel_sendresults($sample_entity) {
+  // No-op: File movement is handled in AutomatedCsvQueueWorker.
+  // This hook is kept for compatibility but does nothing.
+  return;
+}
+
+/**
+ * Helper function to prepare directory with month/year subdirectory.
+ *
+ * @param string $base_dir_uri
+ *   The base directory URI.
+ *
+ * @return string|false
+ *   The full directory URI with month/year subdirectory, or FALSE on failure.
+ */
+function _sentinel_csv_processor_prepare_directory_with_month_year($base_dir_uri) {
+  $file_system = \Drupal::service('file_system');
+  $timestamp = \Drupal::time()->getRequestTime();
+  $month = (int) date('n', $timestamp);
+  $year = (int) date('Y', $timestamp);
+  $month_year = $month . '-' . $year;
+  $full_dir_uri = $base_dir_uri . '/' . $month_year;
+
+  $prepared = $file_system->prepareDirectory($full_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+  if (!$prepared) {
+    $dir_path = $file_system->realpath($full_dir_uri);
+    if ($dir_path && !is_dir($dir_path)) {
+      @mkdir($dir_path, 0775, TRUE);
+    }
+    $dir_path = $file_system->realpath($full_dir_uri);
+    if (!$dir_path || !is_dir($dir_path)) {
+      return FALSE;
+    }
+  }
+
+  return $full_dir_uri;
+}
