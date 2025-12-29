@@ -40,7 +40,7 @@ function sentinel_csv_processor_csv_upload_access(AccountInterface $account) {
 /**
  * Implements hook_cron().
  *
- * Scans the automate-csvs directory and enqueues files for processing.
+ * Scans the automate-csvs/uploads directory and enqueues files for processing.
  */
 function sentinel_csv_processor_cron() {
   // Log immediately to confirm hook is being called.
@@ -51,7 +51,7 @@ function sentinel_csv_processor_cron() {
   $state = \Drupal::state();
   $last_run = $state->get('sentinel_csv_processor.cron_last_run', 0);
   $current_time = \Drupal::time()->getRequestTime();
-  $min_interval = 180; // 3 minutes minimum between runs (reduced from 10 to allow more frequent checks).
+  $min_interval = 60; // 1 minutes minimum between runs (reduced from 10 to allow more frequent checks).
   
   if (($current_time - $last_run) < $min_interval) {
     // Skip this run - too soon since last execution.
@@ -92,13 +92,17 @@ function sentinel_csv_processor_cron() {
     }
 
     // Ensure directories exist.
+    // automate-csvs should have 4 subdirectories: uploads, processing, archive, and failed.
     \Drupal::logger('sentinel_csv_processor')->info('Preparing directories...');
     $file_system->prepareDirectory($automate_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
     \Drupal::logger('sentinel_csv_processor')->info('Automate directory prepared.');
-    // Processing, archive, and failed directories should be inside automate-csvs.
+    // All subdirectories should be inside automate-csvs.
+    $uploads_dir_uri = $automate_dir_uri . '/uploads';
     $processing_dir_uri = $automate_dir_uri . '/processing';
     $archive_dir_uri = $automate_dir_uri . '/archive';
     $failed_dir_uri = $automate_dir_uri . '/failed';
+    $file_system->prepareDirectory($uploads_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    \Drupal::logger('sentinel_csv_processor')->info('Uploads directory prepared.');
     $file_system->prepareDirectory($processing_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
     \Drupal::logger('sentinel_csv_processor')->info('Processing directory prepared.');
     $file_system->prepareDirectory($archive_dir_uri, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
@@ -118,17 +122,26 @@ function sentinel_csv_processor_cron() {
   $queue = \Drupal::queue('automated_csv_processor');
   $entity_storage = \Drupal::entityTypeManager()->getStorage('lab_data');
 
-  // Scan directory for CSV files.
-  \Drupal::logger('sentinel_csv_processor')->info('Scanning directory: @dir', ['@dir' => $automate_dir]);
-  $files = glob($automate_dir . '/*.csv');
-  \Drupal::logger('sentinel_csv_processor')->info('Glob found @count files.', ['@count' => count($files)]);
+  // Scan uploads directory for CSV files (files should be placed in automate-csvs/uploads/).
+  $uploads_dir = $file_system->realpath($uploads_dir_uri);
+  \Drupal::logger('sentinel_csv_processor')->info('Scanning uploads directory: @dir', ['@dir' => $uploads_dir ?: $uploads_dir_uri]);
   
-  if (empty($files)) {
-    \Drupal::logger('sentinel_csv_processor')->info('No CSV files found in automate-csvs directory.');
+  if (!$uploads_dir || !is_dir($uploads_dir)) {
+    \Drupal::logger('sentinel_csv_processor')->warning('Uploads directory does not exist: @dir', [
+      '@dir' => $uploads_dir_uri,
+    ]);
     return;
   }
   
-  \Drupal::logger('sentinel_csv_processor')->info('Found @count CSV files in automate-csvs directory.', [
+  $files = glob($uploads_dir . '/*.csv');
+  \Drupal::logger('sentinel_csv_processor')->info('Glob found @count files.', ['@count' => count($files)]);
+  
+  if (empty($files)) {
+    \Drupal::logger('sentinel_csv_processor')->info('No CSV files found in automate-csvs/uploads directory.');
+    return;
+  }
+  
+  \Drupal::logger('sentinel_csv_processor')->info('Found @count CSV files in automate-csvs/uploads directory.', [
     '@count' => count($files),
   ]);
 
@@ -256,9 +269,10 @@ function sentinel_csv_processor_cron() {
       }
 
       // Enqueue file for processing.
+      // file_uri should point to the file in uploads directory.
       $item_id = $queue->createItem([
         'file_path' => $file_path,
-        'file_uri' => $automate_dir_uri . '/' . $filename,
+        'file_uri' => $uploads_dir_uri . '/' . $filename,
         'filename' => $filename,
         'file_mtime' => $file_mtime,
         'automate_dir_uri' => $automate_dir_uri,
