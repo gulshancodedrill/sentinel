@@ -133,6 +133,7 @@ class LabData extends ContentEntityBase implements ContentEntityInterface {
         'allowed_values' => [
           'manual' => t('Manual'),
           'automate' => t('Automated'),
+          'automatic' => t('Automatic'),
         ],
       ])
       ->setRequired(FALSE)
