@@ -8,9 +8,11 @@ use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\Url;
 use Drupal\sentinel_portal_sample\Ajax\GenericDataCommand;
 use Drupal\sentinel_sample\Entity\SentinelSample;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -374,6 +376,116 @@ class SentinelSampleController extends ControllerBase {
     
     // TODO: Add proper access check logic here
     return AccessResult::allowedIfHasPermission($account, 'sentinel view own sentinel_sample');
+  }
+
+  /**
+   * Anonymous sample submission page.
+   *
+   * Handles redirects based on PRN query parameter and existing sample status.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The request object.
+   *
+   * @return array|\Symfony\Component\HttpFoundation\RedirectResponse
+   *   Either a redirect response or the form render array.
+   */
+  public function anonymousSubmit(Request $request) {
+    $prn = trim($request->query->get('prn', ''));
+
+    // PRN is mandatory in query string
+    if (empty($prn)) {
+      return [
+        '#title' => $this->t('Invalid QR Code'),
+        'error_message' => [
+          '#markup' => '<div class="messages messages--error">' .
+            '<p><strong>' . $this->t('Invalid QR, please scan the correct QR') . '</strong></p>' .
+            '<p>' . $this->t('The QR code is missing or invalid. Please scan the correct QR code from your pack.') . '</p>' .
+            '</div>',
+        ],
+      ];
+    }
+
+    // Check if sample with this PRN already exists
+    $storage = $this->entityTypeManager()->getStorage('sentinel_sample');
+    $query = $storage->getQuery()
+      ->condition('pack_reference_number', $prn)
+      ->accessCheck(FALSE)
+      ->range(0, 1);
+    $existing_ids = $query->execute();
+
+    if (!empty($existing_ids)) {
+      // Sample exists - load it and check addresses
+      $sample_id = reset($existing_ids);
+      $sample = $storage->load($sample_id);
+
+      if ($sample) {
+        // Check if sample has both company address and system address
+        // Check new entity reference fields first
+        $has_company_address = FALSE;
+        if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+          $has_company_address = TRUE;
+        }
+        // Fall back to legacy field
+        elseif ($sample->hasField('sentinel_company_address_target_id')) {
+          $legacy_company_id = $sample->get('sentinel_company_address_target_id')->value;
+          $has_company_address = !empty($legacy_company_id);
+        }
+
+        $has_system_address = FALSE;
+        if ($sample->hasField('field_sentinel_sample_address') && !$sample->get('field_sentinel_sample_address')->isEmpty()) {
+          $has_system_address = TRUE;
+        }
+        // Fall back to legacy field
+        elseif ($sample->hasField('sentinel_sample_address_target_id')) {
+          $legacy_system_id = $sample->get('sentinel_sample_address_target_id')->value;
+          $has_system_address = !empty($legacy_system_id);
+        }
+
+        if ($has_company_address && $has_system_address) {
+          // Sample is complete - show message
+          return [
+            '#title' => $this->t('Sample Already Submitted'),
+            'message' => [
+              '#markup' => '<div class="messages messages--warning">' .
+                '<p><strong>' . $this->t('This record already exists.') . '</strong></p>' .
+                '<p>' . $this->t('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+                  '@prn' => $prn,
+                ]) . '</p>' .
+                '</div>',
+            ],
+          ];
+        }
+        else {
+          // Sample exists but missing addresses - redirect to details form
+          $url = Url::fromRoute('sentinel_portal_sample.anonymous_details', [
+            'sample_id' => $sample_id,
+          ])->setAbsolute(TRUE);
+          return new RedirectResponse($url->toString());
+        }
+      }
+    }
+
+    // PRN exists but sample doesn't exist - show normal submission form
+    $form = $this->formBuilder()->getForm('\Drupal\sentinel_portal_sample\Form\AnonymousSampleSubmissionForm');
+    return $form;
+  }
+
+  /**
+   * Thank you page for anonymous sample submission.
+   *
+   * @return array
+   *   A renderable array.
+   */
+  public function thankYou() {
+    return [
+      '#title' => $this->t('Thank You'),
+      'message' => [
+        '#markup' => '<div class="messages messages--status">' .
+          '<p>' . $this->t('Your sample has been successfully submitted. We appreciate you taking the time to provide this information.') . '</p>' .
+          '<p>' . $this->t('You will receive updates about your sample via email.') . '</p>' .
+          '</div>',
+      ],
+    ];
   }
 
 }

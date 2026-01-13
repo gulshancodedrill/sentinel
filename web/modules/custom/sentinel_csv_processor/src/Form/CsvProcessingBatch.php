@@ -284,6 +284,40 @@ class CsvProcessingBatch {
       ]);
     }
 
+    // Extract Lab Reference from CSV and update sentinel_sample entity
+    if ($ucr && $ucr !== 'pending') {
+      $lab_reference = NULL;
+      if (!empty($rows)) {
+        $first_row = reset($rows);
+        // Lab Reference is at index 1 (Data Source=0, Lab Reference=1, Sample Reference=2, Site=3, ...)
+        if (isset($first_row[1]) && !empty(trim($first_row[1]))) {
+          $lab_reference = trim($first_row[1]);
+        }
+      }
+      
+      if ($lab_reference !== NULL) {
+        // Reload sample entity to ensure we have the latest version
+        $sample_storage = \Drupal::entityTypeManager()->getStorage('sentinel_sample');
+        $sample_query = $sample_storage->getQuery()
+          ->accessCheck(FALSE)
+          ->condition('pack_reference_number', $site)
+          ->range(0, 1);
+        $sample_ids = $sample_query->execute();
+        
+        if (!empty($sample_ids)) {
+          $sample = $sample_storage->load(reset($sample_ids));
+          if ($sample && $sample->hasField('lab_ref')) {
+            $sample->set('lab_ref', $lab_reference);
+            $sample->save();
+            \Drupal::logger('sentinel_csv_processor')->info('Updated lab_ref for pack @site: @lab_ref', [
+              '@site' => $site,
+              '@lab_ref' => $lab_reference,
+            ]);
+          }
+        }
+      }
+    }
+
     // Map CSV rows to API fields.
     $api_data = self::mapRowsToApiFields($rows, $site);
     
