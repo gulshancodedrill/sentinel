@@ -1356,6 +1356,51 @@ class SentinelSampleSubmissionForm extends FormBase {
       if ($ucr_value && $sample->hasField('ucr')) {
         $sample->set('ucr', $ucr_value);
       }
+
+      // Get client_id and client_name from sentinel_client table by UCR
+      $client_id = NULL;
+      $client_name = NULL;
+      if ($ucr_value) {
+        $client_storage = $this->entityTypeManager->getStorage('sentinel_client');
+        $client_query = $client_storage->getQuery()
+          ->condition('ucr', $ucr_value)
+          ->accessCheck(FALSE)
+          ->range(0, 1);
+        $client_ids = $client_query->execute();
+        
+        if (!empty($client_ids)) {
+          $client_entity = $client_storage->load(reset($client_ids));
+          if ($client_entity) {
+            $client_id = $client_entity->id();
+            if ($client_entity->hasField('name') && !$client_entity->get('name')->isEmpty()) {
+              $client_name = $client_entity->get('name')->value;
+            }
+          }
+        }
+      }
+
+      // Get Sentinel Customer ID from form
+      $sentinel_customer_id = NULL;
+      $customer_id_value = $form_state->getValue(['company_details', 'sentinel_customer_id']);
+      if (empty($customer_id_value)) {
+        // Try flattened value
+        $customer_id_value = $form_state->getValue('sentinel_customer_id');
+      }
+      if (!empty($customer_id_value)) {
+        $sentinel_customer_id = trim($customer_id_value);
+      }
+
+      // Determine pack_type from pack_reference_number
+      $pack_type = NULL;
+      $pack_reference_number = NULL;
+      $pack_ref_value = $form_state->getValue('pack_reference_number');
+      if (!empty($pack_ref_value)) {
+        $pack_reference_number = trim($pack_ref_value);
+        $pack_type = \Drupal\sentinel_portal_entities\Entity\SentinelSample::getPackType([
+          'pack_reference_number' => $pack_reference_number,
+        ]);
+      }
+
       // Explicit legacy field name mapping from D7 -> values in this D11 form
       // Only map when present; do not overwrite with empty values.
       $legacyMappings = [
@@ -1456,6 +1501,25 @@ class SentinelSampleSubmissionForm extends FormBase {
       $this->mapFormValuesToEntity($sample, $values, $form);
       $this->ensureAddressEntities($sample, $values, $original_values, $form);
       $this->setLegacyAddressTargetIds($sample);
+
+      // Set customer_id if provided
+      if ($sentinel_customer_id !== NULL && $sample->hasField('customer_id')) {
+        $sample->set('customer_id', $sentinel_customer_id);
+      }
+
+      // Set client_id and client_name if available
+      if ($client_id !== NULL && $sample->hasField('client_id')) {
+        $sample->set('client_id', $client_id);
+      }
+      if ($client_name !== NULL && $sample->hasField('client_name')) {
+        $sample->set('client_name', $client_name);
+      }
+
+      // Set pack_type if available
+      if ($pack_type !== NULL && $sample->hasField('pack_type')) {
+        $sample->set('pack_type', $pack_type);
+      }
+
       $sample->save();
 
       $this->messenger()->addMessage($this->t('Your sample has been added.'));

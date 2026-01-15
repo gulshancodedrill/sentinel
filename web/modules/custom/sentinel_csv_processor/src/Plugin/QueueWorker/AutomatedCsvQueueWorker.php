@@ -117,8 +117,8 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     $processing_dir_uri = $this->prepareDirectoryWithMonthYear($processing_base_dir_uri);
     if (!$processing_dir_uri) {
       \Drupal::logger('sentinel_csv_processor')->error('Failed to prepare processing directory with month/year subdirectory.');
-      return;
-    }
+          return;
+        }
     
     // Prepare archive and failed directories with month/year subdirectories (for later use).
     $archive_dir_uri = $this->prepareDirectoryWithMonthYear($archive_base_dir_uri);
@@ -297,8 +297,8 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
         // CSV processing successful - move to archive directory immediately.
         $archive_dir_uri = $this->prepareDirectoryWithMonthYear($archive_base_dir_uri);
         if ($archive_dir_uri) {
-          $archive_uri = $archive_dir_uri . '/' . $filename;
-          if ($this->fileSystem->move($processing_uri, $archive_uri, FileSystemInterface::EXISTS_REPLACE)) {
+        $archive_uri = $archive_dir_uri . '/' . $filename;
+        if ($this->fileSystem->move($processing_uri, $archive_uri, FileSystemInterface::EXISTS_REPLACE)) {
             // Reload entity to get latest values.
             $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
             // Update lab_data entity path, status, process_type, and processed timestamp.
@@ -308,17 +308,17 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
             $lab_data->set('processed', \Drupal::time()->getRequestTime());
             $lab_data->save();
             \Drupal::logger('sentinel_csv_processor')->info('CSV processing completed successfully for @file. Moved to archive directory. Updated lab_data path to @path, status to success.', [
-              '@file' => $filename,
+            '@file' => $filename,
               '@path' => $archive_uri,
-            ]);
-          }
-          else {
-            \Drupal::logger('sentinel_csv_processor')->error('File @file processing succeeded but could not be moved to archive directory.', [
-              '@file' => $filename,
-            ]);
-          }
+          ]);
         }
         else {
+            \Drupal::logger('sentinel_csv_processor')->error('File @file processing succeeded but could not be moved to archive directory.', [
+            '@file' => $filename,
+          ]);
+        }
+      }
+      else {
           \Drupal::logger('sentinel_csv_processor')->error('Failed to prepare archive directory with month/year subdirectory for file @file.', [
             '@file' => $filename,
           ]);
@@ -329,8 +329,8 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
         // Ensure failed directory with month/year subdirectory is ready.
         $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
         if ($failed_dir_uri) {
-          $failed_uri = $failed_dir_uri . '/' . $filename;
-          if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+        $failed_uri = $failed_dir_uri . '/' . $filename;
+        if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
             // Reload entity to get latest values.
             $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
             // Update lab_data entity path and ensure process_type and processed are set.
@@ -340,13 +340,13 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
             $lab_data->set('status', 'failed');
             $lab_data->save();
             \Drupal::logger('sentinel_csv_processor')->error('File @file processing failed. Moved to failed directory. Error: @error. Updated lab_data path to @path.', [
-              '@file' => $filename,
-              '@error' => $result['error'] ?? 'Unknown error',
+            '@file' => $filename,
+            '@error' => $result['error'] ?? 'Unknown error',
               '@path' => $failed_uri,
-            ]);
-          }
-          else {
-            \Drupal::logger('sentinel_csv_processor')->error('File @file processing failed and could not be moved to failed directory.', [
+          ]);
+        }
+        else {
+          \Drupal::logger('sentinel_csv_processor')->error('File @file processing failed and could not be moved to failed directory.', [
               '@file' => $filename,
             ]);
           }
@@ -363,9 +363,9 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       // Ensure failed directory with month/year subdirectory is ready.
       $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
       if ($failed_dir_uri) {
-        $failed_uri = $failed_dir_uri . '/' . $filename;
-        if ($this->fileSystem->realpath($processing_uri) && file_exists($this->fileSystem->realpath($processing_uri))) {
-          if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+      $failed_uri = $failed_dir_uri . '/' . $filename;
+      if ($this->fileSystem->realpath($processing_uri) && file_exists($this->fileSystem->realpath($processing_uri))) {
+        if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
             // Update lab_data entity path if entity exists.
             if (isset($lab_data) && $lab_data) {
               // Reload entity to get latest values.
@@ -378,10 +378,10 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
               $lab_data->save();
             }
             \Drupal::logger('sentinel_csv_processor')->error('Exception processing file @file. Moved to failed directory. Exception: @exception. Updated lab_data path to @path.', [
-              '@file' => $filename,
-              '@exception' => $e->getMessage(),
+            '@file' => $filename,
+            '@exception' => $e->getMessage(),
               '@path' => $failed_uri,
-            ]);
+          ]);
           }
         }
       }
@@ -854,6 +854,40 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       ]);
     }
 
+    // Extract Lab Reference from CSV and update sentinel_sample entity
+    if ($ucr && $ucr !== 'pending') {
+      $lab_reference = NULL;
+      if (!empty($rows)) {
+        $first_row = reset($rows);
+        // Lab Reference is at index 1 (Data Source=0, Lab Reference=1, Sample Reference=2, Site=3, ...)
+        if (isset($first_row[1]) && !empty(trim($first_row[1]))) {
+          $lab_reference = trim($first_row[1]);
+        }
+      }
+      
+      if ($lab_reference !== NULL) {
+        // Reload sample entity to ensure we have the latest version
+        $sample_storage = $this->entityTypeManager->getStorage('sentinel_sample');
+        $sample_query = $sample_storage->getQuery()
+          ->accessCheck(FALSE)
+          ->condition('pack_reference_number', $site)
+          ->range(0, 1);
+        $sample_ids = $sample_query->execute();
+        
+        if (!empty($sample_ids)) {
+          $sample = $sample_storage->load(reset($sample_ids));
+          if ($sample && $sample->hasField('lab_ref')) {
+            $sample->set('lab_ref', $lab_reference);
+            $sample->save();
+            \Drupal::logger('sentinel_csv_processor')->info('Updated lab_ref for pack @site: @lab_ref', [
+              '@site' => $site,
+              '@lab_ref' => $lab_reference,
+            ]);
+          }
+        }
+      }
+    }
+
     // Map CSV rows to API fields.
     $api_data = $this->mapRowsToApiFields($rows, $site);
     
@@ -1250,13 +1284,13 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     if (empty($api_base_url)) {
       try {
         $request = \Drupal::request();
-        if ($request) {
-          $request_url = $request->getSchemeAndHttpHost();
+    if ($request) {
+      $request_url = $request->getSchemeAndHttpHost();
           // Only use if it's a valid URL (not 'default').
-          if ($request_url && $request_url !== 'http://default' && $request_url !== 'https://default') {
-            $api_base_url = $request_url;
-          }
-        }
+      if ($request_url && $request_url !== 'http://default' && $request_url !== 'https://default') {
+        $api_base_url = $request_url;
+      }
+    }
       }
       catch (\Exception $e) {
         // Request not available in queue context, continue to fallbacks.

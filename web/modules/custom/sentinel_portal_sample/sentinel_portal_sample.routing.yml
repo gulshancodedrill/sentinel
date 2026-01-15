@@ -68,3 +68,47 @@ sentinel_portal_sample.landlord_ajax:
     _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::selectLandlord'
   requirements:
     _permission: 'sentinel portal sample submit'
+
+sentinel_portal_sample.anonymous_submit:
+  path: '/sample/submit'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::anonymousSubmit'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.anonymous_options:
+  path: '/sample/options/{sample_id}'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleOptionsForm'
+    sample_id: NULL
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+    parameters:
+      sample_id:
+        type: integer
+
+sentinel_portal_sample.anonymous_details:
+  path: '/sample/details/{sample_id}'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleDetailsForm'
+    sample_id: NULL
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+    parameters:
+      sample_id:
+        type: integer
+
+sentinel_portal_sample.anonymous_thank_you:
+  path: '/sample/thank-you'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::thankYou'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
