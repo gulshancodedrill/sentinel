@@ -110,8 +110,59 @@ class BulkUploadBatch {
         }
       }
 
-      if (method_exists($client, 'getRealUcr')) {
-        $data['ucr'] = $client->getRealUcr();
+      // Find or create client by email (installer_email first, then company_email)
+      $installer_email = $data['installer_email'] ?? '';
+      $company_email = $data['company_email'] ?? '';
+      $installer_name = $data['installer_name'] ?? '';
+      $company_name = $data['company_name'] ?? '';
+      
+      $client_entity = self::findOrCreateClientByEmail(
+        $installer_email,
+        $company_email,
+        $installer_name,
+        $company_name,
+        $client
+      );
+
+      if ($client_entity) {
+        // Use client found/created by email
+        // Get UCR value - use getRealUcr() to get the actual stored value (not the generated one with check digit)
+        $ucr_value = NULL;
+        if (method_exists($client_entity, 'getRealUcr')) {
+          $ucr_value = $client_entity->getRealUcr();
+        }
+        elseif ($client_entity->hasField('ucr') && !$client_entity->get('ucr')->isEmpty()) {
+          $ucr_value = $client_entity->get('ucr')->value;
+        }
+        
+        $data['ucr'] = $ucr_value;
+        $data['client_id'] = $client_entity->id();
+        if ($client_entity->hasField('name') && !$client_entity->get('name')->isEmpty()) {
+          $data['client_name'] = $client_entity->get('name')->value;
+        }
+      }
+      else {
+        // Fallback to current user's client if both emails are empty
+        if (method_exists($client, 'getRealUcr')) {
+          $data['ucr'] = $client->getRealUcr();
+        }
+        // Try to get client_id and client_name from current user's client
+        if (is_object($client) && method_exists($client, 'id')) {
+          $data['client_id'] = $client->id();
+        }
+        if (is_object($client) && method_exists($client, 'get') && $client->hasField('name') && !$client->get('name')->isEmpty()) {
+          $data['client_name'] = $client->get('name')->value;
+        }
+      }
+
+      // Calculate pack_type from pack_reference_number
+      if (!empty($data['pack_reference_number'])) {
+        $pack_type = \Drupal\sentinel_portal_entities\Entity\SentinelSample::getPackType([
+          'pack_reference_number' => $data['pack_reference_number'],
+        ]);
+        if ($pack_type !== NULL) {
+          $data['pack_type'] = $pack_type;
+        }
       }
 
       $data['sample_created'] = 0;
@@ -413,6 +464,106 @@ class BulkUploadBatch {
   }
 
   /**
+   * Find or create a client entity by email.
+   *
+   * Priority: installer_email first, then company_email, then fallback to current user.
+   *
+   * @param string $installer_email
+   *   The installer email from CSV.
+   * @param string $company_email
+   *   The company email from CSV.
+   * @param string $installer_name
+   *   The installer name from CSV (for creating new client).
+   * @param string $company_name
+   *   The company name from CSV (for creating new client).
+   * @param object $fallback_client
+   *   The current user's client object as fallback.
+   *
+   * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|null
+   *   The client entity or NULL if all emails are empty.
+   */
+  protected static function findOrCreateClientByEmail($installer_email, $company_email, $installer_name = '', $company_name = '', $fallback_client = NULL) {
+    $entity_type_manager = \Drupal::entityTypeManager();
+    $storage = $entity_type_manager->getStorage('sentinel_client');
+    
+    $email_to_use = '';
+    $name_to_use = '';
+    
+    // Priority 1: Try installer_email
+    if (!empty($installer_email) && filter_var($installer_email, FILTER_VALIDATE_EMAIL)) {
+      $email_to_use = trim($installer_email);
+      $name_to_use = !empty($installer_name) ? trim($installer_name) : $email_to_use;
+    }
+    // Priority 2: Try company_email
+    elseif (!empty($company_email) && filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
+      $email_to_use = trim($company_email);
+      $name_to_use = !empty($company_name) ? trim($company_name) : $email_to_use;
+    }
+    // Priority 3: Fallback to current user's client
+    else {
+      // If both emails are empty, return NULL to use fallback client
+      return NULL;
+    }
+    
+    // Query for existing client by email
+    $query = $storage->getQuery()
+      ->condition('email', $email_to_use)
+      ->accessCheck(FALSE)
+      ->range(0, 1);
+    
+    $result = $query->execute();
+    
+    if (!empty($result)) {
+      // Client exists, load and return it
+      $client_ids = array_values($result);
+      $client = $storage->load(reset($client_ids));
+      
+      // Ensure existing client has a UCR (in case it was created without one)
+      if ($client && method_exists($client, 'ensureRealUcr')) {
+        $client->ensureRealUcr();
+        // Save if UCR was just generated
+        if (!$client->isNew() && $client->hasField('ucr') && !$client->get('ucr')->isEmpty()) {
+          try {
+            $client->save();
+          }
+          catch (\Throwable $exception) {
+            // Log but don't fail - UCR might already be set
+            \Drupal::logger('sentinel_portal_bulk_upload')->warning('Failed to save UCR for client @id: @message', [
+              '@id' => $client->id(),
+              '@message' => $exception->getMessage(),
+            ]);
+          }
+        }
+      }
+      
+      return $client;
+    }
+    else {
+      // Client doesn't exist, create new one (similar to CustomerServiceResource)
+      $client_data = [
+        'email' => $email_to_use,
+        'name' => $name_to_use,
+      ];
+      
+      // Add company if provided
+      if (!empty($company_name)) {
+        $client_data['company'] = trim($company_name);
+      }
+      
+      $client = $storage->create($client_data);
+      
+      // Ensure UCR is generated for the new client
+      if (method_exists($client, 'ensureRealUcr')) {
+        $client->ensureRealUcr();
+      }
+      
+      $client->save();
+      
+      return $client;
+    }
+  }
+
+  /**
    * Persist a sample row: create or update as necessary.
    */
   protected static function persistSample(array $data, $client, array &$errors): void {
@@ -427,39 +578,131 @@ class BulkUploadBatch {
       }
 
       if ($sample === FALSE) {
+        // Create new sample
         if (function_exists('sentinel_portal_entities_create_sample')) {
-          sentinel_portal_entities_create_sample($data);
+          $created_sample = sentinel_portal_entities_create_sample($data);
+          
+          // Ensure client_id, client_name, ucr, and pack_type are set after creation
+          // (in case they were filtered out or not properly set)
+          if ($created_sample) {
+            $needs_save = FALSE;
+            
+            // Set client_id if provided
+            if (isset($data['client_id']) && $created_sample->hasField('client_id')) {
+              $current_client_id = $created_sample->hasField('client_id') && !$created_sample->get('client_id')->isEmpty() 
+                ? $created_sample->get('client_id')->value 
+                : NULL;
+              if ($current_client_id != $data['client_id']) {
+                $created_sample->set('client_id', $data['client_id']);
+                $needs_save = TRUE;
+              }
+            }
+            
+            // Set client_name if provided
+            if (isset($data['client_name']) && $created_sample->hasField('client_name')) {
+              $current_client_name = $created_sample->hasField('client_name') && !$created_sample->get('client_name')->isEmpty() 
+                ? $created_sample->get('client_name')->value 
+                : NULL;
+              if ($current_client_name != $data['client_name']) {
+                $created_sample->set('client_name', $data['client_name']);
+                $needs_save = TRUE;
+              }
+            }
+            
+            // Set ucr if provided
+            if (isset($data['ucr']) && $created_sample->hasField('ucr')) {
+              $current_ucr = $created_sample->hasField('ucr') && !$created_sample->get('ucr')->isEmpty() 
+                ? $created_sample->get('ucr')->value 
+                : NULL;
+              if ($current_ucr != $data['ucr']) {
+                $created_sample->set('ucr', $data['ucr']);
+                $needs_save = TRUE;
+              }
+            }
+            
+            // Set pack_type if provided
+            if (isset($data['pack_type']) && $created_sample->hasField('pack_type')) {
+              $current_pack_type = $created_sample->hasField('pack_type') && !$created_sample->get('pack_type')->isEmpty() 
+                ? $created_sample->get('pack_type')->value 
+                : NULL;
+              if ($current_pack_type != $data['pack_type']) {
+                $created_sample->set('pack_type', $data['pack_type']);
+                $needs_save = TRUE;
+              }
+            }
+            
+            if ($needs_save) {
+              $created_sample->save();
+            }
+          }
         }
         unset($sample);
         return;
       }
 
-      $cohorts_access_granted = FALSE;
-      $client_cohorts = function_exists('get_more_clients_based_client_cohorts') ? get_more_clients_based_client_cohorts($client) : [];
-
-      if (!empty($client_cohorts)) {
-        $database = \Drupal::database();
-        $query = $database->select('sentinel_client', 'sc')
-          ->fields('sc', ['ucr'])
-          ->condition('sc.cid', $client_cohorts, 'IN');
-        $result = $query->execute();
-        $ucrs = $result->fetchCol();
-        $result->free();
-
-        if (method_exists($sample, 'isReported') && in_array($sample->ucr, $ucrs) && $sample->isReported() == FALSE) {
-          if (function_exists('sentinel_portal_entities_update_sample')) {
-            sentinel_portal_entities_update_sample($sample, $data);
+      // Sample exists - update it
+      // For bulk upload, always allow updates (trusted operation from authenticated users)
+      // Update all fields from CSV data
+      if (function_exists('sentinel_portal_entities_update_sample')) {
+        sentinel_portal_entities_update_sample($sample, $data);
+        
+        // Reload the sample to ensure we have the latest entity
+        $entity_type_manager = \Drupal::entityTypeManager();
+        $sample_storage = $entity_type_manager->getStorage('sentinel_sample');
+        $updated_sample = $sample_storage->load($sample->id());
+        
+        if ($updated_sample) {
+          $needs_save = FALSE;
+          
+          // Explicitly set client_id if provided in data
+          if (isset($data['client_id']) && $updated_sample->hasField('client_id')) {
+            $current_client_id = $updated_sample->hasField('client_id') && !$updated_sample->get('client_id')->isEmpty() 
+              ? $updated_sample->get('client_id')->value 
+              : NULL;
+            if ($current_client_id != $data['client_id']) {
+              $updated_sample->set('client_id', $data['client_id']);
+              $needs_save = TRUE;
+            }
           }
-          $cohorts_access_granted = TRUE;
+          
+          // Explicitly set client_name if provided in data
+          if (isset($data['client_name']) && $updated_sample->hasField('client_name')) {
+            $current_client_name = $updated_sample->hasField('client_name') && !$updated_sample->get('client_name')->isEmpty() 
+              ? $updated_sample->get('client_name')->value 
+              : NULL;
+            if ($current_client_name != $data['client_name']) {
+              $updated_sample->set('client_name', $data['client_name']);
+              $needs_save = TRUE;
+            }
+          }
+          
+          // Explicitly set ucr if provided in data
+          if (isset($data['ucr']) && $updated_sample->hasField('ucr')) {
+            $current_ucr = $updated_sample->hasField('ucr') && !$updated_sample->get('ucr')->isEmpty() 
+              ? $updated_sample->get('ucr')->value 
+              : NULL;
+            if ($current_ucr != $data['ucr']) {
+              $updated_sample->set('ucr', $data['ucr']);
+              $needs_save = TRUE;
+            }
+          }
+          
+          // Explicitly set pack_type if provided in data
+          if (isset($data['pack_type']) && $updated_sample->hasField('pack_type')) {
+            $current_pack_type = $updated_sample->hasField('pack_type') && !$updated_sample->get('pack_type')->isEmpty() 
+              ? $updated_sample->get('pack_type')->value 
+              : NULL;
+            if ($current_pack_type != $data['pack_type']) {
+              $updated_sample->set('pack_type', $data['pack_type']);
+              $needs_save = TRUE;
+            }
+          }
+          
+          // Save if any of the explicit fields were updated
+          if ($needs_save) {
+            $updated_sample->save();
+          }
         }
-        unset($ucrs);
-      }
-
-      if (!$cohorts_access_granted) {
-        $errors[] = [
-          'title' => t('Sample Access Denied'),
-          'message' => t('You are not allowed to update this sample data. Please contact systemcheck@sentinelprotects.com for more information.'),
-        ];
       }
     }
     catch (\Throwable $ex) {
