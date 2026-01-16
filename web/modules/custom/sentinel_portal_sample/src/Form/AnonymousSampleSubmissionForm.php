@@ -179,7 +179,48 @@ class AnonymousSampleSubmissionForm extends FormBase {
         $sample->set('pack_type', $pack_type);
       }
 
+      if (!$sample->hasField('verification_code')) {
+        $this->messenger()->addError($this->t('Unable to assign verification code. Please try again or contact support.'));
+        \Drupal::logger('sentinel_portal_sample')->error('Anonymous sample missing verification_code field.');
+        return;
+      }
+
+      $verification_code = $this->generateUniqueVerificationCode();
+      if (!$verification_code) {
+        $this->messenger()->addError($this->t('Unable to generate verification code. Please try again or contact support.'));
+        return;
+      }
+
+      $sample->set('verification_code', $verification_code);
+
       $sample->save();
+
+      $details_url = Url::fromRoute('sentinel_portal_sample.anonymous_details', [
+        'sample_id' => $sample->id(),
+      ], [
+        'absolute' => TRUE,
+      ])->toString();
+
+      $mail_manager = \Drupal::service('plugin.manager.mail');
+      $langcode = \Drupal::languageManager()->getCurrentLanguage()->getId();
+      $mail_params = [
+        'verification_code' => $verification_code,
+        'details_url' => $details_url,
+        'pack_reference_number' => $pack_reference_number,
+      ];
+      $mail_result = $mail_manager->mail(
+        'sentinel_portal_sample',
+        'anonymous_submission',
+        $email,
+        $langcode,
+        $mail_params
+      );
+      if (empty($mail_result['result'])) {
+        \Drupal::logger('sentinel_portal_sample')->warning('Anonymous sample email failed to send for pack @pack, UCR @ucr', [
+          '@pack' => $pack_reference_number,
+          '@ucr' => $ucr,
+        ]);
+      }
 
       \Drupal::logger('sentinel_portal_sample')->info('Anonymous sample created: Pack @pack, UCR @ucr', [
         '@pack' => $pack_reference_number,
@@ -257,5 +298,86 @@ class AnonymousSampleSubmissionForm extends FormBase {
       $ucr_value = $client->get('ucr')->value;
       return $ucr_value ? (string) $ucr_value : FALSE;
     }
+  }
+
+  /**
+   * Generate a unique verification code for sentinel_sample.
+   *
+   * @return string|false
+   *   Unique verification code or FALSE on failure.
+   */
+  protected function generateUniqueVerificationCode() {
+    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
+    $max_attempts = 25;
+
+    for ($attempt = 0; $attempt < $max_attempts; $attempt++) {
+      $code = $this->generateVerificationCode();
+      if ($this->isVerificationCodeUnique($storage, $code)) {
+        return $code;
+      }
+    }
+
+    \Drupal::logger('sentinel_portal_sample')->error('Failed to generate unique verification code after @attempts attempts.', [
+      '@attempts' => $max_attempts,
+    ]);
+
+    return FALSE;
+  }
+
+  /**
+   * Generate a verification code with required character mix.
+   *
+   * @return string
+   *   The generated code.
+   */
+  protected function generateVerificationCode() {
+    $alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $digits = '0123456789';
+    $specials = '@#$%&';
+    $all_chars = $alphabet . $digits . $specials;
+
+    $length = random_int(6, 7);
+
+    $chars = [
+      $alphabet[random_int(0, strlen($alphabet) - 1)],
+      $digits[random_int(0, strlen($digits) - 1)],
+      $specials[random_int(0, strlen($specials) - 1)],
+    ];
+
+    $remaining = $length - count($chars);
+    for ($i = 0; $i < $remaining; $i++) {
+      $chars[] = $all_chars[random_int(0, strlen($all_chars) - 1)];
+    }
+
+    // Shuffle using random_int for better randomness.
+    for ($i = count($chars) - 1; $i > 0; $i--) {
+      $j = random_int(0, $i);
+      $tmp = $chars[$i];
+      $chars[$i] = $chars[$j];
+      $chars[$j] = $tmp;
+    }
+
+    return implode('', $chars);
+  }
+
+  /**
+   * Check whether a verification code is unique.
+   *
+   * @param \Drupal\Core\Entity\EntityStorageInterface $storage
+   *   The sentinel_sample storage.
+   * @param string $code
+   *   The verification code to check.
+   *
+   * @return bool
+   *   TRUE when unique, FALSE otherwise.
+   */
+  protected function isVerificationCodeUnique($storage, $code) {
+    $existing = $storage->getQuery()
+      ->condition('verification_code', $code)
+      ->accessCheck(FALSE)
+      ->range(0, 1)
+      ->execute();
+
+    return empty($existing);
   }
 }

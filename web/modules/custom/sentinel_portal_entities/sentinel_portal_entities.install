@@ -1723,6 +1723,148 @@ function sentinel_portal_entities_update_8020() {
 }
 
 /**
+ * Add verification_code base field storage to sentinel_sample.
+ */
+function sentinel_portal_entities_update_9002() {
+  $entity_type_id = 'sentinel_sample';
+  $field_name = 'verification_code';
+  
+  /** @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface $update_manager */
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  /** @var EntityFieldManagerInterface $field_manager */
+  $field_manager = \Drupal::service('entity_field.manager');
+  /** @var EntityTypeManagerInterface $entity_type_manager */
+  $entity_type_manager = \Drupal::entityTypeManager();
+  
+  // Refresh the entity type definition before working with field storage.
+  $definition = $entity_type_manager->getDefinition($entity_type_id, FALSE);
+  if ($definition) {
+    $update_manager->updateEntityType($definition);
+  }
+  
+  $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+  if (!isset($definitions[$field_name])) {
+    return t('Field storage definition for %field not found on %entity.', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+    ]);
+  }
+  
+  $definition = $definitions[$field_name];
+  
+  try {
+    $update_manager->installFieldStorageDefinition($field_name, $entity_type_id, 'sentinel_portal_entities', $definition);
+    return t('Installed field storage for %field on %entity.', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+    ]);
+  }
+  catch (\Exception $e) {
+    // Fall through to attempt update.
+  }
+  
+  try {
+    $update_manager->updateFieldStorageDefinition($definition);
+    return t('Updated field storage for %field on %entity.', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+    ]);
+  }
+  catch (\Exception $e) {
+    return t('Could not install or update %field on %entity: @msg', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+      '@msg' => $e->getMessage(),
+    ]);
+  }
+}
+
+/**
+ * Ensure verification_code storage updates apply to revision table.
+ */
+function sentinel_portal_entities_update_9003() {
+  $entity_type_id = 'sentinel_sample';
+  $field_name = 'verification_code';
+
+  /** @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface $update_manager */
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  /** @var \Drupal\Core\Entity\EntityFieldManagerInterface $field_manager */
+  $field_manager = \Drupal::service('entity_field.manager');
+  /** @var \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager */
+  $entity_type_manager = \Drupal::entityTypeManager();
+
+  // Refresh entity definition to ensure schema updates apply correctly.
+  $definition = $entity_type_manager->getDefinition($entity_type_id, FALSE);
+  if ($definition) {
+    $update_manager->updateEntityType($definition);
+  }
+
+  $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+  if (!isset($definitions[$field_name])) {
+    return t('Field storage definition for %field not found on %entity.', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+    ]);
+  }
+
+  $definition = $definitions[$field_name];
+
+  try {
+    $update_manager->updateFieldStorageDefinition($definition);
+    return t('Updated field storage for %field on %entity.', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+    ]);
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('sentinel_portal_entities')->error('Could not update field storage for %field on %entity: @msg', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+      '@msg' => $e->getMessage(),
+    ]);
+    return t('Error updating field storage for %field on %entity: @message', [
+      '%field' => $field_name,
+      '%entity' => $entity_type_id,
+      '@message' => $e->getMessage(),
+    ]);
+  }
+}
+
+/**
+ * Add verification_code column to sentinel_sample_revision if missing.
+ */
+function sentinel_portal_entities_update_9004() {
+  $table = 'sentinel_sample_revision';
+  $field_name = 'verification_code';
+
+  $connection = \Drupal::database();
+  $schema = $connection->schema();
+
+  if (!$schema->tableExists($table)) {
+    return t('Table %table does not exist.', ['%table' => $table]);
+  }
+
+  if ($schema->fieldExists($table, $field_name)) {
+    return t('Field %field already exists on %table.', [
+      '%field' => $field_name,
+      '%table' => $table,
+    ]);
+  }
+
+  $schema->addField($table, $field_name, [
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => FALSE,
+    'description' => 'Verification code for this sample.',
+  ]);
+
+  return t('Added field %field to %table.', [
+    '%field' => $field_name,
+    '%table' => $table,
+  ]);
+}
+
+/**
  * Helper function to build SQL column definition from MySQL column info.
  */
 function _sentinel_portal_entities_build_column_sql($column) {

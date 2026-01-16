@@ -48,6 +48,28 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
       return $form;
     }
 
+    $is_verified = $this->isSampleVerified($sample_id);
+
+    if (!$is_verified) {
+      $form['#title'] = $this->t('Enter Verification Code');
+      $form['verification_code'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('Verification code'),
+        '#required' => TRUE,
+        '#maxlength' => 7,
+        '#description' => $this->t('Enter the verification code sent to your email.'),
+      ];
+      $form['actions'] = [
+        '#type' => 'actions',
+      ];
+      $form['actions']['submit'] = [
+        '#type' => 'submit',
+        '#value' => $this->t('Verify'),
+        '#submit' => ['::submitVerificationCode'],
+      ];
+      return $form;
+    }
+
     // Check if sample already has both addresses (new or legacy fields)
     $has_company_address = FALSE;
     if ($this->sample->hasField('field_company_address') && !$this->sample->get('field_company_address')->isEmpty()) {
@@ -91,11 +113,19 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
     // Build the form using parent method
     $form = parent::buildForm($form, $form_state);
 
-    // Remove excluded fields
-    unset($form['pack_reference_number']);
+    // Remove pack reference confirm field for anonymous details.
     unset($form['pack_reference_number_confirm']);
-    unset($form['job_details']['installer_name']);
-    unset($form['job_details']['installer_email']);
+
+    // Disable pack reference and installer fields.
+    if (isset($form['pack_reference_number'])) {
+      $form['pack_reference_number']['#disabled'] = TRUE;
+    }
+    if (isset($form['job_details']['installer_name'])) {
+      $form['job_details']['installer_name']['#disabled'] = TRUE;
+    }
+    if (isset($form['job_details']['installer_email'])) {
+      $form['job_details']['installer_email']['#disabled'] = TRUE;
+    }
 
     // Update title
     $form['#title'] = $this->t('Add Sample Details');
@@ -113,12 +143,72 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
   }
 
   /**
+   * Submit handler for verification code gate.
+   */
+  public function submitVerificationCode(array &$form, FormStateInterface $form_state) {
+    $sample_id = $this->getRequest()->attributes->get('sample_id');
+    if (!$sample_id) {
+      $this->messenger()->addError($this->t('Invalid sample.'));
+      return;
+    }
+
+    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
+    $sample = $storage->load($sample_id);
+    if (!$sample) {
+      $this->messenger()->addError($this->t('Sample not found.'));
+      return;
+    }
+
+    $entered = trim((string) $form_state->getValue('verification_code'));
+    $stored = '';
+    if ($sample->hasField('verification_code') && !$sample->get('verification_code')->isEmpty()) {
+      $stored = (string) $sample->get('verification_code')->value;
+    }
+
+    if ($stored === '' || $entered !== $stored) {
+      $form_state->setErrorByName('verification_code', $this->t('Verification code is incorrect.'));
+      return;
+    }
+
+    $session_key = 'sentinel_sample_verified_' . $sample_id;
+    $this->getRequest()->getSession()->set($session_key, TRUE);
+    $form_state->setRebuild(TRUE);
+  }
+
+  /**
+   * Check if the current session is verified for this sample.
+   *
+   * @param int|string $sample_id
+   *   The sample ID.
+   *
+   * @return bool
+   *   TRUE when verified, FALSE otherwise.
+   */
+  protected function isSampleVerified($sample_id) {
+    $session = $this->getRequest()->getSession();
+    $session_key = 'sentinel_sample_verified_' . $sample_id;
+    return $session->has($session_key) && $session->get($session_key) === TRUE;
+  }
+
+  /**
    * {@inheritdoc}
    * 
    * Override validation to skip client check and PRN validation for anonymous users.
    * The PRN already exists in the sample, so we just need to include it in validation data.
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
+    $sample_id = $this->getRequest()->attributes->get('sample_id');
+    $trigger = $form_state->getTriggeringElement();
+    $is_verification_submit = $trigger && !empty($trigger['#submit']) && in_array('::submitVerificationCode', $trigger['#submit'], TRUE);
+
+    if ($is_verification_submit || ($sample_id && !$this->isSampleVerified($sample_id))) {
+      $entered = trim((string) $form_state->getValue('verification_code'));
+      if ($entered === '') {
+        $form_state->setErrorByName('verification_code', $this->t('Verification code is required.'));
+      }
+      return;
+    }
+
     // Skip client check for anonymous users - they don't have a client
     // Skip PRN validation since it already exists in the sample
     
@@ -323,6 +413,29 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
   protected function prefillFormFromSample(array &$form, FormStateInterface $form_state) {
     if (!$this->sample) {
       return;
+    }
+
+    // Pack reference number (and confirm).
+    if ($this->sample->hasField('pack_reference_number') && !$this->sample->get('pack_reference_number')->isEmpty()) {
+      $pack_reference_number = $this->sample->get('pack_reference_number')->value;
+      if (isset($form['pack_reference_number'])) {
+        $form['pack_reference_number']['#default_value'] = $pack_reference_number;
+      }
+      if (isset($form['pack_reference_number_confirm'])) {
+        $form['pack_reference_number_confirm']['#default_value'] = $pack_reference_number;
+      }
+    }
+
+    // Installer details.
+    if ($this->sample->hasField('installer_name') && !$this->sample->get('installer_name')->isEmpty()) {
+      if (isset($form['job_details']['installer_name'])) {
+        $form['job_details']['installer_name']['#default_value'] = $this->sample->get('installer_name')->value;
+      }
+    }
+    if ($this->sample->hasField('installer_email') && !$this->sample->get('installer_email')->isEmpty()) {
+      if (isset($form['job_details']['installer_email'])) {
+        $form['job_details']['installer_email']['#default_value'] = $this->sample->get('installer_email')->value;
+      }
     }
 
     // Company Details

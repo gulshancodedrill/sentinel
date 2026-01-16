@@ -203,6 +203,17 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
             ->setDisplayConfigurable('form', TRUE)
             ->setDisplayConfigurable('view', TRUE);
 
+        $fields['verification_code'] = BaseFieldDefinition::create('string')
+            ->setLabel(t('Verification Code'))
+            ->setDescription(t('Verification code for this sample.'))
+            ->setSettings([
+                'max_length' => 255,
+                'text_processing' => 0,
+            ])
+            ->setRequired(FALSE)
+            ->setDisplayConfigurable('form', TRUE)
+            ->setDisplayConfigurable('view', TRUE);
+
         $fields['installer_name'] = BaseFieldDefinition::create('string')
             ->setLabel(t('Installer Name'))
             ->setDescription(t('Name of the individual engineer who conducted the work and subsequent SystemCheck.'))
