@@ -1,0 +1,40 @@
+<?php
+
+/**
+ * @file
+ * Sentinel Portal Sample module hooks.
+ */
+
+/**
+ * Implements hook_mail().
+ */
+function sentinel_portal_sample_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'anonymous_submission':
+      $message['subject'] = t('Your sample submission details');
+
+      $message['body'] = [
+        t('Thank you for submitting your sample.'),
+        '',
+        t('Verification code: @code', [
+          '@code' => $params['verification_code'] ?? '',
+        ]),
+        t('Sample details link: @url', [
+          '@url' => $params['details_url'] ?? '',
+        ]),
+      ];
+
+      if (!empty($params['pack_reference_number'])) {
+        $message['body'][] = t('Pack reference number: @prn', [
+          '@prn' => $params['pack_reference_number'],
+        ]);
+      }
+      break;
+  }
+
+  if (empty($message['body'])) {
+    $message['body'] = [
+      t('Thank you for your submission.'),
+    ];
+  }
+}
