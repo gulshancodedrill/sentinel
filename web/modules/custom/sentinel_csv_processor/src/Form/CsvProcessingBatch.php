@@ -491,13 +491,16 @@ class CsvProcessingBatch {
       // Map Variable names to entity fields based on Sample Point.
       $normalized_variable = strtolower($variable);
       $normalized_sample_point = strtolower($sample_point);
+      if ($normalized_sample_point === 'mains') {
+        $normalized_sample_point = 'main';
+      }
       
       // Normalize value for validation (check for null, empty, or "pending").
       $normalized_value = strtolower(trim($value));
       $is_valid_value = ($normalized_value !== '' && $normalized_value !== 'null' && $normalized_value !== 'pending' && $value !== NULL);
 
-      // pH Level (Lab) - can be from Main or System, but typically System.
-      if (strpos($normalized_variable, 'ph') !== FALSE && strpos($normalized_variable, 'lab') !== FALSE) {
+      // pH Level - can be from Main or System, but typically System.
+      if (strpos($normalized_variable, 'ph') !== FALSE) {
         if ($is_valid_value) {
           $api_data['ph_result'] = $value;
         }

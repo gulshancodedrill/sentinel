@@ -1035,6 +1035,9 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       // Map Variable names to entity fields based on Sample Point.
       $normalized_variable = strtolower($variable);
       $normalized_sample_point = strtolower($sample_point);
+      if ($normalized_sample_point === 'mains') {
+        $normalized_sample_point = 'main';
+      }
       $normalized_value = strtolower(trim($value));
       $is_valid_value = ($normalized_value !== '' && $normalized_value !== 'null' && $normalized_value !== 'pending' && $value !== NULL);
 
@@ -1046,7 +1049,7 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
         '@valid' => $is_valid_value ? 'YES' : 'NO',
       ]);
 
-      if (strpos($normalized_variable, 'ph') !== FALSE && strpos($normalized_variable, 'lab') !== FALSE) {
+      if (strpos($normalized_variable, 'ph') !== FALSE) {
         if ($is_valid_value) {
           $api_data['ph_result'] = $value;
           \Drupal::logger('sentinel_csv_processor')->info('Mapped ph_result = @value', ['@value' => $value]);
