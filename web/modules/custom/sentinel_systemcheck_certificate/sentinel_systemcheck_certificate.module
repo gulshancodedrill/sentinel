@@ -366,19 +366,9 @@ function _calculate_sentinel_sample_result($result_object, $sentinel_sample) {
     return;
   }
 
-  $existing_pass_fail = NULL;
+  // Always initialize overall pass/fail to pass before recalculation.
   if ($sentinel_sample->hasField('pass_fail')) {
-    $existing_pass_fail = _get_field_value($sentinel_sample, 'pass_fail');
-  }
-
-  // Set initial pass_fail value.
-  if ($sentinel_sample->hasField('pass_fail')) {
-    if ($existing_pass_fail !== NULL) {
-      $sentinel_sample->set('pass_fail', (int) $existing_pass_fail);
-    }
-    else {
-      $sentinel_sample->set('pass_fail', 1);
-    }
+    $sentinel_sample->set('pass_fail', 1);
   }
 
   $total_fail = FALSE;
