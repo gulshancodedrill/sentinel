@@ -248,6 +248,7 @@ class CsvProcessingBatch {
     foreach ($rows as $row) {
       if (isset($row[$site_index]) && !empty(trim($row[$site_index]))) {
         $site = trim($row[$site_index]);
+        $site = preg_replace('/\s+/', '', $site);
         if (!isset($sites_data[$site])) {
           $sites_data[$site] = [];
         }
@@ -491,8 +492,12 @@ class CsvProcessingBatch {
       // Map Variable names to entity fields based on Sample Point.
       $normalized_variable = strtolower($variable);
       $normalized_sample_point = strtolower($sample_point);
+      $normalized_sample_point = preg_replace('/[^a-z]/', '', $normalized_sample_point);
       if ($normalized_sample_point === 'mains') {
         $normalized_sample_point = 'main';
+      }
+      elseif ($normalized_sample_point === 'systems') {
+        $normalized_sample_point = 'system';
       }
       
       // Normalize value for validation (check for null, empty, or "pending").
