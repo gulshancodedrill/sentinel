@@ -603,6 +603,9 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       }
 
       $refname = trim($first_row[$site_index]) ?: NULL;
+      if ($refname !== NULL) {
+        $refname = preg_replace('/\s+/', '', $refname);
+      }
       
       if ($refname) {
         \Drupal::logger('sentinel_csv_processor')->info('Extracted refname from CSV: @refname', [
@@ -828,6 +831,7 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     foreach ($rows as $row) {
       if (isset($row[$site_index]) && !empty(trim($row[$site_index]))) {
         $site = trim($row[$site_index]);
+        $site = preg_replace('/\s+/', '', $site);
         if (!isset($sites_data[$site])) {
           $sites_data[$site] = [];
         }
@@ -1035,8 +1039,12 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       // Map Variable names to entity fields based on Sample Point.
       $normalized_variable = strtolower($variable);
       $normalized_sample_point = strtolower($sample_point);
+      $normalized_sample_point = preg_replace('/[^a-z]/', '', $normalized_sample_point);
       if ($normalized_sample_point === 'mains') {
         $normalized_sample_point = 'main';
+      }
+      elseif ($normalized_sample_point === 'systems') {
+        $normalized_sample_point = 'system';
       }
       $normalized_value = strtolower(trim($value));
       $is_valid_value = ($normalized_value !== '' && $normalized_value !== 'null' && $normalized_value !== 'pending' && $value !== NULL);
