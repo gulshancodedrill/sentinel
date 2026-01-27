@@ -983,7 +983,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $connection = \Drupal::database();
     $query = $connection->select('sentinel_sample', 'ss')
       ->fields('ss', ['pid'])
-      ->orderBy('ss.date_reported', 'DESC');
+      ->orderBy('ss.changed', 'DESC')
+      ->orderBy('ss.pid', 'DESC');
 
     // Search Pack ID - filter on pack_reference_number
     if (!empty($filters['pack_reference_number'])) {
