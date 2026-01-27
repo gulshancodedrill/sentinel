@@ -1865,6 +1865,74 @@ function sentinel_portal_entities_update_9004() {
 }
 
 /**
+ * Create missing dedicated field tables for sentinel_sample revisions.
+ */
+function sentinel_portal_entities_update_9008() {
+  $entity_type_id = 'sentinel_sample';
+
+  $storage = \Drupal::entityTypeManager()->getStorage($entity_type_id);
+  if (!$storage instanceof \Drupal\Core\Entity\Sql\SqlContentEntityStorage) {
+    return t('Storage for %entity is not SQL-based.', ['%entity' => $entity_type_id]);
+  }
+
+  $table_mapping = $storage->getTableMapping();
+  $schema = \Drupal::database()->schema();
+  $field_manager = \Drupal::service('entity_field.manager');
+  $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+
+  try {
+    $storage_schema_method = new \ReflectionMethod($storage, 'getStorageSchema');
+    $storage_schema_method->setAccessible(TRUE);
+    $storage_schema = $storage_schema_method->invoke($storage);
+
+    $dedicated_schema_method = new \ReflectionMethod($storage_schema, 'getDedicatedTableSchema');
+    $dedicated_schema_method->setAccessible(TRUE);
+  }
+  catch (\ReflectionException $e) {
+    return t('Unable to access storage schema for %entity: @message', [
+      '%entity' => $entity_type_id,
+      '@message' => $e->getMessage(),
+    ]);
+  }
+
+  $created = [];
+  foreach ($definitions as $definition) {
+    if (!$table_mapping->requiresDedicatedTableStorage($definition)) {
+      continue;
+    }
+
+    $data_table = $table_mapping->getDedicatedDataTableName($definition);
+    $revision_table = $table_mapping->getDedicatedRevisionTableName($definition);
+    $needs_schema = (!$schema->tableExists($data_table)) || ($revision_table && !$schema->tableExists($revision_table));
+
+    if (!$needs_schema) {
+      continue;
+    }
+
+    $table_schema = $dedicated_schema_method->invoke($storage_schema, $definition);
+
+    if (!$schema->tableExists($data_table) && isset($table_schema[$data_table])) {
+      $schema->createTable($data_table, $table_schema[$data_table]);
+      $created[] = $data_table;
+    }
+
+    if ($revision_table && !$schema->tableExists($revision_table) && isset($table_schema[$revision_table])) {
+      $schema->createTable($revision_table, $table_schema[$revision_table]);
+      $created[] = $revision_table;
+    }
+  }
+
+  if (empty($created)) {
+    return t('No missing dedicated tables found for %entity.', ['%entity' => $entity_type_id]);
+  }
+
+  return t('Created missing dedicated tables for %entity: @tables', [
+    '%entity' => $entity_type_id,
+    '@tables' => implode(', ', $created),
+  ]);
+}
+
+/**
  * Helper function to build SQL column definition from MySQL column info.
  */
 function _sentinel_portal_entities_build_column_sql($column) {
