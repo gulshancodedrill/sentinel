@@ -14,7 +14,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * @QueueWorker(
  *   id = "automated_csv_processor",
  *   title = @Translation("Automated CSV Processor Queue"),
- *   cron = {"time" = 120}
+ *   cron = {"time" = 600}
  * )
  */
 class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
@@ -167,6 +167,13 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     
     // Use direct file system move (rename) instead of Drupal's move to avoid prepareDestination issues.
     try {
+      // If already in processing, skip move.
+      $normalized_source = realpath($source_path) ?: $source_path;
+      $normalized_dest = realpath($dest_file_path) ?: $dest_file_path;
+      if ($normalized_source === $normalized_dest) {
+        $processing_uri = $processing_dir_uri . '/' . $filename;
+      }
+      else {
       // If destination file exists, remove it first.
       if (file_exists($dest_file_path)) {
         @unlink($dest_file_path);
@@ -188,6 +195,11 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       
       // Update the URI to point to the new location.
       $processing_uri = $processing_dir_uri . '/' . $filename;
+      // Ensure the original source file is removed (move semantics).
+      if (file_exists($source_path) && realpath($source_path) !== realpath($dest_file_path)) {
+        @unlink($source_path);
+      }
+      }
     }
     catch (\Exception $e) {
       \Drupal::logger('sentinel_csv_processor')->error('Exception moving file @file: @message', [
@@ -202,8 +214,8 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     ]);
 
     try {
-      // Set a maximum execution time for this queue item (2 minutes).
-      $max_execution_time = 120;
+      // Set a maximum execution time for this queue item (10 minutes).
+      $max_execution_time = 600;
       $start_time = time();
       
       // Check if filename already exists in database.
@@ -249,6 +261,7 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
                 ->condition('id', $existing_id)
                 ->execute();
               
+              $this->sendFailureEmail($filename, 'Duplicate file detected with matching modification time.', 'queue');
               \Drupal::logger('sentinel_csv_processor')->error('Duplicate file @file moved to failed directory. Status set to failed.', [
                 '@file' => $filename,
               ]);
@@ -294,11 +307,50 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       $lab_data->save();
 
       if ($result['success']) {
+        // If processing marked the file as failed, move to failed instead.
+        $lab_data_status = $this->entityTypeManager
+          ->getStorage('lab_data')
+          ->load($lab_data->id())
+          ->get('status')
+          ->value;
+        if ($lab_data_status === 'failed') {
+          $this->sendFailureEmail($filename, 'Processing marked status failed after queue run.', 'queue');
+          $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
+          if ($failed_dir_uri) {
+            $failed_uri = $failed_dir_uri . '/' . $filename;
+            if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+              $processing_path = $this->fileSystem->realpath($processing_uri);
+              if ($processing_path && file_exists($processing_path)) {
+                @unlink($processing_path);
+              }
+              $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
+              $lab_data->set('path', $failed_uri);
+              $lab_data->set('process_type', 'automatic');
+              $lab_data->set('processed', \Drupal::time()->getRequestTime());
+              $lab_data->set('status', 'failed');
+              $lab_data->save();
+              \Drupal::logger('sentinel_csv_processor')->error('File @file marked failed after processing. Moved to failed directory.', [
+                '@file' => $filename,
+              ]);
+            }
+          }
+          else {
+            \Drupal::logger('sentinel_csv_processor')->error('Failed to prepare failed directory after processing for file @file.', [
+              '@file' => $filename,
+            ]);
+          }
+          return;
+        }
+
         // CSV processing successful - move to archive directory immediately.
         $archive_dir_uri = $this->prepareDirectoryWithMonthYear($archive_base_dir_uri);
         if ($archive_dir_uri) {
         $archive_uri = $archive_dir_uri . '/' . $filename;
         if ($this->fileSystem->move($processing_uri, $archive_uri, FileSystemInterface::EXISTS_REPLACE)) {
+            $processing_path = $this->fileSystem->realpath($processing_uri);
+            if ($processing_path && file_exists($processing_path)) {
+              @unlink($processing_path);
+            }
             // Reload entity to get latest values.
             $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
             // Update lab_data entity path, status, process_type, and processed timestamp.
@@ -327,10 +379,15 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       else {
         // CSV processing failed - move to failed directory immediately.
         // Ensure failed directory with month/year subdirectory is ready.
+        $this->sendFailureEmail($filename, $result['error'] ?? 'Unknown error', 'queue');
         $failed_dir_uri = $this->prepareDirectoryWithMonthYear($failed_base_dir_uri);
         if ($failed_dir_uri) {
         $failed_uri = $failed_dir_uri . '/' . $filename;
         if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+            $processing_path = $this->fileSystem->realpath($processing_uri);
+            if ($processing_path && file_exists($processing_path)) {
+              @unlink($processing_path);
+            }
             // Reload entity to get latest values.
             $lab_data = $this->entityTypeManager->getStorage('lab_data')->load($lab_data->id());
             // Update lab_data entity path and ensure process_type and processed are set.
@@ -366,6 +423,10 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       $failed_uri = $failed_dir_uri . '/' . $filename;
       if ($this->fileSystem->realpath($processing_uri) && file_exists($this->fileSystem->realpath($processing_uri))) {
         if ($this->fileSystem->move($processing_uri, $failed_uri, FileSystemInterface::EXISTS_REPLACE)) {
+            $processing_path = $this->fileSystem->realpath($processing_uri);
+            if ($processing_path && file_exists($processing_path)) {
+              @unlink($processing_path);
+            }
             // Update lab_data entity path if entity exists.
             if (isset($lab_data) && $lab_data) {
               // Reload entity to get latest values.
@@ -377,6 +438,7 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
               $lab_data->set('status', 'failed');
               $lab_data->save();
             }
+            $this->sendFailureEmail($filename, $e->getMessage(), 'queue');
             \Drupal::logger('sentinel_csv_processor')->error('Exception processing file @file. Moved to failed directory. Exception: @exception. Updated lab_data path to @path.', [
             '@file' => $filename,
             '@exception' => $e->getMessage(),
@@ -699,6 +761,16 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
     \Drupal::logger('sentinel_csv_processor')->info('Grouped into @sites unique sites', [
       '@sites' => count($sites_data),
     ]);
+
+    if (empty($sites_data)) {
+      $lab_data->set('status', 'failed');
+      $lab_data->set('processed', \Drupal::time()->getRequestTime());
+      $lab_data->save();
+      return [
+        'success' => FALSE,
+        'error' => 'Missing or blank Site column/data in ' . $filename,
+      ];
+    }
 
     // Process each site (one API call per site).
     $processed_count = 0;
@@ -1392,6 +1464,32 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
         'error' => 'API request failed: ' . $e->getMessage(),
       ];
     }
+  }
+
+  /**
+   * Sends a failure alert email for CSV processing errors.
+   *
+   * @param string $filename
+   *   The CSV filename.
+   * @param string $error
+   *   The error message.
+   * @param string $context
+   *   The processing context (queue/batch).
+   */
+  protected function sendFailureEmail($filename, $error, $context = 'queue') {
+    $to = \Drupal::config('system.site')->get('mail');
+    if (!$to) {
+      return;
+    }
+
+    $mail_manager = \Drupal::service('plugin.manager.mail');
+    $langcode = \Drupal::currentUser()->getPreferredLangcode();
+    $params = [
+      'context' => $context,
+      'filename' => $filename,
+      'error' => $error,
+    ];
+    $mail_manager->mail('sentinel_csv_processor', 'csv_processing_error', $to, $langcode, $params);
   }
 
 
