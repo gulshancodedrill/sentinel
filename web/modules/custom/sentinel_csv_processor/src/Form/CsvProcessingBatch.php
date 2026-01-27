@@ -104,6 +104,16 @@ class CsvProcessingBatch {
       '@sites' => count($sites_data),
     ]);
 
+    if (empty($sites_data)) {
+      $lab_data->set('processed', \Drupal::time()->getRequestTime());
+      $lab_data->set('status', 'failed');
+      $lab_data->save();
+      $context['results']['errors'][] = t('Missing or blank Site column/data in @filename.', [
+        '@filename' => $filename,
+      ]);
+      return;
+    }
+
     // Process each site (one API call per site).
     $processed_count = 0;
     $error_count = 0;
@@ -848,6 +858,20 @@ class CsvProcessingBatch {
         \Drupal::messenger()->addWarning(t('Encountered @count error(s) during processing.', [
           '@count' => $error_count,
         ]));
+      }
+
+      if ($error_count > 0) {
+        $to = \Drupal::config('system.site')->get('mail');
+        if ($to) {
+          $mail_manager = \Drupal::service('plugin.manager.mail');
+          $langcode = \Drupal::currentUser()->getPreferredLangcode();
+          $params = [
+            'context' => 'batch',
+            'errors' => $results['errors'] ?? [],
+            'processed' => $results['processed'] ?? [],
+          ];
+          $mail_manager->mail('sentinel_csv_processor', 'csv_processing_error', $to, $langcode, $params);
+        }
       }
     }
     else {

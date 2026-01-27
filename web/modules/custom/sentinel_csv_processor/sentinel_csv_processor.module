@@ -69,8 +69,8 @@ function sentinel_csv_processor_cron() {
   // Record that we're starting (even if we fail, we don't want to retry immediately).
   $state->set('sentinel_csv_processor.cron_last_run', $current_time);
 
-  // Set a maximum execution time for this cron hook (30 seconds).
-  $max_execution_time = 30;
+  // Set a maximum execution time for this cron hook (10 minutes).
+  $max_execution_time = 600;
   $start_time = time();
   @set_time_limit($max_execution_time);
 
@@ -268,11 +268,45 @@ function sentinel_csv_processor_cron() {
         break;
       }
 
+      // Move file from uploads to processing (month/year subdirectory).
+      $processing_target_dir = _sentinel_csv_processor_prepare_directory_with_month_year($processing_dir_uri);
+      if (!$processing_target_dir) {
+        \Drupal::logger('sentinel_csv_processor')->error('Failed to prepare processing directory for @file. Skipping enqueue.', [
+          '@file' => $filename,
+        ]);
+        continue;
+      }
+
+      $processing_target_path = $file_system->realpath($processing_target_dir);
+      if (!$processing_target_path) {
+        \Drupal::logger('sentinel_csv_processor')->error('Could not resolve processing path for @file. Skipping enqueue.', [
+          '@file' => $filename,
+        ]);
+        continue;
+      }
+
+      $processing_target_file = $processing_target_path . '/' . $filename;
+      if (file_exists($processing_target_file)) {
+        @unlink($processing_target_file);
+      }
+
+      if (!@rename($file_path, $processing_target_file)) {
+        if (!@copy($file_path, $processing_target_file)) {
+          \Drupal::logger('sentinel_csv_processor')->error('Failed to move @file from uploads to processing. Skipping enqueue.', [
+            '@file' => $filename,
+          ]);
+          continue;
+        }
+        @unlink($file_path);
+      }
+
+      $processing_target_uri = $processing_target_dir . '/' . $filename;
+
       // Enqueue file for processing.
-      // file_uri should point to the file in uploads directory.
+      // file_uri should point to the file in processing directory.
       $item_id = $queue->createItem([
-        'file_path' => $file_path,
-        'file_uri' => $uploads_dir_uri . '/' . $filename,
+        'file_path' => $processing_target_file,
+        'file_uri' => $processing_target_uri,
         'filename' => $filename,
         'file_mtime' => $file_mtime,
         'automate_dir_uri' => $automate_dir_uri,
@@ -362,4 +396,38 @@ function _sentinel_csv_processor_prepare_directory_with_month_year($base_dir_uri
   }
 
   return $full_dir_uri;
+}
+
+/**
+ * Implements hook_mail().
+ */
+function sentinel_csv_processor_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'csv_processing_error':
+      $context = $params['context'] ?? 'unknown';
+      $message['subject'] = t('CSV processing error (@context)', ['@context' => $context]);
+
+      $lines = [];
+      if ($context === 'queue') {
+        $filename = $params['filename'] ?? 'unknown';
+        $error = $params['error'] ?? 'Unknown error';
+        $lines[] = 'An automated CSV file failed to process.';
+        $lines[] = 'Filename: ' . $filename;
+        $lines[] = 'Error: ' . $error;
+      }
+      else {
+        $lines[] = 'One or more CSV files failed during batch processing.';
+        $errors = $params['errors'] ?? [];
+        if (!empty($errors)) {
+          $lines[] = '';
+          $lines[] = 'Errors:';
+          foreach ($errors as $error) {
+            $lines[] = '- ' . $error;
+          }
+        }
+      }
+
+      $message['body'] = $lines;
+      break;
+  }
 }
