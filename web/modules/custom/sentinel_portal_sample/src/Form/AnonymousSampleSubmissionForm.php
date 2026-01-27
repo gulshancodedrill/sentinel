@@ -83,8 +83,9 @@ class AnonymousSampleSubmissionForm extends FormBase {
 
     // Email field
     $form['email'] = [
-      '#type' => 'email',
+      '#type' => 'textfield',
       '#title' => $this->t('Email'),
+      '#description' => $this->t('You can enter multiple emails separated by ";" or ",".'),
       '#required' => TRUE,
       '#weight' => 20,
     ];
@@ -108,9 +109,12 @@ class AnonymousSampleSubmissionForm extends FormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     $email = trim($form_state->getValue('email'));
 
-    // Validate email
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $filtered_emails = $this->filterEmails($email);
+    if (empty($filtered_emails)) {
       $form_state->setErrorByName('email', $this->t('Please enter a valid email address.'));
+    }
+    else {
+      $form_state->setValue('email', implode('; ', $filtered_emails));
     }
 
     // Note: PRN is always from query string and validated in buildForm()
@@ -124,10 +128,16 @@ class AnonymousSampleSubmissionForm extends FormBase {
     $pack_reference_number = trim($form_state->getValue('pack_reference_number'));
     $name = trim($form_state->getValue('name'));
     $email = trim($form_state->getValue('email'));
+    $filtered_emails = $this->filterEmails($email);
+    if (empty($filtered_emails)) {
+      $this->messenger()->addError($this->t('Unable to process email address. Please try again or contact support.'));
+      return;
+    }
+    $primary_email = $filtered_emails[0];
 
     try {
       // Get or create client via customer service logic
-      $ucr = $this->getOrCreateClientUcr($name, $email);
+      $ucr = $this->getOrCreateClientUcr($name, $primary_email);
 
       if (!$ucr) {
         $this->messenger()->addError($this->t('Unable to create customer record. Please try again or contact support.'));
@@ -164,7 +174,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
       $sample = $storage->create([
         'pack_reference_number' => $pack_reference_number,
         'ucr' => $ucr,
-        'installer_email' => $email,
+        'installer_email' => $primary_email,
         'installer_name' => $name,
       ]);
 
@@ -208,18 +218,21 @@ class AnonymousSampleSubmissionForm extends FormBase {
         'details_url' => $details_url,
         'pack_reference_number' => $pack_reference_number,
       ];
-      $mail_result = $mail_manager->mail(
-        'sentinel_portal_sample',
-        'anonymous_submission',
-        $email,
-        $langcode,
-        $mail_params
-      );
-      if (empty($mail_result['result'])) {
-        \Drupal::logger('sentinel_portal_sample')->warning('Anonymous sample email failed to send for pack @pack, UCR @ucr', [
-          '@pack' => $pack_reference_number,
-          '@ucr' => $ucr,
-        ]);
+      foreach ($filtered_emails as $recipient) {
+        $mail_result = $mail_manager->mail(
+          'sentinel_portal_sample',
+          'anonymous_submission',
+          $recipient,
+          $langcode,
+          $mail_params
+        );
+        if (empty($mail_result['result'])) {
+          \Drupal::logger('sentinel_portal_sample')->warning('Anonymous sample email failed to send for pack @pack, UCR @ucr to @email', [
+            '@pack' => $pack_reference_number,
+            '@ucr' => $ucr,
+            '@email' => $recipient,
+          ]);
+        }
       }
 
       \Drupal::logger('sentinel_portal_sample')->info('Anonymous sample created: Pack @pack, UCR @ucr', [
@@ -298,6 +311,57 @@ class AnonymousSampleSubmissionForm extends FormBase {
       $ucr_value = $client->get('ucr')->value;
       return $ucr_value ? (string) $ucr_value : FALSE;
     }
+  }
+
+  /**
+   * Split, validate, and filter emails using the stoplist.
+   *
+   * @param string $email_input
+   *   Raw email input (may contain multiple addresses).
+   *
+   * @return string[]
+   *   Valid, non-blocked email addresses (preserves order).
+   */
+  protected function filterEmails($email_input) {
+    $email_input = trim((string) $email_input);
+    if ($email_input === '') {
+      return [];
+    }
+
+    $parts = preg_split('/[;,]+/', $email_input);
+    $emails = [];
+    foreach ($parts as $part) {
+      $address = trim($part);
+      if ($address === '') {
+        continue;
+      }
+      if (filter_var($address, FILTER_VALIDATE_EMAIL)) {
+        $emails[] = $address;
+      }
+    }
+
+    if (empty($emails)) {
+      return [];
+    }
+
+    $stop_list = \Drupal::config('sentinel_portal.settings')->get('stop_emails') ?: '';
+    $blocked = [];
+    foreach (preg_split('/\r\n|\r|\n/', $stop_list) as $line) {
+      $line = trim($line);
+      if ($line !== '') {
+        $blocked[] = strtolower($line);
+      }
+    }
+
+    $filtered = [];
+    foreach ($emails as $address) {
+      $domain = strtolower(substr($address, strrpos($address, '@') + 1));
+      if (!in_array($domain, $blocked, TRUE)) {
+        $filtered[] = $address;
+      }
+    }
+
+    return $filtered;
   }
 
   /**

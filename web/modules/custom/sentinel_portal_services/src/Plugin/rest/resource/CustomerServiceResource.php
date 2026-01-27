@@ -55,43 +55,24 @@ class CustomerServiceResource extends ResourceBase {
       throw new BadRequestHttpException('API key is invalid');
     }
 
-    // Validate email address
-    if (!$this->validateEmail($email)) {
-      // Try to handle multi-address (separated by semicolon)
-      if (strpos($email, ';') !== FALSE) {
-        $multiple_addresses = explode(';', $email);
-        $email_found = FALSE;
-
-        foreach ($multiple_addresses as $address) {
-          $address = trim($address);
-          if ($this->validateEmail($address)) {
-            $email = $address;
-            $email_found = TRUE;
-            break;
-          }
-        }
-
-        if (!$email_found) {
-          $email = trim($multiple_addresses[0]);
-        }
-      }
-
-      if (!$this->validateEmail($email)) {
-        \Drupal::logger('sentinel_portal_services')->warning('API GET /sentinel/customerservice - Invalid email validation');
-        $response_data = [
-          'status' => 406,
-          'message' => 'Not acceptable',
-          'error' => [
-            [
-              'error_column' => 'email',
-              'error_description' => 'not a valid email address',
-            ],
+    // Normalize and validate email address (D7 parity with stoplist).
+    $filtered_emails = $this->filterEmails($email);
+    if (empty($filtered_emails)) {
+      \Drupal::logger('sentinel_portal_services')->warning('API GET /sentinel/customerservice - Invalid email validation');
+      $response_data = [
+        'status' => 406,
+        'message' => 'Not acceptable',
+        'error' => [
+          [
+            'error_column' => 'email',
+            'error_description' => 'not a valid email address',
           ],
-        ];
+        ],
+      ];
 
-        return new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
-      }
+      return new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
     }
+    $email = $filtered_emails[0];
 
     $entity_type_manager = \Drupal::entityTypeManager();
     $storage = $entity_type_manager->getStorage('sentinel_client');
@@ -211,6 +192,57 @@ class CustomerServiceResource extends ResourceBase {
 
     // Use Drupal's email validator
     return \Drupal::service('email.validator')->isValid($email);
+  }
+
+  /**
+   * Split, validate, and filter emails using the stoplist.
+   *
+   * @param string $email_input
+   *   Raw email input (may contain multiple addresses).
+   *
+   * @return string[]
+   *   Valid, non-blocked email addresses (preserves order).
+   */
+  protected function filterEmails($email_input) {
+    $email_input = trim((string) $email_input);
+    if ($email_input === '') {
+      return [];
+    }
+
+    $parts = preg_split('/[;,]+/', $email_input);
+    $emails = [];
+    foreach ($parts as $part) {
+      $address = trim($part);
+      if ($address === '') {
+        continue;
+      }
+      if ($this->validateEmail($address)) {
+        $emails[] = $address;
+      }
+    }
+
+    if (empty($emails)) {
+      return [];
+    }
+
+    $stop_list = \Drupal::config('sentinel_portal.settings')->get('stop_emails') ?: '';
+    $blocked = [];
+    foreach (preg_split('/\r\n|\r|\n/', $stop_list) as $line) {
+      $line = trim($line);
+      if ($line !== '') {
+        $blocked[] = strtolower($line);
+      }
+    }
+
+    $filtered = [];
+    foreach ($emails as $address) {
+      $domain = strtolower(substr($address, strrpos($address, '@') + 1));
+      if (!in_array($domain, $blocked, TRUE)) {
+        $filtered[] = $address;
+      }
+    }
+
+    return $filtered;
   }
 
 }
