@@ -11,7 +11,7 @@ $host = 'localhost';
 $port = 3306;
 $username = 'root';
 $password = 'infotech';
-$database = 'sentineld7';
+$database = 'prod';
 
 $mysqli = new mysqli($host, $username, $password, $database, $port);
 if ($mysqli->connect_error) {
@@ -107,6 +107,7 @@ $columns = [
   'company_address_id',
 ];
 
+// Limit export to samples created within the last 3 years.
 $sql = <<<SQL
 SELECT
   s.pid,
@@ -207,6 +208,7 @@ LEFT JOIN field_data_field_company_address company_addr
   AND company_addr.language = 'und'
   AND company_addr.deleted = 0
   AND company_addr.delta = 0
+WHERE s.created >= DATE_SUB(NOW(), INTERVAL 3 YEAR)
 ORDER BY s.pid ASC
 SQL;
 
