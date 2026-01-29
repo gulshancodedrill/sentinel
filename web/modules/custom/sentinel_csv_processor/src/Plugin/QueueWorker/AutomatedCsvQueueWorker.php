@@ -1489,12 +1489,19 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       return;
     }
 
+    $from = \Drupal::config('smtp.settings')->get('from_address');
+    if (empty($from)) {
+      $from = \Drupal::config('system.site')->get('mail');
+    }
+
     $mail_manager = \Drupal::service('plugin.manager.mail');
     $langcode = \Drupal::currentUser()->getPreferredLangcode();
     $params = [
       'context' => $context,
       'filename' => $filename,
       'error' => $error,
+      'from' => $from,
+      'reply_to' => $from,
     ];
     \Drupal::logger('sentinel_csv_processor')->info('Sending CSV failure email to @to for @file (context @context).', [
       '@to' => $to,

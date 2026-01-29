@@ -408,7 +408,15 @@ function sentinel_csv_processor_mail($key, &$message, $params) {
   switch ($key) {
     case 'csv_processing_error':
       $context = $params['context'] ?? 'unknown';
+      $from = $params['from'] ?? $message['from'] ?? '';
+      $reply_to = $params['reply_to'] ?? $from;
       $message['subject'] = t('CSV processing error (@context)', ['@context' => $context]);
+      if (!empty($from)) {
+        $message['from'] = $from;
+      }
+      if (!empty($reply_to)) {
+        $message['headers']['Reply-To'] = $reply_to;
+      }
       \Drupal::logger('sentinel_csv_processor')->info('CSV mail headers: to=@to from=@from subject=@subject', [
         '@to' => $message['to'] ?? '',
         '@from' => $message['from'] ?? '',
