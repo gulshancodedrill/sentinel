@@ -11,7 +11,7 @@ $host = 'localhost';
 $port = 3306;
 $username = 'root';
 $password = 'infotech';
-$database = 'sentineld7';
+$database = 'prod';
 
 $mysqli = new mysqli($host, $username, $password, $database, $port);
 if ($mysqli->connect_error) {
@@ -30,6 +30,7 @@ SELECT
   status,
   timestamp
 FROM file_managed
+WHERE timestamp >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 3 YEAR))
 ORDER BY fid
 SQL;
 
