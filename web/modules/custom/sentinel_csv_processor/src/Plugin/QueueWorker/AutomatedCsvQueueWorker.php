@@ -1479,6 +1479,13 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
   protected function sendFailureEmail($filename, $error, $context = 'queue') {
     $to = \Drupal::config('system.site')->get('mail');
     if (!$to) {
+      $to = \Drupal::config('sentinel_portal.settings')->get('new_pack_email') ?: '';
+    }
+    if (!$to) {
+      \Drupal::logger('sentinel_csv_processor')->warning('CSV failure email skipped (no recipient). File @file, context @context', [
+        '@file' => $filename,
+        '@context' => $context,
+      ]);
       return;
     }
 
@@ -1489,6 +1496,11 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       'filename' => $filename,
       'error' => $error,
     ];
+    \Drupal::logger('sentinel_csv_processor')->info('Sending CSV failure email to @to for @file (context @context).', [
+      '@to' => $to,
+      '@file' => $filename,
+      '@context' => $context,
+    ]);
     $mail_manager->mail('sentinel_csv_processor', 'csv_processing_error', $to, $langcode, $params);
   }
 
