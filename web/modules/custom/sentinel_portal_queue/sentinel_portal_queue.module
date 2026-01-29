@@ -752,21 +752,23 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
   
   // If UCR is pending, send email to admin instead of installer/company.
   if ($ucr_pending) {
-    $site_config = \Drupal::config('system.site');
-    $admin_email = $site_config->get('mail') ?: 'admin@sentinelprotects.com';
+    $admin_email = \Drupal::config('sentinel_portal.settings')->get('new_pack_email')
+      ?: \Drupal::config('system.site')->get('mail')
+      ?: 'admin@sentinelprotects.com';
     $recipients = [$admin_email];
   }
   else {
     $installer_email = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_email');
     $company_email = sentinel_portal_queue_get_sample_value($sample_entity, 'company_email');
 
-    $raw_recipients = $installer_email ?: $company_email;
-    if (empty($raw_recipients)) {
+    if (empty($installer_email) && empty($company_email)) {
       return FALSE;
     }
 
-    $normalized = str_replace(';', ',', $raw_recipients);
-    $recipients = array_filter(array_map('trim', explode(',', $normalized)));
+    $recipients = sentinel_portal_queue_filter_recipients([
+      $installer_email,
+      $company_email,
+    ]);
     if (empty($recipients)) {
       return FALSE;
     }
@@ -802,6 +804,57 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
           'message_html' => $message_html,
           'message_plain' => $message_plain,
   ];
+}
+
+/**
+ * Split, validate, and filter recipient emails using the stoplist.
+ *
+ * @param array $raw_values
+ *   Raw email strings (may contain multiple addresses).
+ *
+ * @return array
+ *   Valid, non-blocked email addresses (unique, ordered).
+ */
+function sentinel_portal_queue_filter_recipients(array $raw_values) {
+  $emails = [];
+  foreach ($raw_values as $raw) {
+    if (empty($raw)) {
+      continue;
+    }
+    $parts = preg_split('/[;,]+/', (string) $raw);
+    foreach ($parts as $part) {
+      $address = trim($part);
+      if ($address === '') {
+        continue;
+      }
+      if (\Drupal::service('email.validator')->isValid($address)) {
+        $emails[] = $address;
+      }
+    }
+  }
+
+  if (empty($emails)) {
+    return [];
+  }
+
+  $stop_list = \Drupal::config('sentinel_portal.settings')->get('stop_emails') ?: '';
+  $blocked = [];
+  foreach (preg_split('/\r\n|\r|\n/', $stop_list) as $line) {
+    $line = trim($line);
+    if ($line !== '') {
+      $blocked[] = strtolower($line);
+    }
+  }
+
+  $filtered = [];
+  foreach ($emails as $address) {
+    $domain = strtolower(substr($address, strrpos($address, '@') + 1));
+    if (!in_array($domain, $blocked, TRUE)) {
+      $filtered[] = $address;
+    }
+  }
+
+  return array_values(array_unique($filtered));
 }
 
 /**
