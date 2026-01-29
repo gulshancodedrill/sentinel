@@ -1501,7 +1501,11 @@ class AutomatedCsvQueueWorker extends QueueWorkerBase implements ContainerFactor
       '@file' => $filename,
       '@context' => $context,
     ]);
-    $mail_manager->mail('sentinel_csv_processor', 'csv_processing_error', $to, $langcode, $params);
+    $result = $mail_manager->mail('sentinel_csv_processor', 'csv_processing_error', $to, $langcode, $params);
+    \Drupal::logger('sentinel_csv_processor')->info('CSV failure mail result for @file: @result', [
+      '@file' => $filename,
+      '@result' => print_r($result, TRUE),
+    ]);
   }
 
 
