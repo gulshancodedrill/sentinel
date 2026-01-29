@@ -58,20 +58,20 @@ class CustomerServiceResource extends ResourceBase {
     // Normalize and validate email address (D7 parity with stoplist).
     $filtered_emails = $this->filterEmails($email);
     if (empty($filtered_emails)) {
-      \Drupal::logger('sentinel_portal_services')->warning('API GET /sentinel/customerservice - Invalid email validation');
-      $response_data = [
-        'status' => 406,
-        'message' => 'Not acceptable',
-        'error' => [
-          [
-            'error_column' => 'email',
-            'error_description' => 'not a valid email address',
+        \Drupal::logger('sentinel_portal_services')->warning('API GET /sentinel/customerservice - Invalid email validation');
+        $response_data = [
+          'status' => 406,
+          'message' => 'Not acceptable',
+          'error' => [
+            [
+              'error_column' => 'email',
+              'error_description' => 'not a valid email address',
+            ],
           ],
-        ],
-      ];
+        ];
 
-      return new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
-    }
+        return new ResourceResponse($response_data, Response::HTTP_NOT_ACCEPTABLE);
+      }
     $email = $filtered_emails[0];
 
     $entity_type_manager = \Drupal::entityTypeManager();

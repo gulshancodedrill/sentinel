@@ -134,6 +134,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
       return;
     }
     $primary_email = $filtered_emails[0];
+    $stored_email = implode(';', $filtered_emails);
 
     try {
       // Get or create client via customer service logic
@@ -174,7 +175,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
       $sample = $storage->create([
         'pack_reference_number' => $pack_reference_number,
         'ucr' => $ucr,
-        'installer_email' => $primary_email,
+        'installer_email' => $stored_email,
         'installer_name' => $name,
       ]);
 
@@ -219,19 +220,19 @@ class AnonymousSampleSubmissionForm extends FormBase {
         'pack_reference_number' => $pack_reference_number,
       ];
       foreach ($filtered_emails as $recipient) {
-        $mail_result = $mail_manager->mail(
-          'sentinel_portal_sample',
-          'anonymous_submission',
+      $mail_result = $mail_manager->mail(
+        'sentinel_portal_sample',
+        'anonymous_submission',
           $recipient,
-          $langcode,
-          $mail_params
-        );
-        if (empty($mail_result['result'])) {
+        $langcode,
+        $mail_params
+      );
+      if (empty($mail_result['result'])) {
           \Drupal::logger('sentinel_portal_sample')->warning('Anonymous sample email failed to send for pack @pack, UCR @ucr to @email', [
-            '@pack' => $pack_reference_number,
-            '@ucr' => $ucr,
+          '@pack' => $pack_reference_number,
+          '@ucr' => $ucr,
             '@email' => $recipient,
-          ]);
+        ]);
         }
       }
 
