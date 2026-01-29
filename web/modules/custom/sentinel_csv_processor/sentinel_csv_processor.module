@@ -402,6 +402,9 @@ function _sentinel_csv_processor_prepare_directory_with_month_year($base_dir_uri
  * Implements hook_mail().
  */
 function sentinel_csv_processor_mail($key, &$message, $params) {
+  \Drupal::logger('sentinel_csv_processor')->info('sentinel_csv_processor_mail invoked for key @key.', [
+    '@key' => $key,
+  ]);
   switch ($key) {
     case 'csv_processing_error':
       $context = $params['context'] ?? 'unknown';
