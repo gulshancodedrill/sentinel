@@ -832,7 +832,7 @@ function sentinel_portal_queue_build_message_html($sample_entity, string $countr
     return '<p>Dear Admin,</p>'
       . '<p>Please find attached a report on a recently submitted sample.</p>'
       . '<p><strong>Note:</strong> This sample was created with pending details. This sample is not linked to any user account, and the UCR (Unique Customer Reference) is also set to pending.</p>'
-      . '<p>We need to sync this sample later when we have the correct details for it. You can find this sample at <a href="https://www.sentinelprotects.com/portal/sync/samples">www.sentinelprotects.com/portal/sync/samples</a>.</p>'
+      . '<p>We need to sync this sample later when we have the correct details for it.</p>'
       . '<p>The attached report provides a report direct from the Sentinel Laboratory on the condition of the central heating water and the level of Sentinel X100 Inhibitor present in the sample submitted by an unknown user. It also provides a brief analysis of the mains water.</p>'
       . '<p>Based on the findings, Sentinel have provided recommendations to ensure the system water allows the central heating systems to operate at optimum efficiency with a minimum of scale and corrosion deposits.</p>'
       . '<p>Regards,</p>'
