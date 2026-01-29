@@ -749,7 +749,7 @@ class SentinelDataImportCommands extends DrushCommands {
     $process = !empty($options['process']);
 
     $threshold = (new \DateTime('now', new \DateTimeZone('UTC')))
-      ->modify('-1 year')
+      ->modify('-3 years')
       ->format('Y-m-d H:i:s');
 
     $storage = \Drupal::entityTypeManager()->getStorage('sentinel_sample');

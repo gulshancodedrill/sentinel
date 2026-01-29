@@ -30,7 +30,6 @@ SELECT
   status,
   timestamp
 FROM file_managed
-WHERE timestamp >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 3 YEAR))
 ORDER BY fid
 SQL;
 

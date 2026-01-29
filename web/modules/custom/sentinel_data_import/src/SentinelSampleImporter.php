@@ -196,9 +196,11 @@ class SentinelSampleImporter {
         continue;
       }
       $raw = $item[$field];
-      // For updates, include NULL/empty to clear fields; for creates, skip empty
-      if ($is_update || ($raw !== '' && $raw !== NULL)) {
-        $values[$field] = ['value' => $raw !== '' && $raw !== NULL ? (int) $raw : NULL];
+      if ($raw === '' || $raw === NULL) {
+        $values[$field] = ['value' => NULL];
+      }
+      else {
+        $values[$field] = ['value' => (int) $raw];
       }
     }
 
@@ -206,7 +208,13 @@ class SentinelSampleImporter {
       if (!array_key_exists($field, $item)) {
         continue;
       }
-      $values[$field] = ['value' => $this->toBoolean($item[$field])];
+      $raw = $item[$field];
+      if ($raw === '' || $raw === NULL) {
+        $values[$field] = ['value' => NULL];
+      }
+      else {
+        $values[$field] = ['value' => $this->toBoolean($raw)];
+      }
     }
 
     foreach (self::DATETIME_FIELDS as $field) {
