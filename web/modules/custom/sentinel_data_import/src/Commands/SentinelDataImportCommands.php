@@ -821,6 +821,101 @@ class SentinelDataImportCommands extends DrushCommands {
   }
 
   /**
+   * Enqueue file entities created within the last 18 months for purge.
+   *
+   * @command sentinel-data-import:enqueue-file-purge
+   * @aliases sdi-efp
+   *
+   * @option start
+   *   Zero-based row index to start from (default 0).
+   * @option limit
+   *   Maximum rows to enqueue (0 = no limit).
+   * @option process
+   *   Process the queue immediately after enqueueing.
+   *
+   * @validate-module-enabled sentinel_data_import
+   */
+  public function enqueueFilePurge(array $options = ['start' => 0, 'limit' => 0, 'process' => FALSE]): void {
+    $queue_name = 'sentinel_data_import.file_managed_purge';
+    $queue = $this->queueFactory->get($queue_name);
+
+    $start = (int) ($options['start'] ?? 0);
+    $limit = (int) ($options['limit'] ?? 0);
+    $process = !empty($options['process']);
+
+    $threshold = (new \DateTime('now', new \DateTimeZone('UTC')))
+      ->modify('-18 months')
+      ->format('Y-m-d H:i:s');
+
+    $storage = \Drupal::entityTypeManager()->getStorage('file');
+    $query = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('created', $threshold, '>=')
+      ->sort('created', 'DESC');
+
+    if ($start > 0 || $limit > 0) {
+      $range_limit = $limit > 0 ? $limit : PHP_INT_MAX;
+      $query->range($start, $range_limit);
+    }
+
+    $ids = $query->execute();
+    $enqueued = 0;
+
+    foreach ($ids as $fid) {
+      $queue->createItem(['fid' => (int) $fid]);
+      $enqueued++;
+    }
+
+    $this->logger()->success(dt('Enqueued @count file entities created within the last 18 months.', [
+      '@count' => $enqueued,
+    ]));
+
+    if (!$process) {
+      return;
+    }
+
+    $queue_worker = \Drupal::service('plugin.manager.queue_worker')->createInstance($queue_name);
+    $processed = 0;
+    $errors = 0;
+    $start_time = time();
+
+    $this->logger()->notice('Processing file purge queue...');
+
+    while ($item = $queue->claimItem()) {
+      try {
+        $queue_worker->processItem($item->data);
+        $queue->deleteItem($item);
+        $processed++;
+
+        if ($processed % 10 === 0) {
+          $elapsed = time() - $start_time;
+          $rate = $elapsed > 0 ? round($processed / $elapsed, 2) : 0;
+          $this->logger()->notice("Processed {$processed} items ({$rate} items/sec)");
+        }
+      }
+      catch (\Exception $e) {
+        $errors++;
+        $fid = is_array($item->data ?? NULL) ? ($item->data['fid'] ?? 'unknown') : 'unknown';
+        $this->logger()->error('Error purging file @fid: @message', [
+          '@fid' => $fid,
+          '@message' => $e->getMessage(),
+        ]);
+        $queue->deleteItem($item);
+      }
+    }
+
+    if ($processed > 0) {
+      $this->logger()->success(dt('Processed @processed file purges (@errors errors).', [
+        '@processed' => $processed,
+        '@errors' => $errors,
+      ]));
+    }
+    else {
+      $this->logger()->notice('No items in file purge queue.');
+    }
+  }
+
+  /**
    * Normalize whitespace in CSV values.
    */
   protected function normalizeCsvValue(string $value): string {
