@@ -334,12 +334,11 @@ class SentinelDataImportCommands extends DrushCommands {
 
       $source_info = $this->resolveSourceAndDestination($data, $config->get('private_source_base'), $config->get('public_source_base'));
       if (!$source_info) {
-        $skipped++;
-        $this->logger()->warning(dt('Skipping fid @fid due to missing source file (@uri).', [
+        $this->logger()->notice(dt('Source file missing for fid @fid (@uri). Enqueuing entity only.', [
           '@fid' => $data['fid'],
           '@uri' => $data['uri'],
         ]));
-        continue;
+        $source_info = ['destination_uri' => $data['uri']];
       }
 
       $queue->createItem($data + $source_info);
