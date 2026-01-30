@@ -16,12 +16,14 @@
  */
 
 // Database configuration
+// D7 PROD SOURCE
 $d7_host = 'localhost';
 $d7_port = 3306;
 $d7_username = 'sentinelportal_d7';
 $d7_password = 'kR4~u[6w2zeM3p~,';
 $d7_database = 'sentinelportal_sentinel_d7';
 
+// D11 LOCAL TARGET
 $d11_host = 'localhost';
 $d11_port = 3306;
 $d11_username = 'sentinelportal_drupalsentinel';
@@ -59,9 +61,20 @@ if ($limit_pids !== NULL) {
 
 // Step 1: Get total count of pids to process
 print "Step 1: Getting total count of pids to process...\n";
-$count_query = "SELECT COUNT(DISTINCT pid) as total FROM sentinel_sample_revision";
+$count_query = "SELECT COUNT(DISTINCT r.pid) as total
+FROM sentinel_sample_revision r
+INNER JOIN sentinel_sample s ON s.pid = r.pid
+WHERE s.created >= DATE_SUB(NOW(), INTERVAL 3 YEAR)";
 if ($limit_pids !== NULL) {
-  $count_query = "SELECT COUNT(DISTINCT pid) as total FROM (SELECT DISTINCT pid FROM sentinel_sample_revision ORDER BY pid LIMIT {$limit_pids}) as limited";
+  $count_query = "SELECT COUNT(DISTINCT pid) as total
+FROM (
+  SELECT DISTINCT r.pid AS pid
+  FROM sentinel_sample_revision r
+  INNER JOIN sentinel_sample s ON s.pid = r.pid
+  WHERE s.created >= DATE_SUB(NOW(), INTERVAL 3 YEAR)
+  ORDER BY r.pid
+  LIMIT {$limit_pids}
+) as limited";
 }
 $count_result = $d7_mysqli->query($count_query);
 if ($count_result === false) {
@@ -83,26 +96,8 @@ if ($total_pids == 0) {
 $total_batches = ceil($total_pids / $batch_size);
 print "Found {$total_pids} total pids to process in {$total_batches} batches.\n";
 
-// Step 2: Truncate all revisions from D11 (only once, before batch processing)
-print "Step 2: Truncating all revisions from D11...\n";
-
-// Truncate sentinel_sample_revision table
-if (!$d11_mysqli->query("TRUNCATE TABLE sentinel_sample_revision")) {
-  fwrite(STDERR, "Error truncating sentinel_sample_revision: {$d11_mysqli->error}\n");
-  $d7_mysqli->close();
-  $d11_mysqli->close();
-  exit(1);
-}
-print "Truncated sentinel_sample_revision table.\n";
-
-// Truncate sentinel_sample_field_revision table
-if (!$d11_mysqli->query("TRUNCATE TABLE sentinel_sample_field_revision")) {
-  fwrite(STDERR, "Error truncating sentinel_sample_field_revision: {$d11_mysqli->error}\n");
-  $d7_mysqli->close();
-  $d11_mysqli->close();
-  exit(1);
-}
-print "Truncated sentinel_sample_field_revision table.\n";
+// Step 2: No global truncation; delete and replace per PID batch.
+print "Step 2: Using per-PID delete/replace (no full truncation).\n";
 
 // Step 3: Get all columns from D7 revision table
 print "Step 3: Getting column list from D7 revision table...\n";
@@ -207,7 +202,12 @@ while ($offset < $total_pids) {
   
   // Get pids for this batch
   $batch_limit = $limit_pids !== NULL ? min($batch_size, $limit_pids - $offset) : $batch_size;
-  $pids_query = "SELECT DISTINCT pid FROM sentinel_sample_revision ORDER BY pid LIMIT {$batch_limit} OFFSET {$offset}";
+  $pids_query = "SELECT DISTINCT r.pid
+FROM sentinel_sample_revision r
+INNER JOIN sentinel_sample s ON s.pid = r.pid
+WHERE s.created >= DATE_SUB(NOW(), INTERVAL 3 YEAR)
+ORDER BY r.pid
+LIMIT {$batch_limit} OFFSET {$offset}";
   $pids_result = $d7_mysqli->query($pids_query);
   if ($pids_result === false) {
     fwrite(STDERR, "Error getting pids for batch: {$d7_mysqli->error}\n");
@@ -227,6 +227,19 @@ while ($offset < $total_pids) {
   
   print "Processing " . count($batch_pids) . " pids in this batch: " . implode(', ', array_slice($batch_pids, 0, 10)) . (count($batch_pids) > 10 ? '...' : '') . "\n";
   
+  // Delete existing revisions for these pids (both revision tables) before re-inserting.
+  $pids_placeholders_d11 = implode(',', $batch_pids);
+  if (!$d11_mysqli->query("DELETE FROM sentinel_sample_field_revision WHERE pid IN ({$pids_placeholders_d11})")) {
+    fwrite(STDERR, "Error deleting field revisions for batch: {$d11_mysqli->error}\n");
+    $offset += $batch_size;
+    continue;
+  }
+  if (!$d11_mysqli->query("DELETE FROM sentinel_sample_revision WHERE pid IN ({$pids_placeholders_d11})")) {
+    fwrite(STDERR, "Error deleting revisions for batch: {$d11_mysqli->error}\n");
+    $offset += $batch_size;
+    continue;
+  }
+
   // Get revision data from D7 for this batch
   $pids_placeholders_d7 = implode(',', $batch_pids);
   $revisions_query = "SELECT {$select_columns}, vid FROM sentinel_sample_revision WHERE pid IN ({$pids_placeholders_d7}) ORDER BY pid, vid";
@@ -368,7 +381,7 @@ while ($offset < $total_pids) {
 print "\n=== Final Summary ===\n";
 print "Total batches processed: {$total_batches}\n";
 print "Total pids processed: {$total_pids}\n";
-print "All revisions truncated from D11 before import.\n";
+print "Revisions replaced per PID batch (no full truncation).\n";
 print "Total revisions imported: {$total_inserted}\n";
 print "Total vids updated: {$total_updated}\n";
 print "\nImport completed successfully!\n";
