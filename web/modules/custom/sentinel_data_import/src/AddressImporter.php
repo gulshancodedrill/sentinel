@@ -134,6 +134,9 @@ class AddressImporter {
         /** @var \Drupal\address\Entity\AddressInterface $address */
         $address = $storage->create($address_values);
         $address->enforceIsNew();
+        // Ensure language defaults are set on the entity before saving.
+        $address->set('langcode', 'en');
+        $address->set('default_langcode', 1);
         $address->save();
         
         $this->logger->notice('Imported address @id (@bundle).', [
