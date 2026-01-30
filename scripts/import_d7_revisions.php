@@ -19,16 +19,16 @@
 // D7 PROD SOURCE
 $d7_host = 'localhost';
 $d7_port = 3306;
-$d7_username = 'root';
-$d7_password = 'infotech';
-$d7_database = 'prod';
+$d7_username = 'sentinelportal_d7';
+$d7_password = 'kR4~u[6w2zeM3p~,';
+$d7_database = 'sentinelportal_sentinel_d7';
 
 // D11 LOCAL TARGET
 $d11_host = 'localhost';
 $d11_port = 3306;
-$d11_username = 'root';
-$d11_password = 'infotech';
-$d11_database = 'sentinel';
+$d11_username = 'sentinelportal_drupalsentinel';
+$d11_password = '!b@xa=}*IL7[hU)O';
+$d11_database = 'sentinelportal_drupalsentinel';
 
 // Batch processing configuration
 $batch_size = 10; // Process this many pids at a time
