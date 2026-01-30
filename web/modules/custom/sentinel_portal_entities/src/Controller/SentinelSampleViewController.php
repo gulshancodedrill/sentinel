@@ -607,10 +607,7 @@ class SentinelSampleViewController extends ControllerBase {
     }
 
     $address_id = NULL;
-    if ($sample->hasField('field_sentinel_sample_address') && !$sample->get('field_sentinel_sample_address')->isEmpty()) {
-      $address_id = $sample->get('field_sentinel_sample_address')->target_id;
-    }
-    elseif ($sample->hasField('sentinel_sample_address_target_id') && !$sample->get('sentinel_sample_address_target_id')->isEmpty()) {
+    if ($sample->hasField('sentinel_sample_address_target_id') && !$sample->get('sentinel_sample_address_target_id')->isEmpty()) {
       $address_id = $sample->get('sentinel_sample_address_target_id')->value;
     }
 
