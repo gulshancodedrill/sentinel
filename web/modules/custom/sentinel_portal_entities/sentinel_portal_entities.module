@@ -347,11 +347,11 @@ function sentinel_portal_entities_link_address($value, SentinelSample $sample = 
     return $value ?? '';
   }
 
-  if (!$sample->hasField('field_sentinel_sample_address') || $sample->get('field_sentinel_sample_address')->isEmpty()) {
+  if (!$sample->hasField('sentinel_sample_address_target_id') || $sample->get('sentinel_sample_address_target_id')->isEmpty()) {
     return $value;
   }
 
-  $target = $sample->get('field_sentinel_sample_address')->target_id;
+  $target = $sample->get('sentinel_sample_address_target_id')->value;
   if (empty($target)) {
     return $value;
   }
