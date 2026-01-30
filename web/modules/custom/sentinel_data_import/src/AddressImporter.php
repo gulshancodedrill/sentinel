@@ -104,6 +104,21 @@ class AddressImporter {
       }
       else {
         // Create new address
+        // Clean up any orphaned field rows to avoid duplicate key errors.
+        $connection = \Drupal::database();
+        $deleted = $connection->delete('address__field_address')
+          ->condition('entity_id', $id)
+          ->execute();
+        $deleted += $connection->delete('address__field_address_note')
+          ->condition('entity_id', $id)
+          ->execute();
+        if ($deleted > 0) {
+          $this->logger->notice('Removed @count orphaned address field rows for @id before create.', [
+            '@count' => $deleted,
+            '@id' => $id,
+          ]);
+        }
+
         $address_values = [
           'id' => $id,
           'type' => $bundle,
