@@ -107,6 +107,8 @@ class AddressImporter {
         $address_values = [
           'id' => $id,
           'type' => $bundle,
+          'langcode' => 'en',
+          'default_langcode' => 1,
         ];
         
         // Only set field_address if it has values (skip empty for new entities)
