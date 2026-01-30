@@ -57,13 +57,7 @@ class FileManagedImporter {
       return;
     }
 
-    $destination_uri = $item['destination_uri'] ?? $item['uri'] ?? NULL;
-    if (!$destination_uri) {
-      $this->logger->error('Queue item @fid does not include a destination URI.', [
-        '@fid' => $fid,
-      ]);
-      throw new \RuntimeException('Destination URI missing.');
-    }
+    $destination_uri = (string) ($item['destination_uri'] ?? $item['uri'] ?? '');
 
     // Directly construct source_path from URI
     $config = $this->configFactory->get('sentinel_data_import.settings');
@@ -96,11 +90,13 @@ class FileManagedImporter {
       $source_path = $item['source_path'];
     }
 
-    // Ensure the destination directory exists.
-    $this->fileSystem->prepareDirectory(
-      dirname($destination_uri),
-      FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS
-    );
+    if ($destination_uri !== '') {
+      // Ensure the destination directory exists when we have a target URI.
+      $this->fileSystem->prepareDirectory(
+        dirname($destination_uri),
+        FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS
+      );
+    }
 
     $storage = $this->entityTypeManager->getStorage('file');
     
@@ -111,20 +107,6 @@ class FileManagedImporter {
     /** @var \Drupal\file\Entity\File|null $file */
     $file = $storage->load($fid);
     $is_update = $file !== NULL;
-    
-    // If not found by fid, also check by URI as fallback
-    if (!$is_update) {
-      $existing_candidates = $storage->loadByProperties(['uri' => $destination_uri]);
-      if (!empty($existing_candidates)) {
-        $file = reset($existing_candidates);
-        $is_update = TRUE;
-        $this->logger->info('Found existing file by URI @uri (fid: @existing_fid), will update instead of creating @requested_fid.', [
-          '@uri' => $destination_uri,
-          '@existing_fid' => $file->id(),
-          '@requested_fid' => $fid,
-        ]);
-      }
-    }
     
     if ($is_update) {
       $this->logger->info('Found existing file @fid, will update.', ['@fid' => $file->id()]);
@@ -159,25 +141,25 @@ class FileManagedImporter {
         // Update existing file entity
         $updated_fields = [];
         
-        // Update file content only if source file is available
-        if ($has_source_file && $data !== NULL) {
+        // Update file content only if source file is available and URI exists.
+        if ($has_source_file && $data !== NULL && $destination_uri !== '') {
           $this->fileRepository->writeData($data, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
           $updated_fields[] = 'file_content';
         }
         
-        // Update filename if provided (for updates, allow empty to clear)
+        // Update filename if provided (allow empty string).
         if (array_key_exists('filename', $item)) {
-          $new_filename = $item['filename'] !== '' && $item['filename'] !== NULL ? $item['filename'] : basename($destination_uri);
+          $new_filename = $item['filename'] !== NULL ? (string) $item['filename'] : '';
           if ($file->getFilename() !== $new_filename) {
             $file->setFilename($new_filename);
             $updated_fields[] = 'filename';
           }
         }
         
-        // Update filemime if provided (for updates, allow empty)
+        // Update filemime if provided (allow empty string).
         if (array_key_exists('filemime', $item)) {
-          $new_filemime = $item['filemime'] !== '' && $item['filemime'] !== NULL ? $item['filemime'] : NULL;
-          if ($new_filemime && $file->getMimeType() !== $new_filemime) {
+          $new_filemime = $item['filemime'] !== NULL ? (string) $item['filemime'] : '';
+          if ($file->getMimeType() !== $new_filemime) {
             $file->setMimeType($new_filemime);
             $updated_fields[] = 'filemime';
           }
@@ -235,8 +217,8 @@ class FileManagedImporter {
         if (!$existing) {
           // Prepare file data
           $uid = isset($item['uid']) && !empty($item['uid']) ? (int) $item['uid'] : 1;
-          $filename = isset($item['filename']) && $item['filename'] !== '' ? $item['filename'] : basename($destination_uri);
-          $filemime = isset($item['filemime']) && $item['filemime'] !== '' ? $item['filemime'] : '';
+          $filename = isset($item['filename']) && $item['filename'] !== NULL ? (string) $item['filename'] : '';
+          $filemime = isset($item['filemime']) && $item['filemime'] !== NULL ? (string) $item['filemime'] : '';
           $filesize = isset($item['filesize']) ? (int) $item['filesize'] : 0;
           $status = isset($item['status']) ? (int) $item['status'] : 1;
           $timestamp = isset($item['timestamp']) && !empty($item['timestamp']) ? (int) $item['timestamp'] : time();
@@ -273,18 +255,20 @@ class FileManagedImporter {
         if (!$file) {
           // Fallback: create normally if direct insert failed
           $this->logger->warning('Direct insert failed for fid @fid, creating with auto-increment ID.', ['@fid' => $fid]);
-          if ($has_source_file && $data !== NULL) {
+          if ($has_source_file && $data !== NULL && $destination_uri !== '') {
             $file = $this->fileRepository->writeData($data, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
           }
           else {
-            $file = File::create([
-              'uri' => $destination_uri,
-            ]);
+            if ($destination_uri !== '') {
+              $file = File::create([
+                'uri' => $destination_uri,
+              ]);
+            }
           }
         }
         else {
           // File was created with preserved fid, now write content if available
-          if ($has_source_file && $data !== NULL) {
+          if ($has_source_file && $data !== NULL && $destination_uri !== '') {
             // Write file content using file repository
             $this->fileRepository->writeData($data, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
             
@@ -300,12 +284,12 @@ class FileManagedImporter {
             $file->setOwnerId((int) $item['uid']);
           }
           
-          if (isset($item['filemime']) && $item['filemime'] !== '' && $item['filemime'] !== NULL) {
-            $file->setMimeType($item['filemime']);
+          if (array_key_exists('filemime', $item)) {
+            $file->setMimeType($item['filemime'] !== NULL ? (string) $item['filemime'] : '');
           }
           
-          if (isset($item['filename']) && $item['filename'] !== '' && $item['filename'] !== NULL) {
-            $file->setFilename($item['filename']);
+          if (array_key_exists('filename', $item)) {
+            $file->setFilename($item['filename'] !== NULL ? (string) $item['filename'] : '');
           }
           
           // Set status
@@ -338,12 +322,13 @@ class FileManagedImporter {
     }
 
     // Register usage to prevent garbage collection.
-    $this->fileUsage->add($file, 'sentinel_data_import', 'file', $file->id());
-
-    $this->logger->notice('File @fid (@uri) processed and usage registered.', [
-      '@fid' => $file->id(),
-      '@uri' => $destination_uri,
-    ]);
+    if ($file) {
+      $this->fileUsage->add($file, 'sentinel_data_import', 'file', $file->id());
+      $this->logger->notice('File @fid (@uri) processed and usage registered.', [
+        '@fid' => $file->id(),
+        '@uri' => $destination_uri,
+      ]);
+    }
   }
 
 }

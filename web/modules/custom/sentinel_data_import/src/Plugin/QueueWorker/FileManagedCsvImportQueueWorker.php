@@ -33,10 +33,9 @@ class FileManagedCsvImportQueueWorker extends QueueWorkerBase {
     $status = isset($data['status']) ? (int) $data['status'] : 0;
     $timestamp = isset($data['timestamp']) ? (int) ($data['timestamp'] ?? 0) : 0;
 
-    if (empty($fid) || empty($uri)) {
-      \Drupal::logger('file_import')->warning('Skipping invalid queue item: missing fid or uri', [
+    if (empty($fid)) {
+      \Drupal::logger('file_import')->warning('Skipping invalid queue item: missing fid', [
         'fid' => $fid,
-        'uri' => $uri,
       ]);
       return;
     }
