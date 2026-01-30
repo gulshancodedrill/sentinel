@@ -95,6 +95,9 @@ class AddressImporter {
             $address->set('field_address', NULL);
           }
         }
+        // Ensure language defaults are set on updates too.
+        $address->set('langcode', $address->language()->getId() ?: 'en');
+        $address->set('default_langcode', 1);
         $address->save();
         
         $this->logger->notice('Updated address @id (@bundle).', [
