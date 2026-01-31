@@ -11,7 +11,7 @@ $host = 'localhost';
 $port = 3306;
 $username = 'root';
 $password = 'infotech';
-$database = 'prod';
+$database = 'prod30';
 
 $mysqli = new mysqli($host, $username, $password, $database, $port);
 if ($mysqli->connect_error) {
@@ -209,6 +209,7 @@ LEFT JOIN field_data_field_company_address company_addr
   AND company_addr.deleted = 0
   AND company_addr.delta = 0
 WHERE s.created >= DATE_SUB(NOW(), INTERVAL 3 YEAR)
+  AND s.fileid > 878226
 ORDER BY s.pid ASC
 SQL;
 
