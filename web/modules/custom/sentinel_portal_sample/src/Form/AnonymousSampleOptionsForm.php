@@ -65,14 +65,14 @@ class AnonymousSampleOptionsForm extends FormBase {
 
     $pack_reference_number = $sample->get('pack_reference_number')->value;
 
-    $form['#title'] = $this->t('Sample submitted successfully but you need to add full details');
+    // $form['#title'] = $this->t('Sample submitted successfully but you need to add full details');
 
     $form['message'] = [
       '#markup' => '<div class="messages messages--status">' .
-        '<p>' . $this->t('Your sample with Packet Reference Number <strong>@pack</strong> has been submitted successfully.', [
+        '<h1>' . $this->t('Your details have been successfully submitted for pack reference number : <b>@pack</b>', [
           '@pack' => $pack_reference_number,
-        ]) . '</p>' .
-        '<p>' . $this->t('What would you like to do next?') . '</p>' .
+        ]) . '</h1>' .
+        '<h2>' . $this->t('Please choose one of the options below.') . '</h2>' .
         '</div>',
       '#weight' => -10,
     ];
@@ -85,7 +85,7 @@ class AnonymousSampleOptionsForm extends FormBase {
     // Add Details Now button
     $form['actions']['add_details_now'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Add Details Now'),
+      '#value' => $this->t('Add More Details'),
       '#submit' => ['::addDetailsNow'],
       '#attributes' => [
         'class' => ['button--primary'],
@@ -95,7 +95,7 @@ class AnonymousSampleOptionsForm extends FormBase {
     // Add Details Later button
     $form['actions']['add_details_later'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Add Details Later'),
+      '#value' => $this->t('Add Later'),
       '#submit' => ['::addDetailsLater'],
     ];
 
