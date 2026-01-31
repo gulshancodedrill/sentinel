@@ -86,7 +86,7 @@ class ReportsController extends ControllerBase {
     }
     
     // Apply filters.
-    if (!empty($data['cids'])) {
+    if (empty($data['is_admin']) && !empty($data['cids'])) {
       $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
       $query->condition('sc.cid', $data['cids'], 'IN');
     }

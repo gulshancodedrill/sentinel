@@ -117,34 +117,40 @@ function _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $in
 
   if (!empty($date_from) && !empty($date_to)) {
     $current_user = \Drupal::currentUser();
-    
-    if (function_exists('sentinel_portal_entities_get_client_by_user')) {
-      $client = sentinel_portal_entities_get_client_by_user($current_user);
-    }
-    else {
-      $renderer = \Drupal::service('renderer');
-      return ['content' => $renderer->render($html), 'export_link' => $link];
-    }
+    $is_admin = $current_user->hasPermission('administer site configuration') || $current_user->hasRole('administrator');
 
-    if (!$client) {
-      $renderer = \Drupal::service('renderer');
-      return ['content' => $renderer->render($html), 'export_link' => $link];
-    }
-
-    if (function_exists('get_more_clients_based_client_cohorts')) {
-      $cids = get_more_clients_based_client_cohorts($client);
-    }
-    else {
+    if ($is_admin) {
       $cids = [];
     }
-    
-    $cids[] = $client->id();
+    else {
+      if (function_exists('sentinel_portal_entities_get_client_by_user')) {
+        $client = sentinel_portal_entities_get_client_by_user($current_user);
+      }
+      else {
+        $renderer = \Drupal::service('renderer');
+        return ['content' => $renderer->render($html), 'export_link' => $link];
+      }
 
-    // Get all pass and fail stats for the user.
+      if (!$client) {
+        $renderer = \Drupal::service('renderer');
+        return ['content' => $renderer->render($html), 'export_link' => $link];
+      }
+
+      if (function_exists('get_more_clients_based_client_cohorts')) {
+        $cids = get_more_clients_based_client_cohorts($client);
+      }
+      else {
+        $cids = [];
+      }
+
+      $cids[] = $client->id();
+    }
+
+    // Get all pass and fail stats for the user (admins see all).
     $data_passes = _sentinel_reports_get_pass_fail_stats($cids, [
       $date_from,
       $date_to,
-    ], $location, $installer_name);
+    ], $location, $installer_name, $is_admin);
     
     if (!empty($data_passes)) {
       // Build render array with data.
@@ -222,8 +228,8 @@ function _sentinel_reports_get_failure_analysis_output($date_from, $date_to, $in
  * @return array
  *   The result info of passes and fails.
  */
-function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $installer_name = '') {
-  if (empty($cids)) {
+function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $installer_name = '', $is_admin = FALSE) {
+  if (empty($cids) && !$is_admin) {
     return [];
   }
 
@@ -237,8 +243,10 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
   $query->addExpression('COUNT(CASE WHEN ss.pass_fail = 1 THEN 1 END)', 'total_passed');
   $query->addExpression('COUNT(CASE WHEN ss.pass_fail = 0 THEN 1 END)', 'total_failed');
 
-  $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
-  $query->condition('sc.cid', $cids, 'IN');
+  if (!$is_admin) {
+    $query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
+    $query->condition('sc.cid', $cids, 'IN');
+  }
 
   if (!empty($date_range)) {
     // Add time to dates to properly compare with datetime field.
@@ -263,8 +271,10 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
   $pids_query = $database->select('sentinel_sample', 'ss');
   $pids_query->fields('ss', ['pid']);
   
-  $pids_query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
-  $pids_query->condition('sc.cid', $cids, 'IN');
+  if (!$is_admin) {
+    $pids_query->leftJoin('sentinel_client', 'sc', 'sc.ucr = ss.ucr');
+    $pids_query->condition('sc.cid', $cids, 'IN');
+  }
   
   if (!empty($date_range)) {
     $pids_query->condition('ss.date_reported', [$date_from, $date_to], 'BETWEEN');
@@ -304,7 +314,7 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
       }
 
       try {
-        $category_stat_object = new $class_name($cids, $date_range, $location, $installer_name);
+      $category_stat_object = new $class_name($cids, $date_range, $location, $installer_name);
         $category_result_object = $category_stat_object->getResultObject();
         $pids[] = $category_stat_object->getPids();
         $segments[] = $category_result_object;
@@ -327,26 +337,28 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
     $key_all = \Drupal::service('uuid')->generate();
 
     \Drupal::cache()->set('sentinel_reports_' . $key_all, [
-      'cids' => $cids,
+      'cids' => $is_admin ? [] : $cids,
       'category' => 'all-samples',
       'date_from' => $date_range[0],
       'date_to' => $date_range[1],
       'location' => $location,
       'installer_name' => $installer_name,
       'pass_fail_filter' => NULL, // No filter - export all
+      'is_admin' => $is_admin,
     ], Cache::PERMANENT);
 
     // Create separate export key for FAILED samples only.
     $key_failed = \Drupal::service('uuid')->generate();
 
     \Drupal::cache()->set('sentinel_reports_' . $key_failed, [
-      'cids' => $cids,
+      'cids' => $is_admin ? [] : $cids,
       'category' => 'failed-samples',
       'date_from' => $date_range[0],
       'date_to' => $date_range[1],
       'location' => $location,
       'installer_name' => $installer_name,
       'pass_fail_filter' => 0, // Only failed samples
+      'is_admin' => $is_admin,
     ], Cache::PERMANENT);
 
     $overall_failed_object = (object) [
