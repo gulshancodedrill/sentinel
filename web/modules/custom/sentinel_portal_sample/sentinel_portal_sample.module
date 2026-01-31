@@ -11,24 +11,26 @@
 function sentinel_portal_sample_mail($key, &$message, $params) {
   switch ($key) {
     case 'anonymous_submission':
-      $message['subject'] = t('Your sample submission details');
+      $message['subject'] = t('Complete Your Submission – Sentinel Performance Solutions');
+
+      $code = $params['verification_code'] ?? '';
+      $details_url = $params['details_url'] ?? '';
+
+      $logo_url = \Drupal::service('file_url_generator')
+        ->generateAbsoluteString('public://image.png');
 
       $message['body'] = [
-        t('Thank you for submitting your sample.'),
-        '',
-        t('Verification code: @code', [
-          '@code' => $params['verification_code'] ?? '',
-        ]),
-        t('Sample details link: @url', [
-          '@url' => $params['details_url'] ?? '',
-        ]),
+        'Dear User,',
+        'Thank you for your submission.',
+        'To add additional details to your submission, please use the code below:',
+        'Verification Code: ' . $code,
+        'Click the link below to continue:',
+        $details_url,
+        'Sentinel Performance Solutions Ltd',
+        'United Kingdom',
+        'sentinelprotects.com',
+        'This is a system-generated message. Please do not reply.',
       ];
-
-      if (!empty($params['pack_reference_number'])) {
-        $message['body'][] = t('Pack reference number: @prn', [
-          '@prn' => $params['pack_reference_number'],
-        ]);
-      }
       break;
   }
 

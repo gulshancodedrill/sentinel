@@ -76,7 +76,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
     // Name field
     $form['name'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Name'),
+      '#title' => $this->t('Enter your Name:'),
       '#required' => TRUE,
       '#weight' => 10,
     ];
@@ -84,7 +84,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
     // Email field
     $form['email'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Email'),
+      '#title' => $this->t('Enter your email address to receive the report:'),
       '#description' => $this->t('You can enter multiple emails separated by ";" or ",".'),
       '#required' => TRUE,
       '#weight' => 20,
