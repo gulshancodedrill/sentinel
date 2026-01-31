@@ -235,8 +235,8 @@ function _sentinel_reports_get_pass_fail_stats($cids, $date_range, $location, $i
 
   $database = \Drupal::database();
   
-  // Set group_concat_max_len.
-  $database->query('SET SESSION group_concat_max_len = 18446744073709551615');
+  // Set group_concat_max_len (use max allowed by MySQL).
+  $database->query('SET SESSION group_concat_max_len = 4294967295');
 
   // First, get the counts.
   $query = $database->select('sentinel_sample', 'ss');
