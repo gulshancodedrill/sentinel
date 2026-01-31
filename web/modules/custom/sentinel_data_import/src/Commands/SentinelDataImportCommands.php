@@ -252,6 +252,112 @@ class SentinelDataImportCommands extends DrushCommands {
   }
 
   /**
+   * Enqueue sentinel_stat entities from a CSV export.
+   *
+   * @param string $csv_path
+   *   Absolute path to the CSV (use "default" for module CSV).
+   * @param array $options
+   *   CLI options.
+   *
+   * @command sentinel-data-import:enqueue-sentinel-stat
+   * @aliases sdi-ess
+   *
+   * @option start
+   *   Zero-based row index to start from (default 0).
+   * @option limit
+   *   Maximum rows to enqueue (0 = no limit).
+   *
+   * @validate-module-enabled sentinel_stats
+   */
+  public function enqueueSentinelStat(string $csv_path, array $options = ['start' => 0, 'limit' => 0]): void {
+    $csv_path = trim($csv_path);
+    $queue = $this->queueFactory->get('sentinel_stat_import');
+
+    if ($csv_path === '' || $csv_path === 'default') {
+      $csv_path = '/var/www/html/sentinel11/sentinel_stat_export_after_14582926.csv';
+    }
+    elseif ($csv_path[0] !== '/') {
+      $csv_path = DRUPAL_ROOT . '/' . ltrim($csv_path, '/');
+    }
+
+    $csv_path = $this->fileSystem->realpath($csv_path) ?: $csv_path;
+    if (!is_readable($csv_path)) {
+      throw new \RuntimeException(sprintf('CSV file not readable: %s', $csv_path));
+    }
+
+    $start = (int) ($options['start'] ?? 0);
+    $limit = (int) ($options['limit'] ?? 0);
+
+    $file = new \SplFileObject($csv_path);
+    $file->setFlags(\SplFileObject::READ_CSV | \SplFileObject::SKIP_EMPTY);
+
+    $headers = $file->fgetcsv();
+    if ($headers === FALSE) {
+      throw new \RuntimeException('Unable to read CSV header.');
+    }
+
+    $headers = array_map('trim', $headers);
+    $required_headers = [
+      'id',
+      'type',
+      'created',
+      'changed',
+      'pack_reference_id',
+      'element_name',
+      'individual_comment',
+      'recommendation',
+      'result_tid',
+    ];
+    $missing_headers = array_diff($required_headers, $headers);
+    if (!empty($missing_headers)) {
+      throw new \RuntimeException(sprintf('CSV missing required columns: %s', implode(', ', $missing_headers)));
+    }
+
+    $processed = 0;
+    $enqueued = 0;
+    $skipped = 0;
+
+    foreach ($file as $row_index => $row) {
+      if ($row === [NULL] || $row === FALSE) {
+        continue;
+      }
+      if ($row_index - 1 < $start) {
+        continue;
+      }
+      if ($limit > 0 && $enqueued >= $limit) {
+        break;
+      }
+
+      $record = [];
+      foreach ($headers as $position => $column) {
+        if ($column === '') {
+          continue;
+        }
+        $raw = $row[$position] ?? '';
+        $record[$column] = $this->normalizeCsvValue(is_string($raw) ? $raw : (string) $raw);
+      }
+
+      $id = isset($record['id']) ? (int) $record['id'] : 0;
+      if ($id <= 0 || empty($record['type'])) {
+        $skipped++;
+        continue;
+      }
+
+      $record['id'] = $id;
+      $queue->createItem($record);
+      $processed++;
+      $enqueued++;
+    }
+
+    $this->logger()->success(dt('Processed @processed rows, enqueued @enqueued sentinel_stat records (skipped @skipped).', [
+      '@processed' => $processed,
+      '@enqueued' => $enqueued,
+      '@skipped' => $skipped,
+    ]));
+    $this->logger()->notice("Run 'drush queue:run sentinel_stat_import' to process.");
+  }
+
+  /**
    * Enqueue all legacy file_managed records from a CSV.
    *
    * @param string $csv_path
