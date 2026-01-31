@@ -11,7 +11,7 @@ $host = 'localhost';
 $port = 3306;
 $username = 'root';
 $password = 'infotech';
-$database = 'prod';
+$database = 'prod30';
 
 $mysqli = new mysqli($host, $username, $password, $database, $port);
 if ($mysqli->connect_error) {
@@ -30,6 +30,7 @@ SELECT
   status,
   timestamp
 FROM file_managed
+WHERE fid > 878226
 ORDER BY fid
 SQL;
 

@@ -92,10 +92,10 @@ class FileManagedImporter {
 
     if ($destination_uri !== '') {
       // Ensure the destination directory exists when we have a target URI.
-      $this->fileSystem->prepareDirectory(
-        dirname($destination_uri),
-        FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS
-      );
+    $this->fileSystem->prepareDirectory(
+      dirname($destination_uri),
+      FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS
+    );
     }
 
     $storage = $this->entityTypeManager->getStorage('file');
@@ -260,9 +260,9 @@ class FileManagedImporter {
           }
           else {
             if ($destination_uri !== '') {
-              $file = File::create([
-                'uri' => $destination_uri,
-              ]);
+            $file = File::create([
+              'uri' => $destination_uri,
+            ]);
             }
           }
         }
@@ -323,11 +323,11 @@ class FileManagedImporter {
 
     // Register usage to prevent garbage collection.
     if ($file) {
-      $this->fileUsage->add($file, 'sentinel_data_import', 'file', $file->id());
-      $this->logger->notice('File @fid (@uri) processed and usage registered.', [
-        '@fid' => $file->id(),
-        '@uri' => $destination_uri,
-      ]);
+    $this->fileUsage->add($file, 'sentinel_data_import', 'file', $file->id());
+    $this->logger->notice('File @fid (@uri) processed and usage registered.', [
+      '@fid' => $file->id(),
+      '@uri' => $destination_uri,
+    ]);
     }
   }
 
