@@ -65,6 +65,7 @@ function _sentinel_reports_get_csv_export_headers() {
     'date_installed',
     'date_sent',
     'date_reported',
+    'pass_fail',
     'system_location',
     'property_number',
     'street',
