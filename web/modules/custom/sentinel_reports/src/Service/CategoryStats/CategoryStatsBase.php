@@ -96,7 +96,7 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
   protected function executeQuery(): void {
     // Ensure the connection can concat long strings of PIDs.
     try {
-      $this->database->query('SET SESSION group_concat_max_len = 18446744073709551615');
+      $this->database->query('SET SESSION group_concat_max_len = 4294967295');
       $result = $this->database->query($this->query, $this->arguments);
       $this->queryResult = $result ? (array) $result->fetchAssoc() : [];
     }
@@ -129,12 +129,12 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
       $arguments['location'] = '%' . $this->database->escapeLike($location) . '%';
     }
 
-    if (!empty($cids)) {
+    if (!empty($cids) && !\Drupal::currentUser()->hasPermission('sentinel view all sentinel_sample')) {
       $arguments['cids[]'] = $cids;
     }
 
-    $arguments['date_from'] = $date_from . ' 00:00:00';
-    $arguments['date_to'] = $date_to . ' 23:59:59';
+    $arguments['date_from'] = $date_from;
+    $arguments['date_to'] = $date_to;
 
     if (!empty($installer_name)) {
       $arguments['installer_name'] = '%' . $this->database->escapeLike($installer_name) . '%';
@@ -149,7 +149,7 @@ abstract class CategoryStatsBase implements CategoryStatsInterface {
   protected function getClientIdOrInstallerNameOrLocationConditions(): string {
     $conditions = '';
 
-    if (!empty($this->cids)) {
+    if (!empty($this->cids) && !\Drupal::currentUser()->hasPermission('sentinel view all sentinel_sample')) {
       $conditions .= ' AND (sc.cid IN (:cids[]))';
     }
 
