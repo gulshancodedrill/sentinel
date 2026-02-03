@@ -22,32 +22,32 @@ function sync_all_field_definitions() {
   $results[] = "=== Syncing All Field Definitions ===";
   $results[] = "";
   
-  // Fix Lab Data fields.
+  // Fix Lab Data entity type and fields.
   $results[] = "--- Lab Data ---";
   try {
-    $result = sync_entity_fields('lab_data');
+    $result = sync_entity_type_and_fields('lab_data');
     $results[] = $result;
   }
   catch (\Exception $e) {
     $results[] = "ERROR: " . $e->getMessage();
   }
   
-  // Fix Sentinel Notice.
+  // Fix Sentinel Notice entity type and fields.
   $results[] = "";
   $results[] = "--- Sentinel Notice ---";
   try {
-    $result = sync_entity_type('sentinel_notice');
+    $result = sync_entity_type_and_fields('sentinel_notice');
     $results[] = $result;
   }
   catch (\Exception $e) {
     $results[] = "ERROR: " . $e->getMessage();
   }
   
-  // Fix Sentinel Sample.
+  // Fix Sentinel Sample entity type and fields.
   $results[] = "";
   $results[] = "--- Sentinel Sample ---";
   try {
-    $result = sync_entity_fields('sentinel_sample');
+    $result = sync_entity_type_and_fields('sentinel_sample');
     $results[] = $result;
   }
   catch (\Exception $e) {
@@ -108,11 +108,13 @@ function sync_entity_fields($entity_type_id) {
 }
 
 /**
- * Sync entity type definition.
+ * Sync entity type definition and all field definitions.
  */
-function sync_entity_type($entity_type_id) {
+function sync_entity_type_and_fields($entity_type_id) {
   /** @var EntityTypeManagerInterface $entity_type_manager */
   $entity_type_manager = \Drupal::service('entity_type.manager');
+  /** @var EntityFieldManagerInterface $field_manager */
+  $field_manager = \Drupal::service('entity_field.manager');
   /** @var \Drupal\Core\Entity\EntityLastInstalledSchemaRepositoryInterface $schema_repository */
   $schema_repository = \Drupal::service('entity.last_installed_schema.repository');
   
@@ -121,11 +123,40 @@ function sync_entity_type($entity_type_id) {
     return "Entity type not found.";
   }
   
-  // Sync entity type definition.
+  // Sync entity type definition first.
   $schema_repository->setLastInstalledDefinition($definition);
   
-  // Also sync all field definitions.
-  return sync_entity_fields($entity_type_id);
+  // Get ALL current field storage definitions.
+  $current_definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+  
+  // Sync ALL field definitions to last installed repository.
+  $schema_repository->setLastInstalledFieldStorageDefinitions($entity_type_id, $current_definitions);
+  
+  // Clear all schema caches for this entity type.
+  $cache = \Drupal::keyValue('entity.storage_schema.sql');
+  $all_keys = $cache->getAll();
+  $deleted = 0;
+  foreach ($all_keys as $key => $value) {
+    if (strpos($key, "{$entity_type_id}.") === 0) {
+      $cache->delete($key);
+      $deleted++;
+    }
+  }
+  
+  // Clear entity definition caches.
+  $update_cache = \Drupal::keyValue('entity.definitions.installed');
+  $update_cache->delete("entity_type_definitions:{$entity_type_id}");
+  $update_cache->delete("field_storage_definitions:{$entity_type_id}");
+  
+  // Clear change list cache.
+  $change_list_cache = \Drupal::keyValue('entity.definition_updates');
+  $change_list_cache->delete($entity_type_id);
+  
+  // Clear entity type manager cache.
+  $entity_type_manager->clearCachedDefinitions();
+  $field_manager->clearCachedFieldDefinitions();
+  
+  return "Synced entity type and " . count($current_definitions) . " field definitions. Cleared {$deleted} schema cache entries.";
 }
 
 // Execute if run directly.
