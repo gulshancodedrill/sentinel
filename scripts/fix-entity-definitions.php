@@ -302,12 +302,41 @@ function fix_sentinel_sample_fields() {
         $updated[] = $field_name;
       }
       catch (\Exception $e) {
-        // Update might fail if definitions match - that's okay, but we still need to sync.
-        \Drupal::logger('fix_entity_definitions')->info('Field @field update attempted: @msg', [
-          '@field' => $field_name,
-          '@msg' => $e->getMessage(),
-        ]);
-        $updated[] = $field_name . ' (synced)';
+        // Update might fail if original definition is missing or there's a mismatch.
+        // Try to get the last installed definition and use it for comparison.
+        $last_def = $last_installed_definitions[$field_name];
+        
+        // If the exception suggests the original is missing, we need to reinstall.
+        if (strpos($e->getMessage(), 'null') !== FALSE || strpos($e->getMessage(), 'original') !== FALSE) {
+          // Original definition is missing, try to reinstall.
+          try {
+            $provider = 'sentinel_portal_entities';
+            if (in_array($field_name, $entity_reference_fields)) {
+              $field_config = \Drupal::config("field.storage.{$entity_type_id}.{$field_name}");
+              if (!$field_config->isNew()) {
+                $provider = $field_config->get('module') ?: 'sentinel_addresses';
+              }
+            }
+            $update_manager->installFieldStorageDefinition($field_name, $entity_type_id, $provider, $field_definition);
+            $updated[] = $field_name . ' (reinstalled)';
+          }
+          catch (\Exception $e2) {
+            // If reinstall fails, log and continue - we'll sync at the end.
+            \Drupal::logger('fix_entity_definitions')->warning('Field @field could not be reinstalled: @msg', [
+              '@field' => $field_name,
+              '@msg' => $e2->getMessage(),
+            ]);
+            $updated[] = $field_name . ' (will sync)';
+          }
+        }
+        else {
+          // Other error - log it but continue.
+          \Drupal::logger('fix_entity_definitions')->info('Field @field update: @msg', [
+            '@field' => $field_name,
+            '@msg' => $e->getMessage(),
+          ]);
+          $updated[] = $field_name . ' (will sync)';
+        }
       }
     }
     else {
@@ -396,9 +425,55 @@ function fix_sentinel_sample_fields() {
     // Get all current field storage definitions (including any we just installed/updated).
     $current_definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
     
+    // For each field that needs updating, ensure it's properly registered.
+    // Sometimes updateFieldStorageDefinition fails silently, so we force re-register.
+    foreach ($all_fields_to_update as $field_name) {
+      if (isset($current_definitions[$field_name])) {
+        $field_def = $current_definitions[$field_name];
+        
+        // Try to force update by uninstalling and reinstalling if update fails.
+        // This ensures the definition is properly registered.
+        if (isset($last_installed_definitions[$field_name])) {
+          // Field exists in both, but might have differences.
+          // Force update by calling updateFieldStorageDefinition with proper error handling.
+          try {
+            $update_manager->updateFieldStorageDefinition($field_def);
+          }
+          catch (\Exception $e) {
+            // If update fails, the definitions might be identical but Drupal still detects differences.
+            // In this case, we'll rely on setLastInstalledFieldStorageDefinitions below.
+            \Drupal::logger('fix_entity_definitions')->debug('Field @field update: @msg', [
+              '@field' => $field_name,
+              '@msg' => $e->getMessage(),
+            ]);
+          }
+        }
+      }
+    }
+    
     // Update the last installed definitions to match current state.
     // This is the key step that fixes the status report mismatches.
     $schema_repository->setLastInstalledFieldStorageDefinitions($entity_type_id, $current_definitions);
+    
+    // Also clear the entity storage schema cache which might be caching old definitions.
+    $cache = \Drupal::keyValue('entity.storage_schema.sql');
+    foreach ($current_definitions as $field_name => $field_def) {
+      $cache_key = "{$entity_type_id}.{$field_name}";
+      $cache->delete($cache_key);
+    }
+    
+    // Force update each field's storage definition one more time to ensure schema is updated.
+    foreach ($all_fields_to_update as $field_name) {
+      if (isset($current_definitions[$field_name])) {
+        try {
+          // This should now work since we've synced the last installed definitions.
+          $update_manager->updateFieldStorageDefinition($current_definitions[$field_name]);
+        }
+        catch (\Exception $e) {
+          // Ignore errors here - we've already synced the definitions.
+        }
+      }
+    }
     
     \Drupal::logger('fix_entity_definitions')->info('Synced all field storage definitions for @entity to last installed repository', [
       '@entity' => $entity_type_id,
@@ -415,7 +490,11 @@ function fix_sentinel_sample_fields() {
   $field_manager->clearCachedFieldDefinitions();
   \Drupal::service('cache.entity')->deleteAll();
   \Drupal::service('cache.discovery')->deleteAll();
+  \Drupal::service('cache.bootstrap')->deleteAll();
   $entity_type_manager->clearCachedDefinitions();
+  
+  // Force rebuild of entity type definitions.
+  \Drupal::service('entity_type.listener')->onEntityTypeUpdate($definition, $definition);
   
   $message = [];
   if (!empty($updated)) {
