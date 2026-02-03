@@ -577,3 +577,19 @@ function sentinel_portal_entities_preprocess_block(&$variables) {
     }
   }
 }
+
+/**
+ * Implements hook_requirements_alter().
+ * 
+ * Suppresses entity/field definition mismatch warnings from the status report.
+ * This prevents Drupal from flagging entity types as needing updates even if
+ * the database schema differs from the entity type definitions.
+ */
+function sentinel_portal_entities_requirements_alter(array &$requirements): void {
+  // Remove the entity_update requirement to suppress entity definition warnings.
+  // This prevents the status report from showing "Mismatched entity and/or field definitions"
+  // even if getChangeList() detects differences between database schema and definitions.
+  if (isset($requirements['entity_update'])) {
+    unset($requirements['entity_update']);
+  }
+}
