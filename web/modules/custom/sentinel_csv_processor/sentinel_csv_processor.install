@@ -47,3 +47,79 @@ function sentinel_csv_processor_update_8001(&$sandbox) {
   return t('Added process_type and ftp_file_updated fields to lab_data table.');
 }
 
+/**
+ * Register process_type and ftp_file_updated field storage definitions.
+ * 
+ * These fields exist in the database but need to be registered with
+ * Drupal's entity field storage system.
+ */
+function sentinel_csv_processor_update_8002() {
+  $entity_type_id = 'lab_data';
+  
+  /** @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface $update_manager */
+  $update_manager = \Drupal::service('entity.definition_update_manager');
+  /** @var \Drupal\Core\Entity\EntityFieldManagerInterface $field_manager */
+  $field_manager = \Drupal::service('entity_field.manager');
+  /** @var \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager */
+  $entity_type_manager = \Drupal::service('entity_type.manager');
+  
+  // Ensure entity type is up to date first.
+  $definition = $entity_type_manager->getDefinition($entity_type_id, FALSE);
+  if ($definition) {
+    try {
+      $update_manager->updateEntityType($definition);
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('sentinel_csv_processor')->error('Error updating entity type: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+    }
+  }
+  
+  $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+  $fields_to_install = ['process_type', 'ftp_file_updated'];
+  $installed = [];
+  $errors = [];
+  
+  foreach ($fields_to_install as $field_name) {
+    if (!isset($definitions[$field_name])) {
+      $errors[] = $field_name . ': field definition not found';
+      continue;
+    }
+    
+    $definition = $definitions[$field_name];
+    
+    try {
+      $update_manager->installFieldStorageDefinition($field_name, $entity_type_id, 'sentinel_csv_processor', $definition);
+      $installed[] = $field_name;
+    }
+    catch (\Exception $e) {
+      // Field might already be installed, try to update instead.
+      try {
+        $update_manager->updateFieldStorageDefinition($definition);
+        $installed[] = $field_name . ' (updated)';
+      }
+      catch (\Exception $e2) {
+        $errors[] = $field_name . ': ' . $e2->getMessage();
+        \Drupal::logger('sentinel_csv_processor')->error('Could not install/update field @field: @msg', [
+          '@field' => $field_name,
+          '@msg' => $e2->getMessage(),
+        ]);
+      }
+    }
+  }
+  
+  // Clear caches.
+  $field_manager->clearCachedFieldDefinitions();
+  \Drupal::service('cache.entity')->deleteAll();
+  
+  $message = [];
+  if (!empty($installed)) {
+    $message[] = t('Installed/updated fields: @fields', ['@fields' => implode(', ', $installed)]);
+  }
+  if (!empty($errors)) {
+    $message[] = t('Errors: @errors', ['@errors' => implode('; ', $errors)]);
+  }
+  
+  return !empty($message) ? implode(' ', $message) : t('No fields were installed.');
+}
