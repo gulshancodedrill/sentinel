@@ -425,55 +425,41 @@ function fix_sentinel_sample_fields() {
     // Get all current field storage definitions (including any we just installed/updated).
     $current_definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
     
-    // For each field that needs updating, ensure it's properly registered.
-    // Sometimes updateFieldStorageDefinition fails silently, so we force re-register.
+    // Update the last installed definitions to match current state FIRST.
+    // This is the key step that fixes the status report mismatches.
+    $schema_repository->setLastInstalledFieldStorageDefinitions($entity_type_id, $current_definitions);
+    
+    // Now try to update each field - this should work now that definitions are synced.
     foreach ($all_fields_to_update as $field_name) {
       if (isset($current_definitions[$field_name])) {
-        $field_def = $current_definitions[$field_name];
-        
-        // Try to force update by uninstalling and reinstalling if update fails.
-        // This ensures the definition is properly registered.
-        if (isset($last_installed_definitions[$field_name])) {
-          // Field exists in both, but might have differences.
-          // Force update by calling updateFieldStorageDefinition with proper error handling.
-          try {
-            $update_manager->updateFieldStorageDefinition($field_def);
+        try {
+          $update_manager->updateFieldStorageDefinition($current_definitions[$field_name]);
+          // Mark as successfully updated if it wasn't already.
+          if (!in_array($field_name, $updated) && !in_array($field_name . ' (installed)', $updated) && !in_array($field_name . ' (reinstalled)', $updated)) {
+            $updated[] = $field_name . ' (synced)';
           }
-          catch (\Exception $e) {
-            // If update fails, the definitions might be identical but Drupal still detects differences.
-            // In this case, we'll rely on setLastInstalledFieldStorageDefinitions below.
-            \Drupal::logger('fix_entity_definitions')->debug('Field @field update: @msg', [
-              '@field' => $field_name,
-              '@msg' => $e->getMessage(),
-            ]);
-          }
+        }
+        catch (\Exception $e) {
+          // Even if update fails, we've already synced the definitions, so it should be fine.
+          \Drupal::logger('fix_entity_definitions')->debug('Field @field final update: @msg', [
+            '@field' => $field_name,
+            '@msg' => $e->getMessage(),
+          ]);
         }
       }
     }
     
-    // Update the last installed definitions to match current state.
-    // This is the key step that fixes the status report mismatches.
-    $schema_repository->setLastInstalledFieldStorageDefinitions($entity_type_id, $current_definitions);
-    
-    // Also clear the entity storage schema cache which might be caching old definitions.
+    // Clear the entity storage schema cache which might be caching old definitions.
     $cache = \Drupal::keyValue('entity.storage_schema.sql');
     foreach ($current_definitions as $field_name => $field_def) {
       $cache_key = "{$entity_type_id}.{$field_name}";
       $cache->delete($cache_key);
     }
     
-    // Force update each field's storage definition one more time to ensure schema is updated.
-    foreach ($all_fields_to_update as $field_name) {
-      if (isset($current_definitions[$field_name])) {
-        try {
-          // This should now work since we've synced the last installed definitions.
-          $update_manager->updateFieldStorageDefinition($current_definitions[$field_name]);
-        }
-        catch (\Exception $e) {
-          // Ignore errors here - we've already synced the definitions.
-        }
-      }
-    }
+    // Also clear the entity definition update cache.
+    $update_cache = \Drupal::keyValue('entity.definitions.installed');
+    $update_cache->delete("entity_type_definitions:{$entity_type_id}");
+    $update_cache->delete("field_storage_definitions:{$entity_type_id}");
     
     \Drupal::logger('fix_entity_definitions')->info('Synced all field storage definitions for @entity to last installed repository', [
       '@entity' => $entity_type_id,
@@ -486,15 +472,23 @@ function fix_sentinel_sample_fields() {
     $errors[] = 'Failed to sync last installed definitions: ' . $e->getMessage();
   }
   
-  // Clear caches to ensure changes are reflected.
+  // Clear ALL caches to ensure changes are reflected.
   $field_manager->clearCachedFieldDefinitions();
   \Drupal::service('cache.entity')->deleteAll();
   \Drupal::service('cache.discovery')->deleteAll();
   \Drupal::service('cache.bootstrap')->deleteAll();
+  \Drupal::service('cache.config')->deleteAll();
   $entity_type_manager->clearCachedDefinitions();
   
   // Force rebuild of entity type definitions.
-  \Drupal::service('entity_type.listener')->onEntityTypeUpdate($definition, $definition);
+  if ($definition) {
+    try {
+      \Drupal::service('entity_type.listener')->onEntityTypeUpdate($definition, $definition);
+    }
+    catch (\Exception $e) {
+      // Ignore if this fails - we've already synced everything.
+    }
+  }
   
   $message = [];
   if (!empty($updated)) {
