@@ -1744,6 +1744,22 @@ class SentinelSampleForm extends ContentEntityForm {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+    // Store original email values before any updates to detect changes
+    $original_installer_email = '';
+    $original_company_email = '';
+    
+    if ($this->entity->hasField('installer_email') && !$this->entity->get('installer_email')->isEmpty()) {
+      $original_installer_email = $this->entity->get('installer_email')->value ?? '';
+    }
+    
+    if ($this->entity->hasField('company_email') && !$this->entity->get('company_email')->isEmpty()) {
+      $original_company_email = $this->entity->get('company_email')->value ?? '';
+    }
+    
+    // Store in form state for later use in save()
+    $form_state->set('original_installer_email', $original_installer_email);
+    $form_state->set('original_company_email', $original_company_email);
+    
     parent::submitForm($form, $form_state);
 
     // Update Pack Reference Number
@@ -1928,6 +1944,10 @@ class SentinelSampleForm extends ContentEntityForm {
       $entity->set('updated', $current_time);
     }
     
+    // Get original email values before save
+    $original_installer_email = $form_state->get('original_installer_email') ?? '';
+    $original_company_email = $form_state->get('original_company_email') ?? '';
+    
     $status = parent::save($form, $form_state);
 
     switch ($status) {
@@ -1941,6 +1961,61 @@ class SentinelSampleForm extends ContentEntityForm {
         $this->messenger()->addMessage($this->t('Saved the %label Sentinel sample.', [
           '%label' => $entity->label(),
         ]));
+    }
+
+    // Check if emails changed and send report if they did
+    if (!$entity->isNew()) {
+      $new_installer_email = '';
+      $new_company_email = '';
+      
+      if ($entity->hasField('installer_email') && !$entity->get('installer_email')->isEmpty()) {
+        $new_installer_email = $entity->get('installer_email')->value ?? '';
+      }
+      
+      if ($entity->hasField('company_email') && !$entity->get('company_email')->isEmpty()) {
+        $new_company_email = $entity->get('company_email')->value ?? '';
+      }
+      
+      // Normalize empty strings for comparison
+      $original_installer_email = $original_installer_email ?? '';
+      $original_company_email = $original_company_email ?? '';
+      $new_installer_email = $new_installer_email ?? '';
+      $new_company_email = $new_company_email ?? '';
+      
+      // Check if either email changed
+      $installer_email_changed = ($original_installer_email !== $new_installer_email);
+      $company_email_changed = ($original_company_email !== $new_company_email);
+      
+      if ($installer_email_changed || $company_email_changed) {
+        // Reload entity to ensure we have the latest saved version
+        $entity = \Drupal::entityTypeManager()->getStorage('sentinel_sample')->load($entity->id());
+        
+        if ($entity && function_exists('_sentinel_portal_queue_process_email')) {
+          try {
+            $result = _sentinel_portal_queue_process_email($entity, 'report');
+            
+            if ($result) {
+              $this->getLogger('sentinel_portal_entities')->info('Sample entity mail sent automatically after email update! @id', [
+                '@id' => $entity->id(),
+              ]);
+              $this->messenger()->addStatus($this->t('Report emailed to updated email address(es).'));
+            }
+            else {
+              $this->getLogger('sentinel_portal_entities')->warning('Failed to send entity mail automatically after email update! @id', [
+                '@id' => $entity->id(),
+              ]);
+              $this->messenger()->addError($this->t('Report failed to email.'));
+            }
+          }
+          catch (\Throwable $e) {
+            $this->getLogger('sentinel_portal_entities')->error('Failed to send sample report email automatically after email update for @id: @message', [
+              '@id' => $entity->id(),
+              '@message' => $e->getMessage(),
+            ]);
+            $this->messenger()->addError($this->t('Report failed to email.'));
+          }
+        }
+      }
     }
 
     $form_state->setRedirectUrl($entity->toUrl('canonical'));
