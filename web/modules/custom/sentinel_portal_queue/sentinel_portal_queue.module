@@ -647,9 +647,24 @@ function _sentinel_portal_queue_process_email($sample_entity, $type) {
     return FALSE;
   }
 
+  $sample_id = method_exists($sample_entity, 'id') ? $sample_entity->id() : 'unknown';
+  $pack_reference = sentinel_portal_queue_get_sample_value($sample_entity, 'pack_reference_number') ?? 'Unknown';
+  $installer_email = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_email');
+  $company_email = sentinel_portal_queue_get_sample_value($sample_entity, 'company_email');
+  
   $email_payload = sentinel_portal_queue_build_email_payload($sample_entity);
   if (!$email_payload) {
-    \Drupal::logger('sentinel_portal_queue')->error('Unable to build email payload for sample @id', ['@id' => method_exists($sample_entity, 'id') ? $sample_entity->id() : 'unknown']);
+    // Error details are already logged in sentinel_portal_queue_build_email_payload()
+    // but we add context here for the calling function
+    \Drupal::logger('sentinel_portal_queue')->error(
+      'Unable to build email payload for sample @id (pack: @pack). installer_email: @installer, company_email: @company',
+      [
+        '@id' => $sample_id,
+        '@pack' => $pack_reference,
+        '@installer' => $installer_email ?: '(empty)',
+        '@company' => $company_email ?: '(empty)',
+      ]
+    );
     return FALSE;
   }
 
@@ -683,9 +698,6 @@ function sentinel_portal_queue_get_pdf_info($sample_entity) {
   // This ensures the PDF contains the latest sample data when sent via queue.
   if (method_exists($sample_entity, 'deleteExistingPdf')) {
     $sample_entity->deleteExistingPdf();
-    \Drupal::logger('sentinel_portal_queue')->info('Deleted existing PDF for sample @id before generating new one for queue processing.', [
-      '@id' => method_exists($sample_entity, 'id') ? $sample_entity->id() : 'unknown',
-    ]);
   }
 
   // Generate a new PDF (GetPDF will call SavePdf if no file exists).
@@ -760,8 +772,17 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
   else {
     $installer_email = sentinel_portal_queue_get_sample_value($sample_entity, 'installer_email');
     $company_email = sentinel_portal_queue_get_sample_value($sample_entity, 'company_email');
+    $sample_id = method_exists($sample_entity, 'id') ? $sample_entity->id() : 'unknown';
+    $pack_reference = sentinel_portal_queue_get_sample_value($sample_entity, 'pack_reference_number') ?? 'Unknown';
 
     if (empty($installer_email) && empty($company_email)) {
+      \Drupal::logger('sentinel_portal_queue')->warning(
+        'Unable to build email payload for sample @id (pack: @pack): No email addresses found (installer_email and company_email both empty)',
+        [
+          '@id' => $sample_id,
+          '@pack' => $pack_reference,
+        ]
+      );
       return FALSE;
     }
 
@@ -770,6 +791,15 @@ function sentinel_portal_queue_build_email_payload($sample_entity) {
       $company_email,
     ]);
     if (empty($recipients)) {
+      \Drupal::logger('sentinel_portal_queue')->warning(
+        'Unable to build email payload for sample @id (pack: @pack): All email addresses filtered out. installer_email: @installer, company_email: @company',
+        [
+          '@id' => $sample_id,
+          '@pack' => $pack_reference,
+          '@installer' => $installer_email ?: '(empty)',
+          '@company' => $company_email ?: '(empty)',
+        ]
+      );
       return FALSE;
     }
   }

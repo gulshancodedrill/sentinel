@@ -1990,7 +1990,14 @@ class SentinelSampleForm extends ContentEntityForm {
         // Reload entity to ensure we have the latest saved version
         $entity = \Drupal::entityTypeManager()->getStorage('sentinel_sample')->load($entity->id());
         
-        if ($entity && function_exists('_sentinel_portal_queue_process_email')) {
+        // Check if pass_fail is set (not NULL) before sending email
+        $pass_fail = NULL;
+        if ($entity && $entity->hasField('pass_fail') && !$entity->get('pass_fail')->isEmpty()) {
+          $pass_fail = $entity->get('pass_fail')->value;
+        }
+        
+        // Only send email if pass_fail is not NULL
+        if ($pass_fail !== NULL && $entity && function_exists('_sentinel_portal_queue_process_email')) {
           try {
             $result = _sentinel_portal_queue_process_email($entity, 'report');
             
@@ -2014,6 +2021,12 @@ class SentinelSampleForm extends ContentEntityForm {
             ]);
             $this->messenger()->addError($this->t('Report failed to email.'));
           }
+        }
+        elseif ($pass_fail === NULL && $entity) {
+          $this->getLogger('sentinel_portal_entities')->info(
+            'Email update detected for sample @id but pass_fail is NULL. Skipping email send.',
+            ['@id' => $entity->id()]
+          );
         }
       }
     }
