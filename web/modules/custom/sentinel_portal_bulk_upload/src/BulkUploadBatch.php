@@ -23,8 +23,26 @@ class BulkUploadBatch {
    *   The current batch context.
    */
   public static function processFile($file, $header_line, $client, &$context) {
-    // Hint to allow more memory; system config should be authoritative.
-    @ini_set('memory_limit', '2048M');
+    // Try to increase memory limit if needed
+    $current_limit = ini_get('memory_limit');
+    $current_bytes = self::memoryToBytes($current_limit);
+    $target_bytes = 2 * 1024 * 1024 * 1024; // 2GB
+    
+    if ($current_bytes < $target_bytes) {
+      $result = @ini_set('memory_limit', '2048M');
+      if ($result === FALSE) {
+        \Drupal::logger('sentinel_portal_bulk_upload')->warning(
+          'Could not increase memory limit. Current: @current. Processing will continue with current limit.',
+          ['@current' => $current_limit]
+        );
+      }
+      else {
+        \Drupal::logger('sentinel_portal_bulk_upload')->info(
+          'Memory limit increased from @old to @new',
+          ['@old' => $current_limit, '@new' => ini_get('memory_limit')]
+        );
+      }
+    }
 
     if (!isset($context['sandbox']['offset'])) {
       $context['sandbox']['offset'] = 0;
@@ -238,6 +256,13 @@ class BulkUploadBatch {
       // Free memory aggressively for this iteration.
       unset($data, $line, $errors);
       gc_collect_cycles();
+      
+      // Clear entity caches periodically to prevent memory accumulation
+      if ($context['sandbox']['records'] % 50 == 0) {
+        \Drupal::entityTypeManager()->getStorage('sentinel_sample')->resetCache();
+        \Drupal::entityTypeManager()->getStorage('sentinel_client')->resetCache();
+        gc_collect_cycles();
+      }
     }
 
     $context['sandbox']['offset'] = ftell($fp);
@@ -536,6 +561,11 @@ class BulkUploadBatch {
         }
       }
       
+      // Clear client cache after loading to prevent accumulation
+      if ($client) {
+        $storage->resetCache([$client->id()]);
+      }
+      
       return $client;
     }
     else {
@@ -558,6 +588,9 @@ class BulkUploadBatch {
       }
       
       $client->save();
+      
+      // Clear client cache after creating to prevent accumulation
+      $storage->resetCache([$client->id()]);
       
       return $client;
     }
@@ -642,6 +675,19 @@ class BulkUploadBatch {
 
       // Sample exists - update it
       // For bulk upload, always allow updates (trusted operation from authenticated users)
+      
+      // Store original email values before update to detect changes
+      $original_installer_email = '';
+      $original_company_email = '';
+      
+      if ($sample->hasField('installer_email') && !$sample->get('installer_email')->isEmpty()) {
+        $original_installer_email = $sample->get('installer_email')->value ?? '';
+      }
+      
+      if ($sample->hasField('company_email') && !$sample->get('company_email')->isEmpty()) {
+        $original_company_email = $sample->get('company_email')->value ?? '';
+      }
+      
       // Update all fields from CSV data
       if (function_exists('sentinel_portal_entities_update_sample')) {
         sentinel_portal_entities_update_sample($sample, $data);
@@ -702,6 +748,69 @@ class BulkUploadBatch {
           if ($needs_save) {
             $updated_sample->save();
           }
+          
+          // Check if emails changed by comparing CSV data with original emails
+          // Get new emails from $data array (CSV values) instead of reloaded entity
+          $new_installer_email = isset($data['installer_email']) ? trim((string) $data['installer_email']) : '';
+          $new_company_email = isset($data['company_email']) ? trim((string) $data['company_email']) : '';
+          
+          // Normalize empty strings for comparison
+          $original_installer_email = $original_installer_email ?? '';
+          $original_company_email = $original_company_email ?? '';
+          $new_installer_email = $new_installer_email ?? '';
+          $new_company_email = $new_company_email ?? '';
+          
+          // Check if either email changed
+          $installer_email_changed = ($original_installer_email !== $new_installer_email);
+          $company_email_changed = ($original_company_email !== $new_company_email);
+          
+          if ($installer_email_changed || $company_email_changed) {
+            // Check if pass_fail is set (not NULL) before sending email
+            $pass_fail = NULL;
+            if ($updated_sample->hasField('pass_fail') && !$updated_sample->get('pass_fail')->isEmpty()) {
+              $pass_fail = $updated_sample->get('pass_fail')->value;
+            }
+            
+            // Only send email if pass_fail is not NULL
+            if ($pass_fail !== NULL && function_exists('_sentinel_portal_queue_process_email')) {
+              try {
+                // Reload entity to ensure we have the latest saved version
+                $final_sample = $sample_storage->load($updated_sample->id());
+                
+                if ($final_sample) {
+                  $result = _sentinel_portal_queue_process_email($final_sample, 'report');
+                  
+                  if ($result) {
+                    \Drupal::logger('sentinel_portal_bulk_upload')->info(
+                      'Sample entity mail sent automatically after email update during bulk upload. Sample ID: @id',
+                      ['@id' => $final_sample->id()]
+                    );
+                  }
+                  else {
+                    \Drupal::logger('sentinel_portal_bulk_upload')->warning(
+                      'Failed to send entity mail automatically after email update during bulk upload. Sample ID: @id',
+                      ['@id' => $final_sample->id()]
+                    );
+                  }
+                }
+              }
+              catch (\Throwable $e) {
+                \Drupal::logger('sentinel_portal_bulk_upload')->error(
+                  'Failed to send sample report email automatically after email update during bulk upload for @id: @message',
+                  [
+                    '@id' => $updated_sample->id(),
+                    '@message' => $e->getMessage(),
+                  ]
+                );
+              }
+            }
+            elseif ($pass_fail === NULL) {
+              \Drupal::logger('sentinel_portal_bulk_upload')->info(
+                'Email update detected for sample @id but pass_fail is NULL. Skipping email send.',
+                ['@id' => $updated_sample->id()]
+              );
+            }
+          }
         }
       }
     }
@@ -715,6 +824,10 @@ class BulkUploadBatch {
 
     // free sample and other temporaries.
     unset($sample);
+    
+    // Clear entity caches to prevent memory accumulation
+    \Drupal::entityTypeManager()->getStorage('sentinel_sample')->resetCache();
+    \Drupal::entityTypeManager()->getStorage('sentinel_client')->resetCache();
     gc_collect_cycles();
   }
 
@@ -722,6 +835,29 @@ class BulkUploadBatch {
    * If memory usage is above a safe threshold, return TRUE to indicate pressure.
    */
   protected static function isMemoryUnderPressure(): bool {
+    $memory_limit = ini_get('memory_limit');
+    $memory_limit_bytes = self::memoryToBytes($memory_limit);
+    $memory_peak = memory_get_peak_usage(TRUE);
+    
+    // If memory limit is unlimited (-1), we can't determine pressure
+    if ($memory_limit_bytes <= 0) {
+      return FALSE;
+    }
+    
+    // Check if memory usage exceeds 80% threshold
+    $usage_percent = $memory_peak / $memory_limit_bytes;
+    if ($usage_percent > 0.80) {
+      \Drupal::logger('sentinel_portal_bulk_upload')->warning(
+        'Memory pressure detected: @used/@limit (@percent%). Deferring row to queue.',
+        [
+          '@used' => number_format($memory_peak / 1024 / 1024, 2) . 'MB',
+          '@limit' => number_format($memory_limit_bytes / 1024 / 1024, 2) . 'MB',
+          '@percent' => number_format($usage_percent * 100, 1) . '%',
+        ]
+      );
+      return TRUE;
+    }
+    
     return FALSE;
   }
 
