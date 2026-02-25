@@ -630,7 +630,10 @@ class SentinelSampleForm extends ContentEntityForm {
       $form['ucr']['#title'] = $this->t('The UCR');
       $form['ucr']['#description'] = $this->t('The unique customer record.');
     }
-
+    // The UCR - directly placed between updated and sample hold state
+    if (isset($form['ucr'])) {
+      $form['ucr']['#access'] = FALSE;
+    }
     // Sample hold state
     $form['sentinel_sample_hold_state_target_id'] = [
       '#type' => 'select',
@@ -1788,8 +1791,8 @@ class SentinelSampleForm extends ContentEntityForm {
     // Update Customer ID
     if ($this->entity->hasField('customer_id')) {
       $customer_id = $form_state->getValue('customer_id');
-      if ($customer_id !== NULL) {
-        $this->entity->set('customer_id', (string) $customer_id);
+      if (!empty($customer_id[0]['value'])) {
+        $this->entity->set('customer_id', $customer_id[0]['value']);
       }
     }
 
@@ -1929,6 +1932,234 @@ class SentinelSampleForm extends ContentEntityForm {
     }
     else {
       $this->entity->set('sentinel_sample_hold_state_target_id', (int) $hold_state);
+    }
+
+    // Find or create client by email and update UCR, client_id, and client_name
+    // Get email values from entity (after they've been updated)
+    $installer_email = '';
+    $company_email = '';
+    
+    if ($this->entity->hasField('installer_email') && !$this->entity->get('installer_email')->isEmpty()) {
+      $installer_email = $this->entity->get('installer_email')->value ?? '';
+    }
+    
+    if ($this->entity->hasField('company_email') && !$this->entity->get('company_email')->isEmpty()) {
+      $company_email = $this->entity->get('company_email')->value ?? '';
+    }
+    
+    // Get installer_name and company_name from form state
+    $installer_name = $form_state->getValue('installer_name') ?? '';
+    $company_name = $form_state->getValue('company_name') ?? '';
+    
+    // Get fallback client (current user's client)
+    $fallback_client = NULL;
+    if (function_exists('sentinel_portal_entities_get_client_by_user')) {
+      $fallback_client = sentinel_portal_entities_get_client_by_user(\Drupal::currentUser());
+      if ($fallback_client === FALSE) {
+        $fallback_client = NULL;
+      }
+    }
+    
+    // Find or create client by email
+    $client_entity = $this->findOrCreateClientByEmail(
+      $installer_email,
+      $company_email,
+      $installer_name,
+      $company_name,
+      $fallback_client
+    );
+    
+    if ($client_entity) {
+      // Get UCR value - use getRealUcr() to get the actual stored value (not the generated one with check digit)
+      $ucr_value = NULL;
+      if (method_exists($client_entity, 'getRealUcr')) {
+        $ucr_value = $client_entity->getRealUcr();
+      }
+      elseif ($client_entity->hasField('ucr') && !$client_entity->get('ucr')->isEmpty()) {
+        $ucr_value = $client_entity->get('ucr')->value;
+      }
+      
+      // Set client_id if provided
+      if ($this->entity->hasField('client_id')) {
+        $current_client_id = $this->entity->hasField('client_id') && !$this->entity->get('client_id')->isEmpty() 
+          ? $this->entity->get('client_id')->value 
+          : NULL;
+        if ($current_client_id != $client_entity->id()) {
+          $this->entity->set('client_id', $client_entity->id());
+        }
+      }
+      
+      // Set client_name if provided
+      if ($this->entity->hasField('client_name') && $client_entity->hasField('name') && !$client_entity->get('name')->isEmpty()) {
+        $current_client_name = $this->entity->hasField('client_name') && !$this->entity->get('client_name')->isEmpty() 
+          ? $this->entity->get('client_name')->value 
+          : NULL;
+        $new_client_name = $client_entity->get('name')->value;
+        if ($current_client_name != $new_client_name) {
+          $this->entity->set('client_name', $new_client_name);
+        }
+      }
+      
+      // Set ucr if provided
+      if ($ucr_value !== NULL && $this->entity->hasField('ucr')) {
+        $current_ucr = $this->entity->hasField('ucr') && !$this->entity->get('ucr')->isEmpty() 
+          ? $this->entity->get('ucr')->value 
+          : NULL;
+        if ($current_ucr != $ucr_value) {
+          $this->entity->set('ucr', $ucr_value);
+        }
+      }
+    }
+    else {
+      // Fallback to current user's client if both emails are empty
+      if ($fallback_client) {
+        $ucr_value = NULL;
+        if (method_exists($fallback_client, 'getRealUcr')) {
+          $ucr_value = $fallback_client->getRealUcr();
+        }
+        elseif ($fallback_client->hasField('ucr') && !$fallback_client->get('ucr')->isEmpty()) {
+          $ucr_value = $fallback_client->get('ucr')->value;
+        }
+        
+        // Set client_id if provided
+        if ($this->entity->hasField('client_id') && method_exists($fallback_client, 'id')) {
+          $current_client_id = $this->entity->hasField('client_id') && !$this->entity->get('client_id')->isEmpty() 
+            ? $this->entity->get('client_id')->value 
+            : NULL;
+          if ($current_client_id != $fallback_client->id()) {
+            $this->entity->set('client_id', $fallback_client->id());
+          }
+        }
+        
+        // Set client_name if provided
+        if ($this->entity->hasField('client_name') && $fallback_client->hasField('name') && !$fallback_client->get('name')->isEmpty()) {
+          $current_client_name = $this->entity->hasField('client_name') && !$this->entity->get('client_name')->isEmpty() 
+            ? $this->entity->get('client_name')->value 
+            : NULL;
+          $new_client_name = $fallback_client->get('name')->value;
+          if ($current_client_name != $new_client_name) {
+            $this->entity->set('client_name', $new_client_name);
+          }
+        }
+        
+        // Set ucr if provided
+        if ($ucr_value !== NULL && $this->entity->hasField('ucr')) {
+          $current_ucr = $this->entity->hasField('ucr') && !$this->entity->get('ucr')->isEmpty() 
+            ? $this->entity->get('ucr')->value 
+            : NULL;
+          if ($current_ucr != $ucr_value) {
+            $this->entity->set('ucr', $ucr_value);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Find or create a client entity by email.
+   *
+   * Priority: installer_email first, then company_email, then fallback to current user.
+   *
+   * @param string $installer_email
+   *   The installer email from form.
+   * @param string $company_email
+   *   The company email from form.
+   * @param string $installer_name
+   *   The installer name from form (for creating new client).
+   * @param string $company_name
+   *   The company name from form (for creating new client).
+   * @param object $fallback_client
+   *   The current user's client object as fallback.
+   *
+   * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|null
+   *   The client entity or NULL if all emails are empty.
+   */
+  protected function findOrCreateClientByEmail($installer_email, $company_email, $installer_name = '', $company_name = '', $fallback_client = NULL) {
+    $entity_type_manager = \Drupal::entityTypeManager();
+    $storage = $entity_type_manager->getStorage('sentinel_client');
+    
+    $email_to_use = '';
+    $name_to_use = '';
+    
+    // Priority 1: Try installer_email
+    if (!empty($installer_email) && filter_var($installer_email, FILTER_VALIDATE_EMAIL)) {
+      $email_to_use = trim($installer_email);
+      $name_to_use = !empty($installer_name) ? trim($installer_name) : $email_to_use;
+    }
+    // Priority 2: Try company_email
+    elseif (!empty($company_email) && filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
+      $email_to_use = trim($company_email);
+      $name_to_use = !empty($company_name) ? trim($company_name) : $email_to_use;
+    }
+    // Priority 3: Fallback to current user's client
+    else {
+      // If both emails are empty, return NULL to use fallback client
+      return NULL;
+    }
+    
+    // Query for existing client by email
+    $query = $storage->getQuery()
+      ->condition('email', $email_to_use)
+      ->accessCheck(FALSE)
+      ->range(0, 1);
+    
+    $result = $query->execute();
+    
+    if (!empty($result)) {
+      // Client exists, load and return it
+      $client_ids = array_values($result);
+      $client = $storage->load(reset($client_ids));
+      
+      // Ensure existing client has a UCR (in case it was created without one)
+      if ($client && method_exists($client, 'ensureRealUcr')) {
+        $client->ensureRealUcr();
+        // Save if UCR was just generated
+        if (!$client->isNew() && $client->hasField('ucr') && !$client->get('ucr')->isEmpty()) {
+          try {
+            $client->save();
+          }
+          catch (\Throwable $exception) {
+            // Log but don't fail - UCR might already be set
+            \Drupal::logger('sentinel_portal_entities')->warning('Failed to save UCR for client @id: @message', [
+              '@id' => $client->id(),
+              '@message' => $exception->getMessage(),
+            ]);
+          }
+        }
+      }
+      
+      // Clear client cache after loading to prevent accumulation
+      if ($client) {
+        $storage->resetCache([$client->id()]);
+      }
+      
+      return $client;
+    }
+    else {
+      // Client doesn't exist, create new one (similar to CustomerServiceResource)
+      $client_data = [
+        'email' => $email_to_use,
+        'name' => $name_to_use,
+      ];
+      
+      // Add company if provided
+      if (!empty($company_name)) {
+        $client_data['company'] = trim($company_name);
+      }
+      
+      $client = $storage->create($client_data);
+      
+      // Ensure UCR is generated for the new client
+      if (method_exists($client, 'ensureRealUcr')) {
+        $client->ensureRealUcr();
+      }
+      
+      $client->save();
+      
+      // Clear client cache after creating to prevent accumulation
+      $storage->resetCache([$client->id()]);
+      
+      return $client;
     }
   }
 
