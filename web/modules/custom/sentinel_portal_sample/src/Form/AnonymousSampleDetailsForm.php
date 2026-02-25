@@ -48,6 +48,34 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
       return $form;
     }
 
+    // Check if user is in same session (submitted PRN in this session)
+    // This allows bypassing verification code if they click "Add details" immediately
+    $session = $this->getRequest()->getSession();
+    $session_whitelist_key = 'sentinel_sample_add_details_whitelist_' . $sample_id;
+    $session_whitelist_timestamp = $session->get($session_whitelist_key);
+    
+    // Maximum age for session flag: 30 minutes (1800 seconds)
+    $max_age = 1800;
+    $is_same_session = FALSE;
+    if ($session_whitelist_timestamp !== NULL) {
+      $age = \Drupal::time()->getRequestTime() - $session_whitelist_timestamp;
+      if ($age >= 0 && $age <= $max_age) {
+        $is_same_session = TRUE;
+        // Mark as verified for this session (so isSampleVerified returns TRUE)
+        $session_verified_key = 'sentinel_sample_verified_' . $sample_id;
+        $session->set($session_verified_key, TRUE);
+        
+        \Drupal::logger('sentinel_portal_sample')->info('Same-session bypass: User accessing details form for sample @sample_id without verification code (session age: @age seconds)', [
+          '@sample_id' => $sample_id,
+          '@age' => $age,
+        ]);
+      }
+      else {
+        // Flag is too old, remove it
+        $session->remove($session_whitelist_key);
+      }
+    }
+
     $is_verified = $this->isSampleVerified($sample_id);
 
     if (!$is_verified) {
