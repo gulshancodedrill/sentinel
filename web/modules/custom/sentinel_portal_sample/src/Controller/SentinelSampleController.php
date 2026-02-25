@@ -478,7 +478,7 @@ class SentinelSampleController extends ControllerBase {
    */
   public function thankYou() {
     return [
-      '#title' => $this->t('Thank you! Your details have been submitted successfully. Please check your email for the next steps. '),
+      '#title' => $this->t('Thank you! Your details have been submitted successfully. The sample report will be sent to the email address you provided.'),
     ];
   }
 

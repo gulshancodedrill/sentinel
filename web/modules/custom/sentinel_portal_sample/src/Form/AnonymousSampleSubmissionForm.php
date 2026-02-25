@@ -241,6 +241,15 @@ class AnonymousSampleSubmissionForm extends FormBase {
         '@ucr' => $ucr,
       ]);
 
+      // Set session flag to allow same-session access to details form without verification code
+      $session = $this->getRequest()->getSession();
+      $session_key = 'sentinel_sample_add_details_whitelist_' . $sample->id();
+      $session->set($session_key, \Drupal::time()->getRequestTime());
+
+      \Drupal::logger('sentinel_portal_sample')->info('Session flag set for sample @sample_id to allow same-session bypass of verification code', [
+        '@sample_id' => $sample->id(),
+      ]);
+
       // Store sample ID in form state for redirect
       $form_state->set('sample_id', $sample->id());
       $form_state->set('pack_reference_number', $pack_reference_number);
