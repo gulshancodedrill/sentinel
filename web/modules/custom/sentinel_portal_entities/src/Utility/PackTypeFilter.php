@@ -91,10 +91,8 @@ class PackTypeFilter {
       return;
     }
 
-    if (!empty($definition['pack_type'])) {
-      $query->condition('ss.pack_type', $definition['pack_type']);
-    }
-
+    // Only filter by pack_reference_number prefix, not by pack_type
+    // This allows searching for all pack types that match the prefix pattern
     if (!empty($definition['prefix'])) {
       $query->condition('ss.pack_reference_number', $connection->escapeLike($definition['prefix']) . '%', 'LIKE');
     }
