@@ -978,6 +978,14 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
    */
   protected function getEntityIds() {
     $filters = $this->getFilters();
+    
+    // Debug: Log active filters and query parameters
+    $request = \Drupal::request();
+    $query_params = $request->query->all();
+    \Drupal::logger('sentinel_portal_entities')->notice('Query params: @params, Active filters: @filters', [
+      '@params' => print_r($query_params, TRUE),
+      '@filters' => print_r($filters, TRUE),
+    ]);
    
     // Use direct database query for complex filtering
     $connection = \Drupal::database();
@@ -1073,11 +1081,17 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
 
     // Email filter uses installer_email field
     if (!empty($filters['email'])) {
+      \Drupal::logger('sentinel_portal_entities')->notice('Applying email filter: @email', [
+        '@email' => $filters['email'],
+      ]);
       $query->leftJoin('sentinel_client', 'sc', 'ss.ucr = sc.ucr');
       // Only match email when client exists (sc.ucr IS NOT NULL)
       // This prevents NULL email values from being excluded
       $query->isNotNull('sc.ucr');
       $query->condition('sc.email', '%' . $connection->escapeLike($filters['email']) . '%', 'LIKE');
+    }
+    else {
+      \Drupal::logger('sentinel_portal_entities')->notice('Email filter NOT applied - filters[email] is empty');
     }
 
     // Add pager with current query parameters preserved
