@@ -978,14 +978,6 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
    */
   protected function getEntityIds() {
     $filters = $this->getFilters();
-    
-    // Debug: Log active filters and query parameters
-    $request = \Drupal::request();
-    $query_params = $request->query->all();
-    \Drupal::logger('sentinel_portal_entities')->notice('Query params: @params, Active filters: @filters', [
-      '@params' => print_r($query_params, TRUE),
-      '@filters' => print_r($filters, TRUE),
-    ]);
    
     // Use direct database query for complex filtering
     $connection = \Drupal::database();
@@ -1014,9 +1006,6 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     
     // Pack Type (pack_reference_number_1) - apply combined pack type / prefix filters.
     if (!empty($filters['pack_reference_number_1'])) {
-      \Drupal::logger('sentinel_portal_entities')->notice('Applying pack type filter: @type', [
-        '@type' => $filters['pack_reference_number_1'],
-      ]);
       PackTypeFilter::applyFilterConditions($query, $connection, $filters['pack_reference_number_1']);
     }
     
@@ -1056,21 +1045,16 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     
     // Date Reported range (date_reported_1)
     if (!empty($filters['date_reported_1'])) {
+      // When filtering by date range, only include records where date_reported is NOT NULL
+      $query->isNotNull('ss.date_reported');
+      
       if (!empty($filters['date_reported_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_reported_1']['min']['date'])) {
-          \Drupal::logger('sentinel_portal_entities')->notice('Date filter MIN: @original => @normalized', [
-            '@original' => $filters['date_reported_1']['min']['date'],
-            '@normalized' => $from,
-          ]);
           $query->condition('ss.date_reported', $from, '>=');
         }
       }
       if (!empty($filters['date_reported_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_reported_1']['max']['date'], TRUE)) {
-          \Drupal::logger('sentinel_portal_entities')->notice('Date filter MAX: @original => @normalized', [
-            '@original' => $filters['date_reported_1']['max']['date'],
-            '@normalized' => $to,
-          ]);
           $query->condition('ss.date_reported', $to, '<=');
         }
       }
@@ -1078,6 +1062,9 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     
     // Date Booked range (date_booked_1)
     if (!empty($filters['date_booked_1'])) {
+      // When filtering by date range, only include records where date_booked is NOT NULL
+      $query->isNotNull('ss.date_booked');
+      
       if (!empty($filters['date_booked_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_booked_1']['min']['date'])) {
           $query->condition('ss.date_booked', $from, '>=');
@@ -1092,27 +1079,13 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
 
     // Email filter uses installer_email field
     if (!empty($filters['email'])) {
-      \Drupal::logger('sentinel_portal_entities')->notice('Applying email filter: @email', [
-        '@email' => $filters['email'],
-      ]);
       $query->leftJoin('sentinel_client', 'sc', 'ss.ucr = sc.ucr');
       // Only match email when client exists (sc.ucr IS NOT NULL)
       // This prevents NULL email values from being excluded
       $query->isNotNull('sc.ucr');
       $query->condition('sc.email', '%' . $connection->escapeLike($filters['email']) . '%', 'LIKE');
     }
-    else {
-      \Drupal::logger('sentinel_portal_entities')->notice('Email filter NOT applied - filters[email] is empty');
-    }
 
-    // Debug: Log the SQL query before execution
-    $sql = (string) $query;
-    $args = $query->getArguments();
-    \Drupal::logger('sentinel_portal_entities')->notice('SQL Query: @sql, Args: @args', [
-      '@sql' => $sql,
-      '@args' => print_r($args, TRUE),
-    ]);
-    
     // Add pager with current query parameters preserved
     // PagerSelectExtender automatically initializes the pager and handles out-of-range pages
     $query = $query->extend('Drupal\Core\Database\Query\PagerSelectExtender')->limit(25);
@@ -1124,11 +1097,6 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     
     $result = $query->execute();
     
-    // Debug: Log result count
-    $result_array = $result->fetchAll();
-    \Drupal::logger('sentinel_portal_entities')->notice('Query returned @count results', [
-      '@count' => count($result_array),
-    ]);
     $entity_ids = [];
     foreach ($result as $row) {
       $entity_ids[] = $row->pid;
