@@ -1047,12 +1047,12 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     if (!empty($filters['date_reported_1'])) {
       if (!empty($filters['date_reported_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_reported_1']['min']['date'])) {
-        $query->condition('ss.date_reported', $from, '>=');
+          $query->condition('ss.date_reported', $from, '>=');
+        }
       }
-    }
       if (!empty($filters['date_reported_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_reported_1']['max']['date'], TRUE)) {
-        $query->condition('ss.date_reported', $to, '<=');
+          $query->condition('ss.date_reported', $to, '<=');
         }
       }
     }
@@ -1061,12 +1061,12 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     if (!empty($filters['date_booked_1'])) {
       if (!empty($filters['date_booked_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_booked_1']['min']['date'])) {
-        $query->condition('ss.date_booked', $from, '>=');
+          $query->condition('ss.date_booked', $from, '>=');
+        }
       }
-    }
       if (!empty($filters['date_booked_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_booked_1']['max']['date'], TRUE)) {
-        $query->condition('ss.date_booked', $to, '<=');
+          $query->condition('ss.date_booked', $to, '<=');
         }
       }
     }
@@ -1074,6 +1074,9 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     // Email filter uses installer_email field
     if (!empty($filters['email'])) {
       $query->leftJoin('sentinel_client', 'sc', 'ss.ucr = sc.ucr');
+      // Only match email when client exists (sc.ucr IS NOT NULL)
+      // This prevents NULL email values from being excluded
+      $query->isNotNull('sc.ucr');
       $query->condition('sc.email', '%' . $connection->escapeLike($filters['email']) . '%', 'LIKE');
     }
 
