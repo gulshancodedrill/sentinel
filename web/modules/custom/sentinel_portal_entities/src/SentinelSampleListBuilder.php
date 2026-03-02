@@ -1073,7 +1073,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
 
     // Email filter uses installer_email field
     if (!empty($filters['email'])) {
-      $query->join('sentinel_client', 'sc', 'ss.ucr = sc.ucr');
+      $query->leftJoin('sentinel_client', 'sc', 'ss.ucr = sc.ucr');
       $query->condition('sc.email', '%' . $connection->escapeLike($filters['email']) . '%', 'LIKE');
     }
 
