@@ -47,10 +47,11 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $filters = $this->getFilters();
 
     // Views exposed form structure
+    // Note: Using POST method to support bulk operations
     $form['#attributes'] = [
       'class' => ['views-exposed-form'],
       'id' => 'views-exposed-form-test-page',
-      'method' => 'get',
+      'method' => 'post',
       'action' => '/portal/admin/sample',
     ];
 
@@ -573,8 +574,10 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $form['operations']['execute'] = [
       '#type' => 'submit',
       '#value' => $this->t('Execute'),
+      '#name' => 'op',
       '#submit' => ['::submitOperations'],
       '#limit_validation_errors' => [['operations', 'action'], ['samples_table']],
+      '#attributes' => ['class' => ['button', 'button--primary']],
     ];
 
     // Build the table of samples within the form so row selections can be submitted.
@@ -654,6 +657,14 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+    // Check if operations button was clicked - if so, handle it separately
+    $triggering_element = $form_state->getTriggeringElement();
+    if ($triggering_element && isset($triggering_element['#parents']) && end($triggering_element['#parents']) === 'execute') {
+      // Operations button was clicked, let submitOperations handle it
+      $this->submitOperations($form, $form_state);
+      return;
+    }
+    
     $form_values = $form_state->getValues();
 
     // Create a new query parameter bag
@@ -800,11 +811,32 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     foreach ($samples as $sample) {
       try {
         if ($action === 'email_report') {
-          $result = function_exists('_sentinel_portal_queue_process_email') ? _sentinel_portal_queue_process_email($sample, 'report') : FALSE;
+          // Ensure the module is loaded
+          if (!\Drupal::moduleHandler()->moduleExists('sentinel_portal_queue')) {
+            \Drupal::logger('sentinel_portal_entities')->error('sentinel_portal_queue module is not enabled');
+            $this->messenger()->addError($this->t('Email functionality requires sentinel_portal_queue module to be enabled.'));
+            return;
+          }
+          
+          if (!function_exists('_sentinel_portal_queue_process_email')) {
+            \Drupal::logger('sentinel_portal_entities')->error('Email function not available for sample @id', [
+              '@id' => $sample->id(),
+            ]);
+            $errors++;
+            continue;
+          }
+          
+          $result = _sentinel_portal_queue_process_email($sample, 'report');
           if ($result) {
+            \Drupal::logger('sentinel_portal_entities')->info('Bulk email sent successfully for sample @id', [
+              '@id' => $sample->id(),
+            ]);
             $processed++;
           }
           else {
+            \Drupal::logger('sentinel_portal_entities')->warning('Bulk email failed for sample @id - function returned FALSE', [
+              '@id' => $sample->id(),
+            ]);
             $errors++;
           }
         }
@@ -815,24 +847,34 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
             continue;
           }
 
-          if (function_exists('sentinel_systemcheck_vaillant_xml_sentinel_sendresults')) {
-            $result = sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample);
-            if ($result) {
-              $processed++;
-            }
-            else {
-              $errors++;
-            }
+          if (!function_exists('sentinel_systemcheck_vaillant_xml_sentinel_sendresults')) {
+            \Drupal::logger('sentinel_portal_entities')->error('Vaillant email function not available for sample @id', [
+              '@id' => $sample->id(),
+            ]);
+            $errors++;
+            continue;
+          }
+          
+          $result = sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample);
+          if ($result) {
+            \Drupal::logger('sentinel_portal_entities')->info('Bulk Vaillant email sent successfully for sample @id', [
+              '@id' => $sample->id(),
+            ]);
+            $processed++;
           }
           else {
+            \Drupal::logger('sentinel_portal_entities')->warning('Bulk Vaillant email failed for sample @id - function returned FALSE', [
+              '@id' => $sample->id(),
+            ]);
             $errors++;
           }
         }
       }
       catch (\Throwable $e) {
-        $this->getLogger('sentinel_portal_entities')->error('Bulk operation failed for sample @id: @message', [
+        \Drupal::logger('sentinel_portal_entities')->error('Bulk operation exception for sample @id: @message', [
           '@id' => $sample->id(),
           '@message' => $e->getMessage(),
+          '@trace' => $e->getTraceAsString(),
         ]);
         $errors++;
       }
