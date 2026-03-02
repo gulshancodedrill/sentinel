@@ -1105,6 +1105,14 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       \Drupal::logger('sentinel_portal_entities')->notice('Email filter NOT applied - filters[email] is empty');
     }
 
+    // Debug: Log the SQL query before execution
+    $sql = (string) $query;
+    $args = $query->getArguments();
+    \Drupal::logger('sentinel_portal_entities')->notice('SQL Query: @sql, Args: @args', [
+      '@sql' => $sql,
+      '@args' => print_r($args, TRUE),
+    ]);
+    
     // Add pager with current query parameters preserved
     // PagerSelectExtender automatically initializes the pager and handles out-of-range pages
     $query = $query->extend('Drupal\Core\Database\Query\PagerSelectExtender')->limit(25);
@@ -1115,6 +1123,12 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     }
     
     $result = $query->execute();
+    
+    // Debug: Log result count
+    $result_array = $result->fetchAll();
+    \Drupal::logger('sentinel_portal_entities')->notice('Query returned @count results', [
+      '@count' => count($result_array),
+    ]);
     $entity_ids = [];
     foreach ($result as $row) {
       $entity_ids[] = $row->pid;
