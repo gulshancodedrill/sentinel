@@ -47,10 +47,11 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $filters = $this->getFilters();
 
     // Views exposed form structure
+    // Note: Using POST method to support bulk operations
     $form['#attributes'] = [
       'class' => ['views-exposed-form'],
       'id' => 'views-exposed-form-test-page',
-      'method' => 'get',
+      'method' => 'post',
       'action' => '/portal/admin/sample',
     ];
 
@@ -528,28 +529,31 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       '#description' => $this->t('E.g., 11/19/2025'),
     ];
 
-    // Submit button
+    // Submit button (Apply filters)
     $wrapper['submit'] = [
       '#type' => 'submit',
       '#value' => $this->t('Apply'),
       '#id' => 'edit-submit-test',
-      '#name' => '',
+      '#name' => 'apply_filters',
+      '#submit' => ['::submitForm'],
       '#attributes' => ['class' => ['btn', 'form-submit']],
       '#prefix' => '<div class="views-exposed-widget views-submit-button" style="flex: 0 0 calc(25% - 12px); min-width: 100px;">',
       '#suffix' => '</div>',
+      // Ensure this button triggers filter submission
+      '#limit_validation_errors' => [],
     ];
 
     // Reset button
     $wrapper['reset'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Reset'),
+      '#type' => 'submit',
+      '#value' => $this->t('Reset'),
       '#id' => 'edit-reset',
-      '#name' => 'op',
+      '#name' => 'reset_filters',
       '#attributes' => ['class' => ['btn', 'form-submit']],
-        '#submit' => ['::resetForm'],
+      '#submit' => ['::resetForm'],
       '#prefix' => '<div class="views-exposed-widget views-reset-button" style="flex: 0 0 calc(25% - 12px); min-width: 100px;">',
       '#suffix' => '</div>',
-      ];
+    ];
 
     // Operations section - place after date fields
     $form['operations'] = [
@@ -573,8 +577,10 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $form['operations']['execute'] = [
       '#type' => 'submit',
       '#value' => $this->t('Execute'),
+      '#name' => 'execute_operations',
       '#submit' => ['::submitOperations'],
       '#limit_validation_errors' => [['operations', 'action'], ['samples_table']],
+      '#attributes' => ['class' => ['button', 'button--primary']],
     ];
 
     // Build the table of samples within the form so row selections can be submitted.
@@ -654,110 +660,196 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+    // Check which button was clicked
+    $triggering_element = $form_state->getTriggeringElement();
+    $button_name = $triggering_element['#name'] ?? '';
+    
+    // If operations button was clicked, let submitOperations handle it
+    // Note: This should not normally happen since Execute has its own submit handler,
+    // but we check here as a safety measure in case the button detection fails
+    if ($button_name === 'execute_operations') {
+      $this->submitOperations($form, $form_state);
+      return;
+    }
+    
+    // If reset button was clicked, let resetForm handle it
+    if ($button_name === 'reset_filters') {
+      $this->resetForm($form, $form_state);
+      return;
+    }
+    
+    // Process filter form submission (Apply button - button_name === 'apply_filters' or empty/default)
+    // This converts POST filter data to GET query parameters and redirects
+    
+    // Get values from POST request - fields with explicit #name submit directly
+    $request = \Drupal::request();
+    $post_data = $request->request->all();
     $form_values = $form_state->getValues();
 
     // Create a new query parameter bag
     $query_params = [];
 
-    // Extract filter values from the views exposed form structure
+    // Try to extract filter values from form structure first
     $wrapper = $form_values['views_exposed_form_wrapper']['views_exposed_widgets'] ?? [];
+    
+    // If wrapper is empty, fields with explicit #name attributes come directly in POST
+    // So we'll read them directly from POST data using their field names
 
     // Pack reference number
+    // Check nested structure first, then direct POST
     if (isset($wrapper['pack_reference_number_wrapper']['views_widget']['pack_reference_number'])) {
       $value = trim((string) $wrapper['pack_reference_number_wrapper']['views_widget']['pack_reference_number']);
-      if ($value !== '') {
-        $query_params['pack_reference_number'] = $value;
-      }
+    } elseif (isset($post_data['pack_reference_number'])) {
+      $value = trim((string) $post_data['pack_reference_number']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '') {
+      $query_params['pack_reference_number'] = $value;
     }
 
     // Pass/Fail
     if (isset($wrapper['pass_fail_wrapper']['views_widget']['pass_fail'])) {
       $value = trim((string) $wrapper['pass_fail_wrapper']['views_widget']['pass_fail']);
-      if ($value !== '' && $value !== 'All') {
-        $query_params['pass_fail'] = $value;
-      }
+    } elseif (isset($post_data['pass_fail'])) {
+      $value = trim((string) $post_data['pass_fail']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '' && $value !== 'All') {
+      $query_params['pass_fail'] = $value;
     }
 
     // Pack Type (pack_reference_number_1)
     if (isset($wrapper['pack_reference_number_1_wrapper']['views_widget']['pack_reference_number_1'])) {
       $value = trim((string) $wrapper['pack_reference_number_1_wrapper']['views_widget']['pack_reference_number_1']);
-      if ($value !== '' && $value !== 'All') {
-        $query_params['pack_reference_number_1'] = $value;
-      }
+    } elseif (isset($post_data['pack_reference_number_1'])) {
+      $value = trim((string) $post_data['pack_reference_number_1']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '' && $value !== 'All') {
+      $query_params['pack_reference_number_1'] = $value;
     }
 
     // Email
     if (isset($wrapper['email_wrapper']['views_widget']['email'])) {
       $value = trim((string) $wrapper['email_wrapper']['views_widget']['email']);
-        if ($value !== '') {
-        $query_params['email'] = $value;
-      }
+    } elseif (isset($post_data['email'])) {
+      $value = trim((string) $post_data['email']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '') {
+      $query_params['email'] = $value;
     }
 
     // Date Reported (simple select)
     if (isset($wrapper['date_reported_wrapper']['views_widget']['date_reported'])) {
       $value = trim((string) $wrapper['date_reported_wrapper']['views_widget']['date_reported']);
-      if ($value !== '' && $value !== 'All') {
-        $query_params['date_reported'] = $value;
-      }
+    } elseif (isset($post_data['date_reported'])) {
+      $value = trim((string) $post_data['date_reported']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '' && $value !== 'All') {
+      $query_params['date_reported'] = $value;
     }
 
     // Date Booked (simple select)
     if (isset($wrapper['date_booked_wrapper']['views_widget']['date_booked'])) {
       $value = trim((string) $wrapper['date_booked_wrapper']['views_widget']['date_booked']);
-      if ($value !== '' && $value !== 'All') {
-        $query_params['date_booked'] = $value;
-      }
+    } elseif (isset($post_data['date_booked'])) {
+      $value = trim((string) $post_data['date_booked']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '' && $value !== 'All') {
+      $query_params['date_booked'] = $value;
     }
 
     // Postcode
     if (isset($wrapper['postcode_wrapper']['views_widget']['postcode'])) {
       $value = trim((string) $wrapper['postcode_wrapper']['views_widget']['postcode']);
-      if ($value !== '') {
-        $query_params['postcode'] = $value;
-      }
+    } elseif (isset($post_data['postcode'])) {
+      $value = trim((string) $post_data['postcode']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '') {
+      $query_params['postcode'] = $value;
     }
 
     // Combine (System address)
     if (isset($wrapper['combine_wrapper']['views_widget']['combine'])) {
       $value = trim((string) $wrapper['combine_wrapper']['views_widget']['combine']);
-      if ($value !== '') {
-        $query_params['combine'] = $value;
-      }
+    } elseif (isset($post_data['combine'])) {
+      $value = trim((string) $post_data['combine']);
+    } else {
+      $value = '';
+    }
+    if ($value !== '') {
+      $query_params['combine'] = $value;
     }
 
     // Date Reported Range (date_reported_1)
     $date_reported_1 = [];
+    // Check nested structure first
     if (isset($wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_reported_1_min'])) {
       $value = trim((string) $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_reported_1_min']);
       if ($value !== '') {
         $date_reported_1['min']['date'] = $value;
       }
+    } elseif (isset($post_data['date_reported_1']['min']['date'])) {
+      $value = trim((string) $post_data['date_reported_1']['min']['date']);
+      if ($value !== '') {
+        $date_reported_1['min']['date'] = $value;
+      }
     }
+    
     if (isset($wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_reported_1_max'])) {
       $value = trim((string) $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_reported_1_max']);
       if ($value !== '') {
         $date_reported_1['max']['date'] = $value;
       }
+    } elseif (isset($post_data['date_reported_1']['max']['date'])) {
+      $value = trim((string) $post_data['date_reported_1']['max']['date']);
+      if ($value !== '') {
+        $date_reported_1['max']['date'] = $value;
+      }
     }
+    
     if (!empty($date_reported_1)) {
       $query_params['date_reported_1'] = $date_reported_1;
     }
 
     // Date Booked Range (date_booked_1)
     $date_booked_1 = [];
+    // Check nested structure first
     if (isset($wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_booked_1_min'])) {
       $value = trim((string) $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['min']['inside']['container']['date_booked_1_min']);
       if ($value !== '') {
         $date_booked_1['min']['date'] = $value;
       }
+    } elseif (isset($post_data['date_booked_1']['min']['date'])) {
+      $value = trim((string) $post_data['date_booked_1']['min']['date']);
+      if ($value !== '') {
+        $date_booked_1['min']['date'] = $value;
+      }
     }
+    
     if (isset($wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_booked_1_max'])) {
       $value = trim((string) $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_booked_1_max']);
       if ($value !== '') {
         $date_booked_1['max']['date'] = $value;
       }
+    } elseif (isset($post_data['date_booked_1']['max']['date'])) {
+      $value = trim((string) $post_data['date_booked_1']['max']['date']);
+      if ($value !== '') {
+        $date_booked_1['max']['date'] = $value;
+      }
     }
+    
     if (!empty($date_booked_1)) {
       $query_params['date_booked_1'] = $date_booked_1;
     }
@@ -800,11 +892,32 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     foreach ($samples as $sample) {
       try {
         if ($action === 'email_report') {
-          $result = function_exists('_sentinel_portal_queue_process_email') ? _sentinel_portal_queue_process_email($sample, 'report') : FALSE;
+          // Ensure the module is loaded
+          if (!\Drupal::moduleHandler()->moduleExists('sentinel_portal_queue')) {
+            \Drupal::logger('sentinel_portal_entities')->error('sentinel_portal_queue module is not enabled');
+            $this->messenger()->addError($this->t('Email functionality requires sentinel_portal_queue module to be enabled.'));
+            return;
+          }
+          
+          if (!function_exists('_sentinel_portal_queue_process_email')) {
+            \Drupal::logger('sentinel_portal_entities')->error('Email function not available for sample @id', [
+              '@id' => $sample->id(),
+            ]);
+            $errors++;
+            continue;
+          }
+          
+          $result = _sentinel_portal_queue_process_email($sample, 'report');
           if ($result) {
+            \Drupal::logger('sentinel_portal_entities')->info('Bulk email sent successfully for sample @id', [
+              '@id' => $sample->id(),
+            ]);
             $processed++;
           }
           else {
+            \Drupal::logger('sentinel_portal_entities')->warning('Bulk email failed for sample @id - function returned FALSE', [
+              '@id' => $sample->id(),
+            ]);
             $errors++;
           }
         }
@@ -815,24 +928,34 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
             continue;
           }
 
-          if (function_exists('sentinel_systemcheck_vaillant_xml_sentinel_sendresults')) {
-            $result = sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample);
-            if ($result) {
-              $processed++;
-            }
-            else {
-              $errors++;
-            }
+          if (!function_exists('sentinel_systemcheck_vaillant_xml_sentinel_sendresults')) {
+            \Drupal::logger('sentinel_portal_entities')->error('Vaillant email function not available for sample @id', [
+              '@id' => $sample->id(),
+            ]);
+            $errors++;
+            continue;
+          }
+          
+          $result = sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample);
+          if ($result) {
+            \Drupal::logger('sentinel_portal_entities')->info('Bulk Vaillant email sent successfully for sample @id', [
+              '@id' => $sample->id(),
+            ]);
+            $processed++;
           }
           else {
+            \Drupal::logger('sentinel_portal_entities')->warning('Bulk Vaillant email failed for sample @id - function returned FALSE', [
+              '@id' => $sample->id(),
+            ]);
             $errors++;
           }
         }
       }
       catch (\Throwable $e) {
-        $this->getLogger('sentinel_portal_entities')->error('Bulk operation failed for sample @id: @message', [
+        \Drupal::logger('sentinel_portal_entities')->error('Bulk operation exception for sample @id: @message', [
           '@id' => $sample->id(),
           '@message' => $e->getMessage(),
+          '@trace' => $e->getTraceAsString(),
         ]);
         $errors++;
       }
@@ -848,7 +971,11 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       $this->messenger()->addWarning($this->t('Skipped @count non-Vaillant sample(s).', ['@count' => $skipped]));
     }
 
+    // Redirect back to the listing page with current filter query parameters preserved
+    // Get query parameters from the current request (filters are stored in URL as GET params)
     $current_query = \Drupal::request()->query->all();
+    // Remove form-related parameters that shouldn't be in the URL
+    unset($current_query['form_build_id'], $current_query['form_token'], $current_query['form_id']);
     $form_state->setRedirect('sentinel_portal.admin_sample', [], ['query' => $current_query]);
   }
 
