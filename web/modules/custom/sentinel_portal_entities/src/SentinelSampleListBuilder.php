@@ -545,15 +545,15 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
 
     // Reset button
     $wrapper['reset'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Reset'),
+        '#type' => 'submit',
+        '#value' => $this->t('Reset'),
       '#id' => 'edit-reset',
       '#name' => 'reset_filters',
       '#attributes' => ['class' => ['btn', 'form-submit']],
-      '#submit' => ['::resetForm'],
+        '#submit' => ['::resetForm'],
       '#prefix' => '<div class="views-exposed-widget views-reset-button" style="flex: 0 0 calc(25% - 12px); min-width: 100px;">',
       '#suffix' => '</div>',
-    ];
+      ];
 
     // Operations section - place after date fields
     $form['operations'] = [
@@ -704,8 +704,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '') {
-      $query_params['pack_reference_number'] = $value;
+      if ($value !== '') {
+        $query_params['pack_reference_number'] = $value;
     }
 
     // Pass/Fail
@@ -716,8 +716,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '' && $value !== 'All') {
-      $query_params['pass_fail'] = $value;
+      if ($value !== '' && $value !== 'All') {
+        $query_params['pass_fail'] = $value;
     }
 
     // Pack Type (pack_reference_number_1)
@@ -728,8 +728,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '' && $value !== 'All') {
-      $query_params['pack_reference_number_1'] = $value;
+      if ($value !== '' && $value !== 'All') {
+        $query_params['pack_reference_number_1'] = $value;
     }
 
     // Email
@@ -740,8 +740,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '') {
-      $query_params['email'] = $value;
+        if ($value !== '') {
+        $query_params['email'] = $value;
     }
 
     // Date Reported (simple select)
@@ -752,8 +752,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '' && $value !== 'All') {
-      $query_params['date_reported'] = $value;
+      if ($value !== '' && $value !== 'All') {
+        $query_params['date_reported'] = $value;
     }
 
     // Date Booked (simple select)
@@ -764,8 +764,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '' && $value !== 'All') {
-      $query_params['date_booked'] = $value;
+      if ($value !== '' && $value !== 'All') {
+        $query_params['date_booked'] = $value;
     }
 
     // Postcode
@@ -776,8 +776,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '') {
-      $query_params['postcode'] = $value;
+      if ($value !== '') {
+        $query_params['postcode'] = $value;
     }
 
     // Combine (System address)
@@ -788,8 +788,8 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     } else {
       $value = '';
     }
-    if ($value !== '') {
-      $query_params['combine'] = $value;
+      if ($value !== '') {
+        $query_params['combine'] = $value;
     }
 
     // Date Reported Range (date_reported_1)
@@ -804,7 +804,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       $value = trim((string) $post_data['date_reported_1']['min']['date']);
       if ($value !== '') {
         $date_reported_1['min']['date'] = $value;
-      }
+    }
     }
     
     if (isset($wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_reported_1_max'])) {
@@ -816,7 +816,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       $value = trim((string) $post_data['date_reported_1']['max']['date']);
       if ($value !== '') {
         $date_reported_1['max']['date'] = $value;
-      }
+    }
     }
     
     if (!empty($date_reported_1)) {
@@ -835,7 +835,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       $value = trim((string) $post_data['date_booked_1']['min']['date']);
       if ($value !== '') {
         $date_booked_1['min']['date'] = $value;
-      }
+    }
     }
     
     if (isset($wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max']['inside']['container']['date_booked_1_max'])) {
@@ -847,7 +847,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       $value = trim((string) $post_data['date_booked_1']['max']['date']);
       if ($value !== '') {
         $date_booked_1['max']['date'] = $value;
-      }
+    }
     }
     
     if (!empty($date_booked_1)) {
@@ -936,14 +936,14 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
             continue;
           }
           
-          $result = sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample);
-          if ($result) {
+            $result = sentinel_systemcheck_vaillant_xml_sentinel_sendresults($sample);
+            if ($result) {
             \Drupal::logger('sentinel_portal_entities')->info('Bulk Vaillant email sent successfully for sample @id', [
               '@id' => $sample->id(),
             ]);
-            $processed++;
-          }
-          else {
+              $processed++;
+            }
+            else {
             \Drupal::logger('sentinel_portal_entities')->warning('Bulk Vaillant email failed for sample @id - function returned FALSE', [
               '@id' => $sample->id(),
             ]);
@@ -1110,7 +1110,7 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
     $connection = \Drupal::database();
     $query = $connection->select('sentinel_sample', 'ss')
       ->fields('ss', ['pid'])
-      ->orderBy('ss.changed', 'DESC')
+      ->orderBy('ss.date_reported', 'DESC')
       ->orderBy('ss.pid', 'DESC');
 
     // Search Pack ID - filter on pack_reference_number
@@ -1177,12 +1177,12 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       
       if (!empty($filters['date_reported_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_reported_1']['min']['date'])) {
-          $query->condition('ss.date_reported', $from, '>=');
-        }
+        $query->condition('ss.date_reported', $from, '>=');
       }
+    }
       if (!empty($filters['date_reported_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_reported_1']['max']['date'], TRUE)) {
-          $query->condition('ss.date_reported', $to, '<=');
+        $query->condition('ss.date_reported', $to, '<=');
         }
       }
     }
@@ -1194,12 +1194,12 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       
       if (!empty($filters['date_booked_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_booked_1']['min']['date'])) {
-          $query->condition('ss.date_booked', $from, '>=');
-        }
+        $query->condition('ss.date_booked', $from, '>=');
       }
+    }
       if (!empty($filters['date_booked_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_booked_1']['max']['date'], TRUE)) {
-          $query->condition('ss.date_booked', $to, '<=');
+        $query->condition('ss.date_booked', $to, '<=');
         }
       }
     }
