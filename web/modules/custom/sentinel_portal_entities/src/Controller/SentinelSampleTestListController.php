@@ -447,14 +447,10 @@ class SentinelSampleTestListController extends ControllerBase {
     if ($order === 'date_reported_1' || $order === 'date_reported') {
       // Sort by date_reported
       $query->orderBy('ss.date_reported', $sort_direction);
-      // Secondary sort by created and pid
-      $query->orderBy('ss.date_reported', 'DESC');
       $query->orderBy('ss.pid', 'DESC');
     } elseif ($order === 'date_received' || $order === 'date_booked') {
       // Sort by date_received (date_booked in database)
       $query->orderBy('ss.date_booked', $sort_direction);
-      // Secondary sort by created and pid
-      $query->orderBy('ss.date_reported', 'DESC');
       $query->orderBy('ss.pid', 'DESC');
     } else {
       // Default sorting - latest first
