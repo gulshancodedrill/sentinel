@@ -266,28 +266,42 @@ class SentinelSampleExportController extends ControllerBase {
     
     // Date Reported range (date_reported_1)
     if (!empty($filters['date_reported_1'])) {
+      // When filtering by date range, only include records where date_reported is NOT NULL
+      $query->isNotNull('ss.date_reported');
+      
       if (!empty($filters['date_reported_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_reported_1']['min']['date'])) {
-          $query->condition('ss.date_reported', $from, '>=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $from_date = date('Y-m-d', strtotime($from));
+          $query->where('DATE(ss.date_reported) >= :date_reported_min', [':date_reported_min' => $from_date]);
         }
       }
       if (!empty($filters['date_reported_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_reported_1']['max']['date'], TRUE)) {
-          $query->condition('ss.date_reported', $to, '<=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $to_date = date('Y-m-d', strtotime($to));
+          $query->where('DATE(ss.date_reported) <= :date_reported_max', [':date_reported_max' => $to_date]);
         }
       }
     }
     
     // Date Booked range (date_booked_1)
     if (!empty($filters['date_booked_1'])) {
+      // When filtering by date range, only include records where date_booked is NOT NULL
+      $query->isNotNull('ss.date_booked');
+      
       if (!empty($filters['date_booked_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_booked_1']['min']['date'])) {
-          $query->condition('ss.date_booked', $from, '>=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $from_date = date('Y-m-d', strtotime($from));
+          $query->where('DATE(ss.date_booked) >= :date_booked_min', [':date_booked_min' => $from_date]);
         }
       }
       if (!empty($filters['date_booked_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_booked_1']['max']['date'], TRUE)) {
-          $query->condition('ss.date_booked', $to, '<=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $to_date = date('Y-m-d', strtotime($to));
+          $query->where('DATE(ss.date_booked) <= :date_booked_max', [':date_booked_max' => $to_date]);
         }
       }
     }
