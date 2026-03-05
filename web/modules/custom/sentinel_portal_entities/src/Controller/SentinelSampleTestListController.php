@@ -458,7 +458,7 @@ class SentinelSampleTestListController extends ControllerBase {
       $query->orderBy('ss.pid', 'DESC');
     } else {
       // Default sorting - latest first
-      $query->orderBy('ss.date_reported', 'DESC');
+      $query->orderBy('ss.changed', 'DESC');
       $query->orderBy('ss.pid', 'DESC');
     }
 
