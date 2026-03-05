@@ -406,10 +406,10 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
         'size' => 20,
         'maxlength' => 30,
         'class' => ['form-text', 'datepicker-popup'],
-        'placeholder' => 'E.g., 11/19/2025',
+        'placeholder' => 'E.g., 01/19/2025',
         'autocomplete' => 'off',
       ],
-      '#description' => $this->t('E.g., 11/19/2025'),
+      '#description' => $this->t('E.g., 01/19/2025'),
     ];
     $wrapper['date_reported_1_wrapper']['views_widget']['form_wrapper']['max'] = [
       '#type' => 'container',
@@ -438,10 +438,10 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
         'size' => 20,
         'maxlength' => 30,
         'class' => ['form-text', 'datepicker-popup'],
-        'placeholder' => 'E.g., 11/19/2025',
+        'placeholder' => 'E.g., 01/19/2025',
         'autocomplete' => 'off',
       ],
-      '#description' => $this->t('E.g., 11/19/2025'),
+      '#description' => $this->t('E.g., 01/19/2025'),
     ];
 
     // Date Booked Range (date_booked_1)
@@ -496,10 +496,10 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
         'size' => 20,
         'maxlength' => 30,
         'class' => ['form-text', 'datepicker-popup'],
-        'placeholder' => 'E.g., 11/19/2025',
+        'placeholder' => 'E.g., 01/19/2025',
         'autocomplete' => 'off',
       ],
-      '#description' => $this->t('E.g., 11/19/2025'),
+      '#description' => $this->t('E.g., 01/19/2025'),
     ];
     $wrapper['date_booked_1_wrapper']['views_widget']['form_wrapper']['max'] = [
       '#type' => 'container',
@@ -523,10 +523,10 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
         'size' => 20,
         'maxlength' => 30,
         'class' => ['form-text', 'datepicker-popup'],
-        'placeholder' => 'E.g., 11/19/2025',
+        'placeholder' => 'E.g., 01/19/2025',
         'autocomplete' => 'off',
       ],
-      '#description' => $this->t('E.g., 11/19/2025'),
+      '#description' => $this->t('E.g., 01/19/2025'),
     ];
 
     // Submit button (Apply filters)
@@ -1177,12 +1177,16 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       
       if (!empty($filters['date_reported_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_reported_1']['min']['date'])) {
-        $query->condition('ss.date_reported', $from, '>=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $from_date = date('Y-m-d', strtotime($from));
+          $query->where('DATE(ss.date_reported) >= :date_reported_min', [':date_reported_min' => $from_date]);
+        }
       }
-    }
       if (!empty($filters['date_reported_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_reported_1']['max']['date'], TRUE)) {
-        $query->condition('ss.date_reported', $to, '<=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $to_date = date('Y-m-d', strtotime($to));
+          $query->where('DATE(ss.date_reported) <= :date_reported_max', [':date_reported_max' => $to_date]);
         }
       }
     }
@@ -1194,12 +1198,16 @@ class SentinelSampleListBuilder extends EntityListBuilder implements FormInterfa
       
       if (!empty($filters['date_booked_1']['min']['date'])) {
         if ($from = $this->normalizeFilterDate($filters['date_booked_1']['min']['date'])) {
-        $query->condition('ss.date_booked', $from, '>=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $from_date = date('Y-m-d', strtotime($from));
+          $query->where('DATE(ss.date_booked) >= :date_booked_min', [':date_booked_min' => $from_date]);
+        }
       }
-    }
       if (!empty($filters['date_booked_1']['max']['date'])) {
         if ($to = $this->normalizeFilterDate($filters['date_booked_1']['max']['date'], TRUE)) {
-        $query->condition('ss.date_booked', $to, '<=');
+          // Extract date part only (YYYY-MM-DD) for comparison
+          $to_date = date('Y-m-d', strtotime($to));
+          $query->where('DATE(ss.date_booked) <= :date_booked_max', [':date_booked_max' => $to_date]);
         }
       }
     }
