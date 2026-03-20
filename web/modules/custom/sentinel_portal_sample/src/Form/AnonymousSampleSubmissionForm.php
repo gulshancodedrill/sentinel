@@ -7,6 +7,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Url;
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
+use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 
@@ -165,8 +166,8 @@ class AnonymousSampleSubmissionForm extends FormBase {
         }
       }
 
-      // Determine pack_type from pack_reference_number
-      $pack_type = SentinelSample::getPackType([
+      // Determine pack_type from pack_reference_number (map to short DB value: SEN/VAL)
+      $sample_type_key = SentinelSample::getPackType([
         'pack_reference_number' => $pack_reference_number,
       ]);
 
@@ -186,8 +187,8 @@ class AnonymousSampleSubmissionForm extends FormBase {
       if ($client_name !== NULL && $sample->hasField('client_name')) {
         $sample->set('client_name', $client_name);
       }
-      if ($sample->hasField('pack_type')) {
-        $sample->set('pack_type', $pack_type);
+      if ($sample->hasField('pack_type') && $sample_type_key !== NULL) {
+        $sample->set('pack_type', PackTypeFilter::getPackTypeDbValue($sample_type_key));
       }
 
       if (!$sample->hasField('verification_code')) {

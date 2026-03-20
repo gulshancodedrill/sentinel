@@ -76,6 +76,28 @@ class PackTypeFilter {
   }
 
   /**
+   * Returns the pack_type database value for a sample type key.
+   *
+   * Case-insensitive. Vaillant maps to VAL; all other types (standard,
+   * worcesterbosch_contract, worcesterbosch_service, german, italian, french,
+   * or unknown) map to SEN.
+   *
+   * @param string $sampleTypeKey
+   *   The key from getPackType() or CSV (e.g. worcesterbosch_service, vaillant,
+   *   UK Standard, german).
+   *
+   * @return string
+   *   The DB value: 'VAL' or 'SEN'.
+   */
+  public static function getPackTypeDbValue(string $sampleTypeKey): string {
+    $normalized = strtolower(trim($sampleTypeKey));
+    if ($normalized === 'vaillant') {
+      return 'VAL';
+    }
+    return 'SEN';
+  }
+
+  /**
    * Applies the corresponding conditions to a query.
    *
    * @param \Drupal\Core\Database\Query\SelectInterface $query

@@ -9,6 +9,7 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
+use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 use Drupal\sentinel_portal_sample\Controller\SentinelSampleController;
 use Drupal\user\Entity\User;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -1515,9 +1516,9 @@ class SentinelSampleSubmissionForm extends FormBase {
         $sample->set('client_name', $client_name);
       }
 
-      // Set pack_type if available
+      // Set pack_type if available (map to short DB value: SEN/VAL)
       if ($pack_type !== NULL && $sample->hasField('pack_type')) {
-        $sample->set('pack_type', $pack_type);
+        $sample->set('pack_type', PackTypeFilter::getPackTypeDbValue($pack_type));
       }
 
       $sample->save();

@@ -173,13 +173,13 @@ class BulkUploadBatch {
         }
       }
 
-      // Calculate pack_type from pack_reference_number
+      // Calculate pack_type from pack_reference_number (map to short DB value: SEN/VAL)
       if (!empty($data['pack_reference_number'])) {
-        $pack_type = \Drupal\sentinel_portal_entities\Entity\SentinelSample::getPackType([
+        $sample_type_key = \Drupal\sentinel_portal_entities\Entity\SentinelSample::getPackType([
           'pack_reference_number' => $data['pack_reference_number'],
         ]);
-        if ($pack_type !== NULL) {
-          $data['pack_type'] = $pack_type;
+        if ($sample_type_key !== NULL) {
+          $data['pack_type'] = \Drupal\sentinel_portal_entities\Utility\PackTypeFilter::getPackTypeDbValue($sample_type_key);
         }
       }
 

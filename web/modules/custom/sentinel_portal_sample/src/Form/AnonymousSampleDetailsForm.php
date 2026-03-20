@@ -6,6 +6,7 @@ use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
+use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 
 /**
  * Anonymous sample details form - allows adding details to existing sample.
@@ -832,9 +833,9 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
         $this->sample->set('client_name', $client_name);
       }
 
-      // Set pack_type if available
+      // Set pack_type if available (map to short DB value: SEN/VAL)
       if ($pack_type !== NULL && $this->sample->hasField('pack_type')) {
-        $this->sample->set('pack_type', $pack_type);
+        $this->sample->set('pack_type', PackTypeFilter::getPackTypeDbValue($pack_type));
       }
 
       // Save the updated sample
