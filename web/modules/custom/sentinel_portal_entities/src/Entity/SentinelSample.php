@@ -1750,6 +1750,10 @@ class SentinelSample extends ContentEntityBase implements ContentEntityInterface
         // German.
         return 'de';
 
+      case '210':
+        // German.
+        return 'de';
+        
       case '120':
         // Italian.
         return 'it';
