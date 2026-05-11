@@ -107,3 +107,10 @@ scripts/file_managed_d7_excluding_last_2_years_part3.csv
 .user.ini
 php.ini
 >>>>>>> bea6a653 (live changes uploaded on git)
+
+web/.htaccess
+.htaccess2
+web/.htaccess.ajay
+web/.htaccess2
+web/rebuild.php
+web/rebuildpermissions.php
