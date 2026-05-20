@@ -79,35 +79,59 @@ sentinel_portal_sample.anonymous_submit:
     _admin_route: FALSE
 
 sentinel_portal_sample.anonymous_options:
-  path: '/sample/options/{sample_id}'
+  path: '/sample/options/{token}'
   defaults:
     _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleOptionsForm'
-    sample_id: NULL
+    token: NULL
   requirements:
     _access: 'TRUE'
   options:
     _admin_route: FALSE
-    parameters:
-      sample_id:
-        type: integer
+
+sentinel_portal_sample.anonymous_company_wizard:
+  path: '/sample/company/{token}'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleCompanyWizardForm'
+    token: NULL
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.anonymous_individual_contact:
+  path: '/sample/individual/{token}'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleIndividualContactForm'
+    token: NULL
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
 
 sentinel_portal_sample.anonymous_details:
-  path: '/sample/details/{sample_id}'
+  path: '/sample/details/{token}'
   defaults:
-    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleDetailsForm'
-    sample_id: NULL
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSamplePropertyDetailsForm'
+    token: NULL
   requirements:
     _access: 'TRUE'
   options:
     _admin_route: FALSE
-    parameters:
-      sample_id:
-        type: integer
 
 sentinel_portal_sample.anonymous_thank_you:
   path: '/sample/thank-you'
   defaults:
     _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::thankYou'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.property_address_autocomplete:
+  path: '/sample/property-address/autocomplete/{user_type}'
+  defaults:
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::propertyAddressAutocomplete'
+    user_type: 'any'
   requirements:
     _access: 'TRUE'
   options:

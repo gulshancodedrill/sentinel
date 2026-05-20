@@ -10,6 +10,8 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
 use Drupal\sentinel_portal_sample\Ajax\GenericDataCommand;
+use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
+use Drupal\sentinel_portal_sample\AnonymousSampleWizardProgress;
 use Drupal\sentinel_sample\Entity\SentinelSample;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -108,6 +110,70 @@ class SentinelSampleController extends ControllerBase {
           'raw' => $address_string,
         ],
       ];
+    }
+
+    return new JsonResponse($matches);
+  }
+
+  /**
+   * Property address autocomplete callback using entity type manager.
+   */
+  public function propertyAddressAutocomplete(Request $request, $user_type = 'any') {
+    $string = trim((string) $request->query->get('q', ''));
+    $matches = [];
+
+    if ($string !== '') {
+      try {
+        $storage = $this->entityTypeManager()->getStorage('address');
+        $query = $storage->getQuery()
+          ->condition('type', 'address')
+          ->range(0, 15)
+          ->accessCheck(FALSE);
+        // OR conditions
+        $or = $query->orConditionGroup()
+          ->condition('field_address.address_line1', $string, 'CONTAINS')
+          ->condition('field_address.address_line2', $string, 'CONTAINS')
+          ->condition('field_address.address_line2', $string, 'CONTAINS')
+          ->condition('field_address.locality', $string, 'CONTAINS')
+          ->condition('field_address.postal_code', $string, 'CONTAINS');
+
+// Add OR group to main query
+$query->condition($or);
+
+$ids = $query->execute();
+        if ($ids) {
+          $entities = $storage->loadMultiple($ids);
+          foreach ($entities as $entity) {
+            if ($entity->hasField('field_address') && !$entity->get('field_address')->isEmpty()) {
+              $address_item = $entity->get('field_address')->first();
+              
+              $parts = array_filter([
+                $address_item->address_line1,
+                $address_item->address_line2,
+                $address_item->address_line3,
+                $address_item->locality,
+                $address_item->postal_code,
+                $address_item->country_code,
+              ], function ($value) {
+                return !empty(trim((string) $value)) && trim((string) $value) !== '-';
+              });
+
+              $label = implode(', ', $parts);
+              
+              if ($label !== '') {
+                $matches[] = [
+                  'value' => $label . ' (' . $entity->id() . ')',
+                  'label' => Html::escape($label),
+                ];
+              }
+            }
+          }
+        }
+      } catch (\Exception $e) {
+        \Drupal::logger('sentinel_portal_sample')->error('Property address autocomplete error: @message', [
+          '@message' => $e->getMessage(),
+        ]);
+      }
     }
 
     return new JsonResponse($matches);
@@ -456,10 +522,12 @@ class SentinelSampleController extends ControllerBase {
           ];
         }
         else {
-          // Sample exists but missing addresses - redirect to details form
-          $url = Url::fromRoute('sentinel_portal_sample.anonymous_details', [
+
+          // Redirect to options page instead of details page
+          $url = Url::fromRoute('sentinel_portal_sample.anonymous_options', [
             'sample_id' => $sample_id,
-          ])->setAbsolute(TRUE);
+          ], AnonymousSampleLanguageRedirect::options())->setAbsolute(TRUE);
+
           return new RedirectResponse($url->toString());
         }
       }
@@ -472,13 +540,39 @@ class SentinelSampleController extends ControllerBase {
 
   /**
    * Thank you page for anonymous sample submission.
-   *
-   * @return array
-   *   A renderable array.
    */
-  public function thankYou() {
+  public function thankYou(Request $request) {
+    $sid = $request->query->get('sid');
+    $flow_hint = NULL;
+    if ($sid !== NULL && $sid !== '') {
+      $sample = $this->entityTypeManager()->getStorage('sentinel_sample')->load((int) $sid);
+      if ($sample && $sample->hasField('user_type') && !$sample->get('user_type')->isEmpty()) {
+        $flow_hint = AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $sample->get('user_type')->value);
+      }
+    }
+
     return [
-      '#title' => $this->t('Thank you! Your details have been submitted successfully. The sample report will be sent to the email address you provided.'),
+      '#title' => AnonymousSampleWizardProgress::trans('Submission complete'),
+      'message' => [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['sentinel-anonymous-thankyou']],
+        'icon' => [
+          '#markup' => '<p class="sentinel-anonymous-thankyou__icon" aria-hidden="true">✅</p>',
+        ],
+        'text' => [
+          '#markup' => '<p class="sentinel-anonymous-thankyou__lead"><strong>' .
+            Html::escape(AnonymousSampleWizardProgress::trans('Your details have been saved.')) . '</strong></p>' .
+            '<p>' . Html::escape(AnonymousSampleWizardProgress::trans('You can close this page.')) . '</p>',
+        ],
+        'done' => [
+          '#type' => 'link',
+          '#title' => AnonymousSampleWizardProgress::trans('Done'),
+          '#url' => Url::fromRoute('<front>', [], AnonymousSampleLanguageRedirect::options()),
+          '#attributes' => [
+            'class' => ['button', 'button--primary', 'btn', 'btn-success', 'sentinel-anonymous-thankyou__done'],
+          ],
+        ],
+      ],
     ];
   }
 

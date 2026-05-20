@@ -2,16 +2,23 @@
 
 namespace Drupal\sentinel_portal_sample\Form;
 
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\RedirectCommand;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\sentinel_portal_sample\AnonymousSampleFlowTranslationTrait;
+use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
+use Drupal\sentinel_portal_sample\AnonymousSampleWizardProgress;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Options form after anonymous sample submission.
  */
 class AnonymousSampleOptionsForm extends FormBase {
+
+  use AnonymousSampleFlowTranslationTrait;
 
   /**
    * The entity type manager.
@@ -49,71 +56,207 @@ class AnonymousSampleOptionsForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $sample_id = NULL) {
-    if (!$sample_id) {
-      $this->messenger()->addError($this->t('Invalid sample.'));
+  public function buildForm(array $form, FormStateInterface $form_state, $token = NULL) {
+    if (!$token) {
+      $this->messenger()->addError($this->tFlow('Invalid sample.'));
       return $form;
     }
 
     $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    $sample = $storage->load($sample_id);
+    if (str_starts_with($token, 'draft_')) {
+      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
+      $sample = $storage->create($draft_data);
+    } else {
+      $sample = $storage->load((int) $token);
+    }
 
     if (!$sample) {
-      $this->messenger()->addError($this->t('Sample not found.'));
+      $this->messenger()->addError($this->tFlow('Sample not found.'));
       return $form;
     }
 
-    $pack_reference_number = $sample->get('pack_reference_number')->value;
+    $this->getRequest()->getSession()->set('sentinel_anonymous_entry', 'options');
 
-    // $form['#title'] = $this->t('Sample submitted successfully but you need to add full details');
+    $languages = \Drupal::languageManager()->getLanguages();
+    $lang_options = [];
+    foreach ($languages as $code => $language) {
+      $lang_options[$code] = $language->getName();
+    }
+    if ($lang_options === []) {
+      $lang_options = ['en' => 'English'];
+    }
 
-    $form['message'] = [
-      '#markup' => '<div class="messages messages--status">' .
-        '<h1>' . $this->t('Your details have been successfully submitted for pack reference number : <b>@pack</b>', [
-          '@pack' => $pack_reference_number,
-        ]) . '</h1>' .
-        '<h2>' . $this->t('Please choose one of the options below.') . '</h2>' .
-        '</div>',
+    $resolved_lang = \Drupal::languageManager()->getCurrentLanguage()->getId();
+    if (!isset($lang_options[$resolved_lang])) {
+      $resolved_lang = array_key_first($lang_options);
+    }
+
+    $form['wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'anonymous-options-ajax-wrapper'],
+      '#weight' => -20,
+    ];
+
+    $form['wrapper']['message'] = [
+      '#markup' => '<p class="anonymous-sample-options-intro">' . $this->tFlow('Please choose one of the options below.') . '</p>',
       '#weight' => -10,
     ];
 
-    $form['actions'] = [
-      '#type' => 'actions',
-      '#weight' => 10,
-    ];
-
-    // Add Details Now button
-    $form['actions']['add_details_now'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Add More Details'),
-      '#submit' => ['::addDetailsNow'],
-      '#attributes' => [
-        'class' => ['button--primary'],
+    $form['wrapper']['language'] = [
+      '#type' => 'select',
+      '#title' => $this->tFlow('Select Language'),
+      '#options' => $lang_options,
+      '#default_value' => $resolved_lang,
+      '#required' => TRUE,
+      // Keep values at the form root so submit handlers and language resolution work.
+      '#parents' => ['language'],
+      '#submit' => ['::persistLanguageSelectionAjax'],
+      '#ajax' => [
+        'callback' => '::ajaxLanguageChange',
+        'event' => 'change',
+        'progress' => [
+          'type' => 'throbber',
+          'message' => NULL,
+        ],
       ],
     ];
 
-    // Add Details Later button
-    $form['actions']['add_details_later'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Add Later'),
-      '#submit' => ['::addDetailsLater'],
+    $user_type_default = NULL;
+    if ($sample->hasField('user_type') && !$sample->get('user_type')->isEmpty()) {
+      $normalized = AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $sample->get('user_type')->value);
+      if ($normalized === 'company' || $normalized === 'individual') {
+        $user_type_default = $normalized;
+      }
+    }
+
+    $form['wrapper']['user_type'] = [
+      '#type' => 'radios',
+      '#title' => $this->tFlow('Please select your account type'),
+      '#options' => [
+        'company' => $this->tFlow('Company'),
+        'individual' => $this->tFlow('Individual'),
+      ],
+      '#required' => TRUE,
+      '#parents' => ['user_type'],
+      '#default_value' => $user_type_default,
     ];
 
-    $form_state->set('sample_id', $sample_id);
+    // Add Details Now button
+    // $form['actions']['add_details_now'] = [
+    //   '#type' => 'submit',
+    //   '#value' => $this->t('Add More Details'),
+    //   '#submit' => ['::addDetailsNow'],
+    //   '#attributes' => [
+    //     'class' => ['button--primary'],
+    //   ],
+    // ];
+
+    // Add Details Later button
+    // $form['actions']['add_details_later'] = [
+    //   '#type' => 'submit',
+    //   '#value' => $this->t('Add Later'),
+    //   '#submit' => ['::addDetailsLater'],
+    // ];
+
+    $form['wrapper']['actions'] = [
+      '#type' => 'actions',
+      '#parents' => ['actions'],
+    ];
+    $form['wrapper']['actions']['next'] = [
+      '#type' => 'submit',
+      '#value' => $this->tFlow('Next'),
+      '#button_type' => 'primary',
+      '#parents' => ['actions', 'next'],
+    ];
+
+    $form_state->set('options_token', $token);
+
+    AnonymousSampleWizardProgress::prependToForm($form, $form_state, 'anonymous_sample_options_form', $sample);
 
     return $form;
   }
 
   /**
+   * Saves language choice on the sample before the interface reloads in that language.
+   */
+  public function persistLanguageSelectionAjax(array &$form, FormStateInterface $form_state): void {
+    $token = $form_state->get('options_token');
+    $langcode = $form_state->getValue('language');
+    if (!$token || $langcode === NULL || $langcode === '') {
+      return;
+    }
+    
+    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
+    if (str_starts_with($token, 'draft_')) {
+      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
+      $sample = $storage->create($draft_data);
+    } else {
+      $sample = $storage->load((int) $token);
+    }
+    
+    if ($sample && $sample->hasField('language')) {
+      $sample->set('language', $langcode);
+      if (str_starts_with($token, 'draft_')) {
+        $this->getRequest()->getSession()->set('sentinel_draft_' . $token, $sample->toArray());
+      } else {
+        $sample->save();
+      }
+    }
+  }
+
+  /**
+   * Full page redirect to the URL language prefix (site uses path-based negotiation).
+   */
+public function ajaxLanguageChange(array &$form, FormStateInterface $form_state) {
+
+  $token = $form_state->get('options_token');
+
+  $langcode = $form_state->getValue('language');
+
+  $language = $langcode
+    ? \Drupal::languageManager()->getLanguage($langcode)
+    : NULL;
+
+  if (!$token || !$language) {
+    return $form['wrapper'];
+  }
+
+  // Store selected language in session.
+  $this->getRequest()
+    ->getSession()
+    ->set('sentinel_anonymous_language', $langcode);
+
+  $url = Url::fromRoute(
+    'sentinel_portal_sample.anonymous_options',
+    [
+      'token' => $token,
+    ],
+    [
+      'language' => $language,
+    ]
+  )->setAbsolute(TRUE);
+
+  $response = new AjaxResponse();
+
+  $response->addCommand(
+    new RedirectCommand($url->toString())
+  );
+
+  return $response;
+}
+
+  /**
    * Submit handler for "Add Details Now".
    */
   public function addDetailsNow(array &$form, FormStateInterface $form_state) {
-    $sample_id = $form_state->get('sample_id');
+    $token = $form_state->get('options_token');
     
     // Redirect to anonymous details form
+    $langcode = $form_state->getValue('language');
+    $target_lang = $langcode ? \Drupal::languageManager()->getLanguage($langcode) : NULL;
     $form_state->setRedirect('sentinel_portal_sample.anonymous_details', [
-      'sample_id' => $sample_id,
-    ]);
+      'token' => $token,
+    ], AnonymousSampleLanguageRedirect::options($target_lang));
   }
 
   /**
@@ -121,13 +264,88 @@ class AnonymousSampleOptionsForm extends FormBase {
    */
   public function addDetailsLater(array &$form, FormStateInterface $form_state) {
     // Redirect to thank you page
-    $form_state->setRedirect('sentinel_portal_sample.anonymous_thank_you');
+    $form_state->setRedirect('sentinel_portal_sample.anonymous_thank_you', [], AnonymousSampleLanguageRedirect::options());
   }
 
   /**
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    // Default submit handler (should not be called)
+
+    $token = $form_state->get('options_token');
+  
+    $storage = $this->entityTypeManager
+      ->getStorage('sentinel_sample');
+  
+    if (str_starts_with($token, 'draft_')) {
+      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
+      $sample = $storage->create($draft_data);
+    } else {
+      $sample = $storage->load((int) $token);
+    }
+  
+    $langcode = $form_state->getValue('language');
+  
+    // Store selected language in session.
+    $this->getRequest()
+      ->getSession()
+      ->set('sentinel_anonymous_language', $langcode);
+    $this->getRequest()->getSession()->set(
+      'sentinel_anonymous_last_flow',
+      AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $form_state->getValue('user_type'))
+    );
+  
+    if ($sample) {
+  
+      // Save user type.
+      if ($sample->hasField('user_type')) {
+        $sample->set(
+          'user_type',
+          $form_state->getValue('user_type')
+        );
+      }
+  
+      // Save language.
+      if ($sample->hasField('language')) {
+        $sample->set('language', $langcode);
+      }
+  
+      $sample->save();
+      
+      if (str_starts_with($token, 'draft_')) {
+        $this->getRequest()->getSession()->set('sentinel_draft_' . $token, $sample->toArray());
+      } else {
+        $sample->save();
+      }
+    }
+  
+    $user_type = $form_state->getValue('user_type');
+  
+    $target_lang = $langcode
+      ? \Drupal::languageManager()->getLanguage($langcode)
+      : NULL;
+  
+    $redirect_options = AnonymousSampleLanguageRedirect::options($target_lang);
+  
+    if ($user_type === 'company') {
+  
+      $form_state->setRedirect(
+        'sentinel_portal_sample.anonymous_company_wizard',
+        [
+          'token' => $token,
+        ],
+        $redirect_options
+      );
+    }
+    else {
+  
+      $form_state->setRedirect(
+        'sentinel_portal_sample.anonymous_individual_contact',
+        [
+          'token' => $token,
+        ],
+        $redirect_options
+      );
+    }
   }
 }

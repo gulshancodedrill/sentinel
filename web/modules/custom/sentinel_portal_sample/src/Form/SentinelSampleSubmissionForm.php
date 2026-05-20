@@ -7,6 +7,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\sentinel_portal_sample\PortalSampleCountryOptions;
 use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
 use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
@@ -22,7 +23,7 @@ class SentinelSampleSubmissionForm extends FormBase {
   /**
    * The entity type manager.
    *
-   *354 @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
    */
   protected $entityTypeManager;
 
@@ -164,257 +165,7 @@ class SentinelSampleSubmissionForm extends FormBase {
     $form['company_details']['company_address']['company_country'] = [
       '#type' => 'select',
       '#title' => $this->t('Country'),
-      '#options' => [
-        'AD' => $this->t('Andorra'),
-        'AE' => $this->t('United Arab Emirates'),
-        'AF' => $this->t('Afghanistan'),
-        'AG' => $this->t('Antigua and Barbuda'),
-        'AI' => $this->t('Anguilla'),
-        'AL' => $this->t('Albania'),
-        'AM' => $this->t('Armenia'),
-        'AO' => $this->t('Angola'),
-        'AQ' => $this->t('Antarctica'),
-        'AR' => $this->t('Argentina'),
-        'AS' => $this->t('American Samoa'),
-        'AT' => $this->t('Austria'),
-        'AU' => $this->t('Australia'),
-        'AW' => $this->t('Aruba'),
-        'AX' => $this->t('Åland Islands'),
-        'AZ' => $this->t('Azerbaijan'),
-        'BA' => $this->t('Bosnia and Herzegovina'),
-        'BB' => $this->t('Barbados'),
-        'BD' => $this->t('Bangladesh'),
-        'BE' => $this->t('Belgium'),
-        'BF' => $this->t('Burkina Faso'),
-        'BG' => $this->t('Bulgaria'),
-        'BH' => $this->t('Bahrain'),
-        'BI' => $this->t('Burundi'),
-        'BJ' => $this->t('Benin'),
-        'BL' => $this->t('Saint Barthélemy'),
-        'BM' => $this->t('Bermuda'),
-        'BN' => $this->t('Brunei'),
-        'BO' => $this->t('Bolivia'),
-        'BQ' => $this->t('Caribbean Netherlands'),
-        'BR' => $this->t('Brazil'),
-        'BS' => $this->t('Bahamas'),
-        'BT' => $this->t('Bhutan'),
-        'BV' => $this->t('Bouvet Island'),
-        'BW' => $this->t('Botswana'),
-        'BY' => $this->t('Belarus'),
-        'BZ' => $this->t('Belize'),
-        'CA' => $this->t('Canada'),
-        'CC' => $this->t('Cocos Islands'),
-        'CD' => $this->t('Democratic Republic of the Congo'),
-        'CF' => $this->t('Central African Republic'),
-        'CG' => $this->t('Republic of the Congo'),
-        'CH' => $this->t('Switzerland'),
-        'CI' => $this->t('Côte d\'Ivoire'),
-        'CK' => $this->t('Cook Islands'),
-        'CL' => $this->t('Chile'),
-        'CM' => $this->t('Cameroon'),
-        'CN' => $this->t('China'),
-        'CO' => $this->t('Colombia'),
-        'CR' => $this->t('Costa Rica'),
-        'CU' => $this->t('Cuba'),
-        'CV' => $this->t('Cape Verde'),
-        'CW' => $this->t('Curaçao'),
-        'CX' => $this->t('Christmas Island'),
-        'CY' => $this->t('Cyprus'),
-        'CZ' => $this->t('Czech Republic'),
-        'DE' => $this->t('Germany'),
-        'DJ' => $this->t('Djibouti'),
-        'DK' => $this->t('Denmark'),
-        'DM' => $this->t('Dominica'),
-        'DO' => $this->t('Dominican Republic'),
-        'DZ' => $this->t('Algeria'),
-        'EC' => $this->t('Ecuador'),
-        'EE' => $this->t('Estonia'),
-        'EG' => $this->t('Egypt'),
-        'EH' => $this->t('Western Sahara'),
-        'ER' => $this->t('Eritrea'),
-        'ES' => $this->t('Spain'),
-        'ET' => $this->t('Ethiopia'),
-        'FI' => $this->t('Finland'),
-        'FJ' => $this->t('Fiji'),
-        'FK' => $this->t('Falkland Islands'),
-        'FM' => $this->t('Micronesia'),
-        'FO' => $this->t('Faroe Islands'),
-        'FR' => $this->t('France'),
-        'GA' => $this->t('Gabon'),
-        'GB' => $this->t('United Kingdom'),
-        'GD' => $this->t('Grenada'),
-        'GE' => $this->t('Georgia'),
-        'GF' => $this->t('French Guiana'),
-        'GG' => $this->t('Guernsey'),
-        'GH' => $this->t('Ghana'),
-        'GI' => $this->t('Gibraltar'),
-        'GL' => $this->t('Greenland'),
-        'GM' => $this->t('Gambia'),
-        'GN' => $this->t('Guinea'),
-        'GP' => $this->t('Guadeloupe'),
-        'GQ' => $this->t('Equatorial Guinea'),
-        'GR' => $this->t('Greece'),
-        'GS' => $this->t('South Georgia and the South Sandwich Islands'),
-        'GT' => $this->t('Guatemala'),
-        'GU' => $this->t('Guam'),
-        'GW' => $this->t('Guinea-Bissau'),
-        'GY' => $this->t('Guyana'),
-        'HK' => $this->t('Hong Kong'),
-        'HM' => $this->t('Heard Island and McDonald Islands'),
-        'HN' => $this->t('Honduras'),
-        'HR' => $this->t('Croatia'),
-        'HT' => $this->t('Haiti'),
-        'HU' => $this->t('Hungary'),
-        'ID' => $this->t('Indonesia'),
-        'IE' => $this->t('Ireland'),
-        'IL' => $this->t('Israel'),
-        'IM' => $this->t('Isle of Man'),
-        'IN' => $this->t('India'),
-        'IO' => $this->t('British Indian Ocean Territory'),
-        'IQ' => $this->t('Iraq'),
-        'IR' => $this->t('Iran'),
-        'IS' => $this->t('Iceland'),
-        'IT' => $this->t('Italy'),
-        'JE' => $this->t('Jersey'),
-        'JM' => $this->t('Jamaica'),
-        'JO' => $this->t('Jordan'),
-        'JP' => $this->t('Japan'),
-        'KE' => $this->t('Kenya'),
-        'KG' => $this->t('Kyrgyzstan'),
-        'KH' => $this->t('Cambodia'),
-        'KI' => $this->t('Kiribati'),
-        'KM' => $this->t('Comoros'),
-        'KN' => $this->t('Saint Kitts and Nevis'),
-        'KP' => $this->t('North Korea'),
-        'KR' => $this->t('South Korea'),
-        'KW' => $this->t('Kuwait'),
-        'KY' => $this->t('Cayman Islands'),
-        'KZ' => $this->t('Kazakhstan'),
-        'LA' => $this->t('Laos'),
-        'LB' => $this->t('Lebanon'),
-        'LC' => $this->t('Saint Lucia'),
-        'LI' => $this->t('Liechtenstein'),
-        'LK' => $this->t('Sri Lanka'),
-        'LR' => $this->t('Liberia'),
-        'LS' => $this->t('Lesotho'),
-        'LT' => $this->t('Lithuania'),
-        'LU' => $this->t('Luxembourg'),
-        'LV' => $this->t('Latvia'),
-        'LY' => $this->t('Libya'),
-        'MA' => $this->t('Morocco'),
-        'MC' => $this->t('Monaco'),
-        'MD' => $this->t('Moldova'),
-        'ME' => $this->t('Montenegro'),
-        'MF' => $this->t('Saint Martin'),
-        'MG' => $this->t('Madagascar'),
-        'MH' => $this->t('Marshall Islands'),
-        'MK' => $this->t('North Macedonia'),
-        'ML' => $this->t('Mali'),
-        'MM' => $this->t('Myanmar'),
-        'MN' => $this->t('Mongolia'),
-        'MO' => $this->t('Macao'),
-        'MP' => $this->t('Northern Mariana Islands'),
-        'MQ' => $this->t('Martinique'),
-        'MR' => $this->t('Mauritania'),
-        'MS' => $this->t('Montserrat'),
-        'MT' => $this->t('Malta'),
-        'MU' => $this->t('Mauritius'),
-        'MV' => $this->t('Maldives'),
-        'MW' => $this->t('Malawi'),
-        'MX' => $this->t('Mexico'),
-        'MY' => $this->t('Malaysia'),
-        'MZ' => $this->t('Mozambique'),
-        'NA' => $this->t('Namibia'),
-        'NC' => $this->t('New Caledonia'),
-        'NE' => $this->t('Niger'),
-        'NF' => $this->t('Norfolk Island'),
-        'NG' => $this->t('Nigeria'),
-        'NI' => $this->t('Nicaragua'),
-        'NL' => $this->t('Netherlands'),
-        'NO' => $this->t('Norway'),
-        'NP' => $this->t('Nepal'),
-        'NR' => $this->t('Nauru'),
-        'NU' => $this->t('Niue'),
-        'NZ' => $this->t('New Zealand'),
-        'OM' => $this->t('Oman'),
-        'PA' => $this->t('Panama'),
-        'PE' => $this->t('Peru'),
-        'PF' => $this->t('French Polynesia'),
-        'PG' => $this->t('Papua New Guinea'),
-        'PH' => $this->t('Philippines'),
-        'PK' => $this->t('Pakistan'),
-        'PL' => $this->t('Poland'),
-        'PM' => $this->t('Saint Pierre and Miquelon'),
-        'PN' => $this->t('Pitcairn Islands'),
-        'PR' => $this->t('Puerto Rico'),
-        'PS' => $this->t('Palestine'),
-        'PT' => $this->t('Portugal'),
-        'PW' => $this->t('Palau'),
-        'PY' => $this->t('Paraguay'),
-        'QA' => $this->t('Qatar'),
-        'RE' => $this->t('Réunion'),
-        'RO' => $this->t('Romania'),
-        'RS' => $this->t('Serbia'),
-        'RU' => $this->t('Russia'),
-        'RW' => $this->t('Rwanda'),
-        'SA' => $this->t('Saudi Arabia'),
-        'SB' => $this->t('Solomon Islands'),
-        'SC' => $this->t('Seychelles'),
-        'SD' => $this->t('Sudan'),
-        'SE' => $this->t('Sweden'),
-        'SG' => $this->t('Singapore'),
-        'SH' => $this->t('Saint Helena'),
-        'SI' => $this->t('Slovenia'),
-        'SJ' => $this->t('Svalbard and Jan Mayen'),
-        'SK' => $this->t('Slovakia'),
-        'SL' => $this->t('Sierra Leone'),
-        'SM' => $this->t('San Marino'),
-        'SN' => $this->t('Senegal'),
-        'SO' => $this->t('Somalia'),
-        'SR' => $this->t('Suriname'),
-        'SS' => $this->t('South Sudan'),
-        'ST' => $this->t('São Tomé and Príncipe'),
-        'SV' => $this->t('El Salvador'),
-        'SX' => $this->t('Sint Maarten'),
-        'SY' => $this->t('Syria'),
-        'SZ' => $this->t('Eswatini'),
-        'TC' => $this->t('Turks and Caicos Islands'),
-        'TD' => $this->t('Chad'),
-        'TF' => $this->t('French Southern Territories'),
-        'TG' => $this->t('Togo'),
-        'TH' => $this->t('Thailand'),
-        'TJ' => $this->t('Tajikistan'),
-        'TK' => $this->t('Tokelau'),
-        'TL' => $this->t('Timor-Leste'),
-        'TM' => $this->t('Turkmenistan'),
-        'TN' => $this->t('Tunisia'),
-        'TO' => $this->t('Tonga'),
-        'TR' => $this->t('Turkey'),
-        'TT' => $this->t('Trinidad and Tobago'),
-        'TV' => $this->t('Tuvalu'),
-        'TW' => $this->t('Taiwan'),
-        'TZ' => $this->t('Tanzania'),
-        'UA' => $this->t('Ukraine'),
-        'UG' => $this->t('Uganda'),
-        'UM' => $this->t('United States Minor Outlying Islands'),
-        'US' => $this->t('United States'),
-        'UY' => $this->t('Uruguay'),
-        'UZ' => $this->t('Uzbekistan'),
-        'VA' => $this->t('Vatican City'),
-        'VC' => $this->t('Saint Vincent and the Grenadines'),
-        'VE' => $this->t('Venezuela'),
-        'VG' => $this->t('British Virgin Islands'),
-        'VI' => $this->t('United States Virgin Islands'),
-        'VN' => $this->t('Vietnam'),
-        'VU' => $this->t('Vanuatu'),
-        'WF' => $this->t('Wallis and Futuna'),
-        'WS' => $this->t('Samoa'),
-        'YE' => $this->t('Yemen'),
-        'YT' => $this->t('Mayotte'),
-        'ZA' => $this->t('South Africa'),
-        'ZM' => $this->t('Zambia'),
-        'ZW' => $this->t('Zimbabwe'),
-      ],
+      '#options' => PortalSampleCountryOptions::options(fn (string $label) => $this->t($label)),
       '#default_value' => 'GB',
       '#weight' => 2,
     ];
@@ -636,257 +387,7 @@ class SentinelSampleSubmissionForm extends FormBase {
     $form['system_details']['address']['address_fields']['country'] = [
       '#type' => 'select',
       '#title' => $this->t('Country'),
-      '#options' => [
-        'AD' => $this->t('Andorra'),
-        'AE' => $this->t('United Arab Emirates'),
-        'AF' => $this->t('Afghanistan'),
-        'AG' => $this->t('Antigua and Barbuda'),
-        'AI' => $this->t('Anguilla'),
-        'AL' => $this->t('Albania'),
-        'AM' => $this->t('Armenia'),
-        'AO' => $this->t('Angola'),
-        'AQ' => $this->t('Antarctica'),
-        'AR' => $this->t('Argentina'),
-        'AS' => $this->t('American Samoa'),
-        'AT' => $this->t('Austria'),
-        'AU' => $this->t('Australia'),
-        'AW' => $this->t('Aruba'),
-        'AX' => $this->t('Åland Islands'),
-        'AZ' => $this->t('Azerbaijan'),
-        'BA' => $this->t('Bosnia and Herzegovina'),
-        'BB' => $this->t('Barbados'),
-        'BD' => $this->t('Bangladesh'),
-        'BE' => $this->t('Belgium'),
-        'BF' => $this->t('Burkina Faso'),
-        'BG' => $this->t('Bulgaria'),
-        'BH' => $this->t('Bahrain'),
-        'BI' => $this->t('Burundi'),
-        'BJ' => $this->t('Benin'),
-        'BL' => $this->t('Saint Barthélemy'),
-        'BM' => $this->t('Bermuda'),
-        'BN' => $this->t('Brunei'),
-        'BO' => $this->t('Bolivia'),
-        'BQ' => $this->t('Caribbean Netherlands'),
-        'BR' => $this->t('Brazil'),
-        'BS' => $this->t('Bahamas'),
-        'BT' => $this->t('Bhutan'),
-        'BV' => $this->t('Bouvet Island'),
-        'BW' => $this->t('Botswana'),
-        'BY' => $this->t('Belarus'),
-        'BZ' => $this->t('Belize'),
-        'CA' => $this->t('Canada'),
-        'CC' => $this->t('Cocos Islands'),
-        'CD' => $this->t('Democratic Republic of the Congo'),
-        'CF' => $this->t('Central African Republic'),
-        'CG' => $this->t('Republic of the Congo'),
-        'CH' => $this->t('Switzerland'),
-        'CI' => $this->t('Côte d\'Ivoire'),
-        'CK' => $this->t('Cook Islands'),
-        'CL' => $this->t('Chile'),
-        'CM' => $this->t('Cameroon'),
-        'CN' => $this->t('China'),
-        'CO' => $this->t('Colombia'),
-        'CR' => $this->t('Costa Rica'),
-        'CU' => $this->t('Cuba'),
-        'CV' => $this->t('Cape Verde'),
-        'CW' => $this->t('Curaçao'),
-        'CX' => $this->t('Christmas Island'),
-        'CY' => $this->t('Cyprus'),
-        'CZ' => $this->t('Czech Republic'),
-        'DE' => $this->t('Germany'),
-        'DJ' => $this->t('Djibouti'),
-        'DK' => $this->t('Denmark'),
-        'DM' => $this->t('Dominica'),
-        'DO' => $this->t('Dominican Republic'),
-        'DZ' => $this->t('Algeria'),
-        'EC' => $this->t('Ecuador'),
-        'EE' => $this->t('Estonia'),
-        'EG' => $this->t('Egypt'),
-        'EH' => $this->t('Western Sahara'),
-        'ER' => $this->t('Eritrea'),
-        'ES' => $this->t('Spain'),
-        'ET' => $this->t('Ethiopia'),
-        'FI' => $this->t('Finland'),
-        'FJ' => $this->t('Fiji'),
-        'FK' => $this->t('Falkland Islands'),
-        'FM' => $this->t('Micronesia'),
-        'FO' => $this->t('Faroe Islands'),
-        'FR' => $this->t('France'),
-        'GA' => $this->t('Gabon'),
-        'GB' => $this->t('United Kingdom'),
-        'GD' => $this->t('Grenada'),
-        'GE' => $this->t('Georgia'),
-        'GF' => $this->t('French Guiana'),
-        'GG' => $this->t('Guernsey'),
-        'GH' => $this->t('Ghana'),
-        'GI' => $this->t('Gibraltar'),
-        'GL' => $this->t('Greenland'),
-        'GM' => $this->t('Gambia'),
-        'GN' => $this->t('Guinea'),
-        'GP' => $this->t('Guadeloupe'),
-        'GQ' => $this->t('Equatorial Guinea'),
-        'GR' => $this->t('Greece'),
-        'GS' => $this->t('South Georgia and the South Sandwich Islands'),
-        'GT' => $this->t('Guatemala'),
-        'GU' => $this->t('Guam'),
-        'GW' => $this->t('Guinea-Bissau'),
-        'GY' => $this->t('Guyana'),
-        'HK' => $this->t('Hong Kong'),
-        'HM' => $this->t('Heard Island and McDonald Islands'),
-        'HN' => $this->t('Honduras'),
-        'HR' => $this->t('Croatia'),
-        'HT' => $this->t('Haiti'),
-        'HU' => $this->t('Hungary'),
-        'ID' => $this->t('Indonesia'),
-        'IE' => $this->t('Ireland'),
-        'IL' => $this->t('Israel'),
-        'IM' => $this->t('Isle of Man'),
-        'IN' => $this->t('India'),
-        'IO' => $this->t('British Indian Ocean Territory'),
-        'IQ' => $this->t('Iraq'),
-        'IR' => $this->t('Iran'),
-        'IS' => $this->t('Iceland'),
-        'IT' => $this->t('Italy'),
-        'JE' => $this->t('Jersey'),
-        'JM' => $this->t('Jamaica'),
-        'JO' => $this->t('Jordan'),
-        'JP' => $this->t('Japan'),
-        'KE' => $this->t('Kenya'),
-        'KG' => $this->t('Kyrgyzstan'),
-        'KH' => $this->t('Cambodia'),
-        'KI' => $this->t('Kiribati'),
-        'KM' => $this->t('Comoros'),
-        'KN' => $this->t('Saint Kitts and Nevis'),
-        'KP' => $this->t('North Korea'),
-        'KR' => $this->t('South Korea'),
-        'KW' => $this->t('Kuwait'),
-        'KY' => $this->t('Cayman Islands'),
-        'KZ' => $this->t('Kazakhstan'),
-        'LA' => $this->t('Laos'),
-        'LB' => $this->t('Lebanon'),
-        'LC' => $this->t('Saint Lucia'),
-        'LI' => $this->t('Liechtenstein'),
-        'LK' => $this->t('Sri Lanka'),
-        'LR' => $this->t('Liberia'),
-        'LS' => $this->t('Lesotho'),
-        'LT' => $this->t('Lithuania'),
-        'LU' => $this->t('Luxembourg'),
-        'LV' => $this->t('Latvia'),
-        'LY' => $this->t('Libya'),
-        'MA' => $this->t('Morocco'),
-        'MC' => $this->t('Monaco'),
-        'MD' => $this->t('Moldova'),
-        'ME' => $this->t('Montenegro'),
-        'MF' => $this->t('Saint Martin'),
-        'MG' => $this->t('Madagascar'),
-        'MH' => $this->t('Marshall Islands'),
-        'MK' => $this->t('North Macedonia'),
-        'ML' => $this->t('Mali'),
-        'MM' => $this->t('Myanmar'),
-        'MN' => $this->t('Mongolia'),
-        'MO' => $this->t('Macao'),
-        'MP' => $this->t('Northern Mariana Islands'),
-        'MQ' => $this->t('Martinique'),
-        'MR' => $this->t('Mauritania'),
-        'MS' => $this->t('Montserrat'),
-        'MT' => $this->t('Malta'),
-        'MU' => $this->t('Mauritius'),
-        'MV' => $this->t('Maldives'),
-        'MW' => $this->t('Malawi'),
-        'MX' => $this->t('Mexico'),
-        'MY' => $this->t('Malaysia'),
-        'MZ' => $this->t('Mozambique'),
-        'NA' => $this->t('Namibia'),
-        'NC' => $this->t('New Caledonia'),
-        'NE' => $this->t('Niger'),
-        'NF' => $this->t('Norfolk Island'),
-        'NG' => $this->t('Nigeria'),
-        'NI' => $this->t('Nicaragua'),
-        'NL' => $this->t('Netherlands'),
-        'NO' => $this->t('Norway'),
-        'NP' => $this->t('Nepal'),
-        'NR' => $this->t('Nauru'),
-        'NU' => $this->t('Niue'),
-        'NZ' => $this->t('New Zealand'),
-        'OM' => $this->t('Oman'),
-        'PA' => $this->t('Panama'),
-        'PE' => $this->t('Peru'),
-        'PF' => $this->t('French Polynesia'),
-        'PG' => $this->t('Papua New Guinea'),
-        'PH' => $this->t('Philippines'),
-        'PK' => $this->t('Pakistan'),
-        'PL' => $this->t('Poland'),
-        'PM' => $this->t('Saint Pierre and Miquelon'),
-        'PN' => $this->t('Pitcairn Islands'),
-        'PR' => $this->t('Puerto Rico'),
-        'PS' => $this->t('Palestine'),
-        'PT' => $this->t('Portugal'),
-        'PW' => $this->t('Palau'),
-        'PY' => $this->t('Paraguay'),
-        'QA' => $this->t('Qatar'),
-        'RE' => $this->t('Réunion'),
-        'RO' => $this->t('Romania'),
-        'RS' => $this->t('Serbia'),
-        'RU' => $this->t('Russia'),
-        'RW' => $this->t('Rwanda'),
-        'SA' => $this->t('Saudi Arabia'),
-        'SB' => $this->t('Solomon Islands'),
-        'SC' => $this->t('Seychelles'),
-        'SD' => $this->t('Sudan'),
-        'SE' => $this->t('Sweden'),
-        'SG' => $this->t('Singapore'),
-        'SH' => $this->t('Saint Helena'),
-        'SI' => $this->t('Slovenia'),
-        'SJ' => $this->t('Svalbard and Jan Mayen'),
-        'SK' => $this->t('Slovakia'),
-        'SL' => $this->t('Sierra Leone'),
-        'SM' => $this->t('San Marino'),
-        'SN' => $this->t('Senegal'),
-        'SO' => $this->t('Somalia'),
-        'SR' => $this->t('Suriname'),
-        'SS' => $this->t('South Sudan'),
-        'ST' => $this->t('São Tomé and Príncipe'),
-        'SV' => $this->t('El Salvador'),
-        'SX' => $this->t('Sint Maarten'),
-        'SY' => $this->t('Syria'),
-        'SZ' => $this->t('Eswatini'),
-        'TC' => $this->t('Turks and Caicos Islands'),
-        'TD' => $this->t('Chad'),
-        'TF' => $this->t('French Southern Territories'),
-        'TG' => $this->t('Togo'),
-        'TH' => $this->t('Thailand'),
-        'TJ' => $this->t('Tajikistan'),
-        'TK' => $this->t('Tokelau'),
-        'TL' => $this->t('Timor-Leste'),
-        'TM' => $this->t('Turkmenistan'),
-        'TN' => $this->t('Tunisia'),
-        'TO' => $this->t('Tonga'),
-        'TR' => $this->t('Turkey'),
-        'TT' => $this->t('Trinidad and Tobago'),
-        'TV' => $this->t('Tuvalu'),
-        'TW' => $this->t('Taiwan'),
-        'TZ' => $this->t('Tanzania'),
-        'UA' => $this->t('Ukraine'),
-        'UG' => $this->t('Uganda'),
-        'UM' => $this->t('United States Minor Outlying Islands'),
-        'US' => $this->t('United States'),
-        'UY' => $this->t('Uruguay'),
-        'UZ' => $this->t('Uzbekistan'),
-        'VA' => $this->t('Vatican City'),
-        'VC' => $this->t('Saint Vincent and the Grenadines'),
-        'VE' => $this->t('Venezuela'),
-        'VG' => $this->t('British Virgin Islands'),
-        'VI' => $this->t('United States Virgin Islands'),
-        'VN' => $this->t('Vietnam'),
-        'VU' => $this->t('Vanuatu'),
-        'WF' => $this->t('Wallis and Futuna'),
-        'WS' => $this->t('Samoa'),
-        'YE' => $this->t('Yemen'),
-        'YT' => $this->t('Mayotte'),
-        'ZA' => $this->t('South Africa'),
-        'ZM' => $this->t('Zambia'),
-        'ZW' => $this->t('Zimbabwe'),
-      ],
+      '#options' => PortalSampleCountryOptions::options(fn (string $label) => $this->t($label)),
       '#default_value' => 'GB',
       '#weight' => 1,
     ];
@@ -1726,28 +1227,61 @@ class SentinelSampleSubmissionForm extends FormBase {
     try {
       $address_storage = \Drupal::entityTypeManager()->getStorage('address');
 
-      $company_selection = $values['company_address_selection']
-        ?? $this->getArrayPathValue($values, ['company_details', 'company_address', 'company_address_selection'])
-        ?? $this->getArrayPathValue($original_values, ['company_details', 'company_address', 'company_address_selection'])
-        ?? NULL;
-      $company_target_id = $this->parseAddressSelection($company_selection);
+      $skip_company_address = $values['skip_company_address'] ?? $original_values['skip_company_address'] ?? FALSE;
+      $company_target_id = NULL;
 
-      if ($company_target_id) {
-        $company_entity = $address_storage->load($company_target_id);
-        if (!$company_entity) {
-          $company_target_id = NULL;
+      if (!$skip_company_address) {
+        $company_selection = $values['company_address_selection']
+          ?? $this->getArrayPathValue($values, ['company_details', 'company_address', 'company_address_selection'])
+          ?? $this->getArrayPathValue($original_values, ['company_details', 'company_address', 'company_address_selection'])
+          ?? NULL;
+        $company_target_id = $this->parseAddressSelection($company_selection);
+
+        if ($company_target_id) {
+          $company_entity = $address_storage->load($company_target_id);
+          if (!$company_entity) {
+            $company_target_id = NULL;
+          }
         }
-      }
 
-      if (!$company_target_id) {
         $company_address_data = $this->buildCompanyAddressFieldValues($values, $original_values);
-        if (!empty($company_address_data)) {
-          $company_entity = $address_storage->create([
-            'type' => 'company_address',
-            'field_address' => $company_address_data,
-          ]);
-          $company_entity->save();
-          $company_target_id = (int) $company_entity->id();
+
+        // Reuse the sample's existing company address when the submitted values
+        // still describe the same address (e.g. wizard set field_company_address
+        // but the details step does not post a dropdown selection).
+        if (!$company_target_id && !empty($company_address_data)) {
+          if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+            $reuse_id = (int) $sample->get('field_company_address')->first()->target_id;
+            if ($this->companyAddressDataMatchesEntity($reuse_id, $company_address_data)) {
+              $company_target_id = $reuse_id;
+            }
+          }
+        }
+
+        if (!$company_target_id && !empty($company_address_data)) {
+          $existing_id = $this->findExistingAddress('company_address', $company_address_data);
+          if ($existing_id) {
+            $company_target_id = $existing_id;
+          }
+          else {
+            $company_entity = $address_storage->create([
+              'type' => 'company_address',
+              'field_address' => $company_address_data,
+            ]);
+            $company_entity->save();
+            $company_target_id = (int) $company_entity->id();
+          }
+        }
+
+        // Preserve an existing reference when no address lines were submitted
+        // (e.g. company fields disabled after the anonymous wizard).
+        if (!$company_target_id && empty($company_address_data)) {
+          if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+            $preserve_id = (int) $sample->get('field_company_address')->first()->target_id;
+            if ($address_storage->load($preserve_id)) {
+              $company_target_id = $preserve_id;
+            }
+          }
         }
       }
 
@@ -1778,12 +1312,17 @@ class SentinelSampleSubmissionForm extends FormBase {
       if (!$sample_target_id) {
         $sample_address_data = $this->buildSampleAddressFieldValues($values, $original_values);
         if (!empty($sample_address_data)) {
-          $sample_entity = $address_storage->create([
-            'type' => 'address',
-            'field_address' => $sample_address_data,
-          ]);
-          $sample_entity->save();
-          $sample_target_id = (int) $sample_entity->id();
+          $existing_id = $this->findExistingAddress('address', $sample_address_data);
+          if ($existing_id) {
+            $sample_target_id = $existing_id;
+          } else {
+            $sample_entity = $address_storage->create([
+              'type' => 'address',
+              'field_address' => $sample_address_data,
+            ]);
+            $sample_entity->save();
+            $sample_target_id = (int) $sample_entity->id();
+          }
         }
       }
 
@@ -1822,6 +1361,73 @@ class SentinelSampleSubmissionForm extends FormBase {
   }
 
   /**
+   * Finds an existing ECK address entity matching the given data.
+   */
+  protected function findExistingAddress(string $bundle, array $address_data): ?int {
+    $storage = \Drupal::entityTypeManager()->getStorage('address');
+    $query = $storage->getQuery()
+      ->condition('type', $bundle)
+      ->accessCheck(FALSE)
+      ->range(0, 1);
+
+    $fields_to_check = ['country_code', 'address_line1', 'address_line2', 'locality', 'administrative_area', 'postal_code', 'organization'];
+    
+    $has_conditions = FALSE;
+    foreach ($fields_to_check as $field) {
+      if (isset($address_data[$field]) && $address_data[$field] !== '') {
+        $query->condition("field_address.$field", $address_data[$field]);
+        $has_conditions = TRUE;
+      }
+    }
+
+    if (!$has_conditions) {
+      return NULL;
+    }
+
+    $existing_ids = $query->execute();
+    if (!empty($existing_ids)) {
+      return (int) reset($existing_ids);
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Whether an address entity's field_address values match submitted data.
+   *
+   * Used to avoid creating a duplicate company_address when the sample already
+   * references the correct entity (e.g. after the anonymous company wizard).
+   */
+  protected function companyAddressDataMatchesEntity(int $entity_id, array $data): bool {
+    $storage = \Drupal::entityTypeManager()->getStorage('address');
+    $entity = $storage->load($entity_id);
+    if (!$entity || !$entity->hasField('field_address') || $entity->get('field_address')->isEmpty()) {
+      return FALSE;
+    }
+    $row = $entity->get('field_address')->first()->getValue();
+    $fields = [
+      'country_code',
+      'address_line1',
+      'address_line2',
+      'locality',
+      'administrative_area',
+      'postal_code',
+      'organization',
+    ];
+    foreach ($fields as $field) {
+      $a = isset($data[$field]) ? trim((string) $data[$field]) : '';
+      $b = isset($row[$field]) ? trim((string) $row[$field]) : '';
+      if ($field === 'organization' && $a === '') {
+        continue;
+      }
+      if (mb_strtolower($a) !== mb_strtolower($b)) {
+        return FALSE;
+      }
+    }
+    return TRUE;
+  }
+
+  /**
    * Parse an address selection value (dropdown or autocomplete) to an ID.
    */
   protected function parseAddressSelection($selection): ?int {
@@ -1831,7 +1437,13 @@ class SentinelSampleSubmissionForm extends FormBase {
     if (is_numeric($selection)) {
       return (int) $selection;
     }
-    if (is_string($selection) && preg_match('/^\((\d+)\)/', trim($selection), $matches)) {
+    $trimmed = trim((string) $selection);
+    // Sample address autocomplete: "(123) Street, Town"
+    if (preg_match('/^\((\d+)\)/', $trimmed, $matches)) {
+      return (int) $matches[1];
+    }
+    // Property address autocomplete: "Street, Postcode, GB (123)"
+    if (preg_match('/\((\d+)\)\s*$/', $trimmed, $matches)) {
       return (int) $matches[1];
     }
     return NULL;
