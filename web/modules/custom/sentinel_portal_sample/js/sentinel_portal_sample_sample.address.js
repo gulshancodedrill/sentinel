@@ -66,6 +66,16 @@
                 });
             });
 
+            // Handle the "Close address manually" button click
+            once('sample-address-close', '.sample-address-close-button', context).forEach(function(element) {
+                $(element).on('click', function(e) {
+                    e.preventDefault();
+                    $('.sample-address-fields').slideUp();
+                    $('.sample-address-add-button').slideDown();
+                    return false;
+                });
+            });
+
             // Legacy support for D7 field structure
             once('legacy-sample-address', '#edit-field-sentinel-sample-address-und-form-sample-address-add', context).forEach(function(element) {
                 $(element).on('click', function(e) {

@@ -73,6 +73,37 @@ sentinel_portal_sample.anonymous_submit:
   path: '/sample/submit'
   defaults:
     _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::anonymousSubmit'
+    _title: 'Submit Sample'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.anonymous_submit_individual:
+  path: '/sample/submit/individual'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleIndividualContactForm'
+    _title: 'Your details'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.anonymous_submit_company:
+  path: '/sample/submit/company'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleCompanyWizardForm'
+    _title: 'Company details'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _admin_route: FALSE
+
+sentinel_portal_sample.anonymous_submit_other_details:
+  path: '/sample/submit/other-details'
+  defaults:
+    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSamplePropertyDetailsForm'
+    _title: 'Property details'
   requirements:
     _access: 'TRUE'
   options:
@@ -91,7 +122,7 @@ sentinel_portal_sample.anonymous_options:
 sentinel_portal_sample.anonymous_company_wizard:
   path: '/sample/company/{token}'
   defaults:
-    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleCompanyWizardForm'
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::redirectLegacyCompanyRoute'
     token: NULL
   requirements:
     _access: 'TRUE'
@@ -101,7 +132,7 @@ sentinel_portal_sample.anonymous_company_wizard:
 sentinel_portal_sample.anonymous_individual_contact:
   path: '/sample/individual/{token}'
   defaults:
-    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSampleIndividualContactForm'
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::redirectLegacyIndividualRoute'
     token: NULL
   requirements:
     _access: 'TRUE'
@@ -111,7 +142,7 @@ sentinel_portal_sample.anonymous_individual_contact:
 sentinel_portal_sample.anonymous_details:
   path: '/sample/details/{token}'
   defaults:
-    _form: '\Drupal\sentinel_portal_sample\Form\AnonymousSamplePropertyDetailsForm'
+    _controller: '\Drupal\sentinel_portal_sample\Controller\SentinelSampleController::redirectLegacyDetailsRoute'
     token: NULL
   requirements:
     _access: 'TRUE'

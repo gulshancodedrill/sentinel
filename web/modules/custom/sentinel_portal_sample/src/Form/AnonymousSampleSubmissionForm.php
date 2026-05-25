@@ -20,6 +20,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 class AnonymousSampleSubmissionForm extends FormBase {
 
+  use AnonymousSampleAccessGateTrait;
   use AnonymousSampleFlowTranslationTrait;
 
   /**
@@ -64,8 +65,22 @@ class AnonymousSampleSubmissionForm extends FormBase {
 
     $request->getSession()->set('sentinel_anonymous_entry', 'submit');
 
+    $existing_sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
+    if ($existing_sample && AnonymousSampleWizardProgress::sampleIsFullySubmitted($existing_sample)) {
+      $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['message'] = [
+        '#markup' => '<div class="messages messages--warning">' .
+          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
+          '<p>' . $this->tFlow('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+            '@prn' => $prn,
+          ]) . '</p></div>',
+        '#weight' => -10,
+      ];
+      return $form;
+    }
+
     // PRN should be present (controller handles validation, but we need it for the form)
-    $form['#title'] = $this->tFlow('Submit Sample');
+    $form['#title'] = $this->t('Submit Sample');
 
     $form['help_text'] = [
       '#markup' => '<p>' . $this->tFlow('Confirm your pack reference number, choose your language and account type, then continue.') . '</p>',
@@ -90,16 +105,29 @@ class AnonymousSampleSubmissionForm extends FormBase {
     if ($lang_options === []) {
       $lang_options = ['en' => 'English'];
     }
-    $current_lang = \Drupal::languageManager()->getCurrentLanguage()->getId();
+    $current_lang = AnonymousSampleWizardProgress::flowLanguageCode();
     if (!isset($lang_options[$current_lang])) {
       $current_lang = array_key_first($lang_options);
+    }
+
+    $user_type_default = NULL;
+    $language_default = $current_lang;
+    if ($existing_sample) {
+      $user_type_default = AnonymousSampleWizardProgress::resolveUserType($existing_sample, $form_state, $this->getFormId())
+        ?? AnonymousSampleWizardProgress::inferUserTypeFromSample($existing_sample);
+    }
+    $session_flow = AnonymousSampleWizardProgress::normalizeUserTypeKey(
+      (string) $request->getSession()->get('sentinel_anonymous_last_flow')
+    );
+    if ($user_type_default === NULL && ($session_flow === 'company' || $session_flow === 'individual')) {
+      $user_type_default = $session_flow;
     }
 
     $form['language'] = [
       '#type' => 'select',
       '#title' => $this->tFlow('Language'),
       '#options' => $lang_options,
-      '#default_value' => $current_lang,
+      '#default_value' => $language_default,
       '#required' => TRUE,
       '#weight' => 5,
       '#ajax' => [
@@ -121,7 +149,12 @@ class AnonymousSampleSubmissionForm extends FormBase {
       ],
       '#required' => TRUE,
       '#weight' => 10,
+      '#default_value' => $user_type_default,
     ];
+
+    if ($existing_sample) {
+      $form_state->set('existing_sample_id', $existing_sample->id());
+    }
 
     // // Name field
     // $form['name'] = [
@@ -144,6 +177,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
       '#type' => 'actions',
       '#weight' => 100,
     ];
+    
 
     // $form['actions']['submit'] = [
     //   '#type' => 'submit',
@@ -155,7 +189,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
       '#value' => $this->tFlow('Next'),
     ];
 
-    AnonymousSampleWizardProgress::prependToForm($form, $form_state, 'anonymous_sample_submission_form', NULL);
+    AnonymousSampleWizardProgress::prependToForm($form, $form_state, 'anonymous_sample_submission_form', $existing_sample);
 
     return $form;
   }
@@ -170,6 +204,17 @@ class AnonymousSampleSubmissionForm extends FormBase {
     if ($prn === '' || !$language) {
       return $form;
     }
+    
+    // Set session language
+    $this->getRequest()->getSession()->set('sentinel_anonymous_language', $langcode);
+    
+    // Save language to the sample so it persists for future visits
+    $sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
+    if ($sample && $sample->hasField('language')) {
+      $sample->set('language', $langcode);
+      $sample->save();
+    }
+    
     $url = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], [
       'language' => $language,
       'query' => ['prn' => $prn],
@@ -235,134 +280,72 @@ class AnonymousSampleSubmissionForm extends FormBase {
         'pack_reference_number' => $pack_reference_number,
       ]);
 
-      // Create sample entity
       $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-      $sample = $storage->create([
-        'pack_reference_number' => $pack_reference_number,
-        // 'ucr' => $ucr,
-        // 'installer_email' => $stored_email,
-        // 'installer_name' => $name,
-      ]);
+      $existing_id = $form_state->get('existing_sample_id');
+      if ($existing_id) {
+        $sample = $storage->load((int) $existing_id);
+      }
+      else {
+        $sample = AnonymousSampleWizardProgress::loadSampleByPrn($pack_reference_number);
+      }
+      if (!$sample) {
+        $sample = $storage->create([
+          'pack_reference_number' => $pack_reference_number,
+        ]);
+      }
 
-      // Set client_id, client_name, and pack_type if fields exist
-      // if ($client_id !== NULL && $sample->hasField('client_id')) {
-      //   $sample->set('client_id', $client_id);
-      // }
-      // if ($client_name !== NULL && $sample->hasField('client_name')) {
-      //   $sample->set('client_name', $client_name);
-      // // }
       if ($sample->hasField('pack_type') && $sample_type_key !== NULL) {
         $sample->set('pack_type', PackTypeFilter::getPackTypeDbValue($sample_type_key));
       }
 
-      // if (!$sample->hasField('verification_code')) {
-      //   $this->messenger()->addError($this->t('Unable to assign verification code. Please try again or contact support.'));
-      //   \Drupal::logger('sentinel_portal_sample')->error('Anonymous sample missing verification_code field.');
-      //   return;
-      // }
-
-      // $verification_code = $this->generateUniqueVerificationCode();
-      // if (!$verification_code) {
-      //   $this->messenger()->addError($this->t('Unable to generate verification code. Please try again or contact support.'));
-      //   return;
-      // }
-
-      // $sample->set('verification_code', $verification_code);
-
-      // We no longer save the sample here. Instead, we use a session draft token.
-      $token = 'draft_' . md5(uniqid('sentinel', true));
+      $user_type = (string) $form_state->getValue('user_type');
       
-      $session = $this->getRequest()->getSession();
-      
-      // Store the initial values in the session under the token
-      $draft_data = [
-        'pack_reference_number' => $pack_reference_number,
-        'user_type' => $form_state->getValue('user_type'),
-        'language' => $form_state->getValue('language'),
-      ];
-      if ($sample_type_key !== NULL) {
-        $draft_data['pack_type'] = PackTypeFilter::getPackTypeDbValue($sample_type_key);
+      $previous_flow = NULL;
+      if ($sample->hasField('user_type') && !$sample->get('user_type')->isEmpty()) {
+        $previous_flow = AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $sample->get('user_type')->value);
       }
-      $session->set('sentinel_draft_' . $token, $draft_data);
+      if ($previous_flow === NULL) {
+        $previous_flow = AnonymousSampleWizardProgress::inferUserTypeFromSample($sample);
+      }
 
-      $session->set(
-        'sentinel_anonymous_last_flow',
-        AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $form_state->getValue('user_type'))
-      );
+      if ($previous_flow !== NULL && $previous_flow !== AnonymousSampleWizardProgress::normalizeUserTypeKey($user_type)) {
+        AnonymousSampleWizardProgress::clearOppositeFlowData($sample, $user_type);
+      }
+
+      if ($sample->hasField('user_type')) {
+        $sample->set('user_type', $user_type);
+      }
 
       $langcode = $form_state->getValue('language');
+      if ($sample->hasField('language') && is_string($langcode) && $langcode !== '') {
+        $sample->set('language', $langcode);
+      }
+
+      $sample->save();
+
+      $session = $this->getRequest()->getSession();
+      $session->set(
+        'sentinel_anonymous_last_flow',
+        AnonymousSampleWizardProgress::normalizeUserTypeKey($user_type)
+      );
       if (is_string($langcode) && $langcode !== '') {
         $session->set('sentinel_anonymous_language', $langcode);
       }
 
-      // $details_url = Url::fromRoute('sentinel_portal_sample.anonymous_details', [
-      //   'sample_id' => $sample->id(),
-      // ], [
-      //   'absolute' => TRUE,
-      // ])->toString();
-
-      // $mail_manager = \Drupal::service('plugin.manager.mail');
-      // $langcode = \Drupal::languageManager()->getCurrentLanguage()->getId();
-      // $mail_params = [
-      //   'verification_code' => $verification_code,
-      //   'details_url' => $details_url,
-      //   'pack_reference_number' => $pack_reference_number,
-      // ];
-      // foreach ($filtered_emails as $recipient) {
-      // $mail_result = $mail_manager->mail(
-      //   'sentinel_portal_sample',
-      //   'anonymous_submission',
-      //     $recipient,
-      //   $langcode,
-      //   $mail_params
-      // );
-      // if (empty($mail_result['result'])) {
-      //     \Drupal::logger('sentinel_portal_sample')->warning('Anonymous sample email failed to send for pack @pack, UCR @ucr to @email', [
-      //     '@pack' => $pack_reference_number,
-      //     '@ucr' => $ucr,
-      //       '@email' => $recipient,
-      //   ]);
-      //   }
-      // }
-
-      // \Drupal::logger('sentinel_portal_sample')->info('Anonymous sample created: Pack @pack, UCR @ucr', [
-      //   '@pack' => $pack_reference_number,
-      //   '@ucr' => $ucr,
-      // ]);
+      $this->whitelistAnonymousSampleSession((int) $sample->id());
 
       \Drupal::logger('sentinel_portal_sample')->info(
-        'Anonymous sample created: Pack @pack',
+        'Anonymous sample step 1 saved: Pack @pack, id @id',
         [
           '@pack' => $pack_reference_number,
+          '@id' => $sample->id(),
         ]
       );
 
-      // Set session flag to allow same-session access to details form without verification code
-      $session_key = 'sentinel_sample_add_details_whitelist_' . $token;
-      $session->set($session_key, \Drupal::time()->getRequestTime());
-
-      \Drupal::logger('sentinel_portal_sample')->info('Session flag set for draft sample @token to allow same-session bypass of verification code', [
-        '@token' => $token,
-      ]);
-
-      // Store token in form state for redirect
-      $form_state->set('sample_id', $token);
-      $form_state->set('pack_reference_number', $pack_reference_number);
-
-      $user_type = $form_state->getValue('user_type');
-      $langcode = $form_state->getValue('language');
       $target_lang = $langcode ? \Drupal::languageManager()->getLanguage($langcode) : NULL;
-      $redirect_options = AnonymousSampleLanguageRedirect::options($target_lang);
-      if ($user_type === 'company') {
-        $form_state->setRedirect('sentinel_portal_sample.anonymous_company_wizard', [
-          'token' => $token,
-        ], $redirect_options);
-      }
-      else {
-        $form_state->setRedirect('sentinel_portal_sample.anonymous_individual_contact', [
-          'token' => $token,
-        ], $redirect_options);
-      }
+      $redirect_options = AnonymousSampleWizardProgress::prnRedirectOptions($pack_reference_number, $target_lang);
+      $step2_route = AnonymousSampleWizardProgress::step2RouteName($user_type);
+      $form_state->setRedirect($step2_route, [], $redirect_options);
 
     }
     catch (\Exception $e) {

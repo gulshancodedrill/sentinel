@@ -24,13 +24,22 @@ final class AnonymousSampleLanguageRedirect {
         ->get('sentinel_anonymous_language');
 
       if (!$session_langcode) {
-        $sample_id = \Drupal::routeMatch()->getParameter('sample_id');
-        if ($sample_id) {
+        $prn = trim((string) \Drupal::request()->query->get('prn', ''));
+        if ($prn !== '') {
           $sample = \Drupal::entityTypeManager()
             ->getStorage('sentinel_sample')
-            ->load($sample_id);
-          if ($sample && $sample->hasField('language') && !$sample->get('language')->isEmpty()) {
-            $session_langcode = (string) $sample->get('language')->value;
+            ->getQuery()
+            ->condition('pack_reference_number', $prn)
+            ->accessCheck(FALSE)
+            ->range(0, 1)
+            ->execute();
+          if (!empty($sample)) {
+            $loaded = \Drupal::entityTypeManager()
+              ->getStorage('sentinel_sample')
+              ->load((int) reset($sample));
+            if ($loaded && $loaded->hasField('language') && !$loaded->get('language')->isEmpty()) {
+              $session_langcode = (string) $loaded->get('language')->value;
+            }
           }
         }
       }

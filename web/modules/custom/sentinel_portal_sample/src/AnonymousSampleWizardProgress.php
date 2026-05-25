@@ -4,7 +4,9 @@ namespace Drupal\sentinel_portal_sample;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Form\FormState;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Url;
 
 /**
  * Progress bar, step counts, and flow language for the anonymous QR sample wizard.
@@ -90,6 +92,10 @@ final class AnonymousSampleWizardProgress {
         $candidates[] = $v;
       }
     }
+    $session_flow = \Drupal::request()->getSession()->get('sentinel_anonymous_last_flow');
+    if ($session_flow !== NULL && $session_flow !== '') {
+      $candidates[] = (string) $session_flow;
+    }
     if ($sample && $sample->hasField('user_type') && !$sample->get('user_type')->isEmpty()) {
       $candidates[] = (string) $sample->get('user_type')->value;
     }
@@ -100,9 +106,11 @@ final class AnonymousSampleWizardProgress {
         $candidates[] = (string) $loaded->get('user_type')->value;
       }
     }
-    $session_flow = \Drupal::request()->getSession()->get('sentinel_anonymous_last_flow');
-    if ($session_flow !== NULL && $session_flow !== '') {
-      $candidates[] = (string) $session_flow;
+    if ($sample) {
+      $inferred = static::inferUserTypeFromSample($sample);
+      if ($inferred !== NULL) {
+        $candidates[] = $inferred;
+      }
     }
     foreach ($candidates as $raw) {
       $n = static::normalizeUserTypeKey($raw);
@@ -111,6 +119,200 @@ final class AnonymousSampleWizardProgress {
       }
     }
     return NULL;
+  }
+
+  /**
+   * Loads a sentinel_sample by pack reference number.
+   */
+  public static function loadSampleByPrn(string $prn): ?EntityInterface {
+    $prn = trim($prn);
+    if ($prn === '') {
+      return NULL;
+    }
+    $storage = \Drupal::entityTypeManager()->getStorage('sentinel_sample');
+    $ids = $storage->getQuery()
+      ->condition('pack_reference_number', $prn)
+      ->accessCheck(FALSE)
+      ->range(0, 1)
+      ->execute();
+    if (empty($ids)) {
+      return NULL;
+    }
+    return $storage->load((int) reset($ids));
+  }
+
+  /**
+   * Redirect/query options preserving ?prn= and flow language.
+   */
+  public static function prnRedirectOptions(string $prn, $language = NULL): array {
+    $options = AnonymousSampleLanguageRedirect::options($language);
+    $options['query'] = ['prn' => $prn];
+    return $options;
+  }
+
+  /**
+   * Infers company vs individual from persisted sample fields (no user_type column).
+   */
+  public static function inferUserTypeFromSample(?EntityInterface $sample): ?string {
+    if (!$sample) {
+      return NULL;
+    }
+    // Company wizard: customer_id or saved company address reference.
+    if ($sample->hasField('customer_id') && !$sample->get('customer_id')->isEmpty()) {
+      return 'company';
+    }
+    if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+      return 'company';
+    }
+    if ($sample->hasField('sentinel_company_address_target_id') && !empty($sample->get('sentinel_company_address_target_id')->value)) {
+      return 'company';
+    }
+    // Individual step copies name into company_name; installer_email is the reliable signal.
+    if (static::sampleHasIndividualStepData($sample)) {
+      return 'individual';
+    }
+    if ($sample->hasField('company_name') && trim((string) $sample->get('company_name')->value) !== '') {
+      return 'company';
+    }
+    return NULL;
+  }
+
+  /**
+   * Whether step 2 company data exists on the sample.
+   */
+  public static function sampleHasCompanyStepData(EntityInterface $sample): bool {
+    if ($sample->hasField('customer_id') && !$sample->get('customer_id')->isEmpty()) {
+      return TRUE;
+    }
+    if ($sample->hasField('company_name') && trim((string) $sample->get('company_name')->value) !== '') {
+      return TRUE;
+    }
+    if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
+   * Whether step 2 individual data exists on the sample.
+   */
+  public static function sampleHasIndividualStepData(EntityInterface $sample): bool {
+    if ($sample->hasField('installer_email') && trim((string) $sample->get('installer_email')->value) !== '') {
+      return TRUE;
+    }
+    if ($sample->hasField('installer_name') && trim((string) $sample->get('installer_name')->value) !== '') {
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
+   * Whether property / system address step is complete.
+   */
+  public static function sampleHasPropertyStepData(EntityInterface $sample): bool {
+    if ($sample->hasField('field_sentinel_sample_address') && !$sample->get('field_sentinel_sample_address')->isEmpty()) {
+      return TRUE;
+    }
+    if ($sample->hasField('sentinel_sample_address_target_id') && !empty($sample->get('sentinel_sample_address_target_id')->value)) {
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
+   * Whether the sample is fully submitted (company + system addresses).
+   */
+  public static function sampleIsFullySubmitted(EntityInterface $sample): bool {
+    return static::sampleHasPropertyStepData($sample);
+  }
+
+  /**
+   * Which wizard steps may be opened (1 = account, 2 = contact/company, 3 = property).
+   *
+   * @return array<int, bool>
+   */
+  public static function wizardStepAccess(?EntityInterface $sample, ?string $flow): array {
+    $access = [
+      1 => TRUE,
+      2 => FALSE,
+      3 => FALSE,
+    ];
+    if (!$sample || !$sample->id()) {
+      return $access;
+    }
+    $access[2] = TRUE;
+    $flow = static::normalizeUserTypeKey($flow ?? static::inferUserTypeFromSample($sample) ?? '');
+    if ($flow === 'company' && static::sampleHasCompanyStepData($sample)) {
+      $access[3] = TRUE;
+    }
+    elseif ($flow === 'individual' && static::sampleHasIndividualStepData($sample)) {
+      $access[3] = TRUE;
+    }
+    return $access;
+  }
+
+  /**
+   * Route name for step 2 for the given flow.
+   */
+  public static function step2RouteName(string $flow): string {
+    return static::isCompanyFlow($flow)
+      ? 'sentinel_portal_sample.anonymous_submit_company'
+      : 'sentinel_portal_sample.anonymous_submit_individual';
+  }
+
+  /**
+   * Clears fields for the flow the user is leaving when account type changes.
+   */
+  public static function clearOppositeFlowData(EntityInterface $sample, string $new_flow): void {
+    $new_flow = static::normalizeUserTypeKey($new_flow);
+    if ($new_flow === 'company') {
+      foreach (['installer_name', 'installer_email'] as $field) {
+        if ($sample->hasField($field)) {
+          $sample->set($field, NULL);
+        }
+      }
+    }
+    elseif ($new_flow === 'individual') {
+      foreach (['customer_id', 'company_name', 'company_email', 'company_tel', 'sentinel_company_address_target_id', 'company_address1', 'company_address2', 'company_town', 'company_county', 'company_postcode'] as $field) {
+        if ($sample->hasField($field)) {
+          $sample->set($field, NULL);
+        }
+      }
+      if ($sample->hasField('field_company_address')) {
+        $sample->set('field_company_address', NULL);
+      }
+    }
+  }
+
+  /**
+   * Resume URL for an in-progress sample (next incomplete step).
+   */
+  public static function resumeUrl(EntityInterface $sample): Url {
+    $prn = '';
+    if ($sample->hasField('pack_reference_number') && !$sample->get('pack_reference_number')->isEmpty()) {
+      $prn = trim((string) $sample->get('pack_reference_number')->value);
+    }
+    $flow = static::resolveUserType($sample, new FormState(), 'anonymous_sample_submission_form')
+      ?? static::inferUserTypeFromSample($sample)
+      ?? 'company';
+    $lang = NULL;
+    if ($sample->hasField('language') && !$sample->get('language')->isEmpty()) {
+      $lang = \Drupal::languageManager()->getLanguage((string) $sample->get('language')->value);
+    }
+    $options = static::prnRedirectOptions($prn, $lang);
+
+    if (static::sampleIsFullySubmitted($sample)) {
+      return Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], $options);
+    }
+    if (static::isCompanyFlow($flow)) {
+      if (!static::sampleHasCompanyStepData($sample)) {
+        return Url::fromRoute('sentinel_portal_sample.anonymous_submit_company', [], $options);
+      }
+    }
+    elseif (!static::sampleHasIndividualStepData($sample)) {
+      return Url::fromRoute('sentinel_portal_sample.anonymous_submit_individual', [], $options);
+    }
+    return Url::fromRoute('sentinel_portal_sample.anonymous_submit_other_details', [], $options);
   }
 
   /**
@@ -152,161 +354,88 @@ final class AnonymousSampleWizardProgress {
       ];
     }
 
-    // $pct = $data['percent'];//here
-    $current_sid = NULL;
+    $prn = trim((string) \Drupal::request()->query->get('prn', ''));
+    if ($prn === '' && $sample && $sample->hasField('pack_reference_number') && !$sample->get('pack_reference_number')->isEmpty()) {
+      $prn = trim((string) $sample->get('pack_reference_number')->value);
+    }
 
-if ($sample) {
-  $current_sid = $sample->id();
-}
+    $resolved_type = static::resolveUserType($sample, $form_state, $form_id);
+    if ($resolved_type === NULL) {
+      $session_hint = static::normalizeUserTypeKey((string) \Drupal::request()->getSession()->get('sentinel_anonymous_last_flow'));
+      if ($session_hint === 'company' || $session_hint === 'individual') {
+        $resolved_type = $session_hint;
+      }
+    }
+    $is_company_flow = static::isCompanyFlow($resolved_type);
+    $step_access = static::wizardStepAccess($sample, $resolved_type);
 
-$steps = [];
+    if ($is_company_flow) {
+      $steps = [
+        1 => [
+          'title' => static::trans('Account'),
+          'route' => 'sentinel_portal_sample.anonymous_submit',
+        ],
+        2 => [
+          'title' => static::trans('Company details'),
+          'route' => 'sentinel_portal_sample.anonymous_submit_company',
+        ],
+        3 => [
+          'title' => static::trans('Property'),
+          'route' => 'sentinel_portal_sample.anonymous_submit_other_details',
+        ],
+      ];
+    }
+    else {
+      $steps = [
+        1 => [
+          'title' => static::trans('Account'),
+          'route' => 'sentinel_portal_sample.anonymous_submit',
+        ],
+        2 => [
+          'title' => static::trans('Your details'),
+          'route' => 'sentinel_portal_sample.anonymous_submit_individual',
+        ],
+        3 => [
+          'title' => static::trans('Property'),
+          'route' => 'sentinel_portal_sample.anonymous_submit_other_details',
+        ],
+      ];
+    }
 
-$resolved_type = static::resolveUserType($sample, $form_state, $form_id);
-$is_company_flow = static::isCompanyFlow($resolved_type) || $resolved_type === NULL;
+    $lang = NULL;
+    if ($sample && $sample->hasField('language') && !$sample->get('language')->isEmpty()) {
+      $lang = \Drupal::languageManager()->getLanguage((string) $sample->get('language')->value);
+    }
 
-if ($is_company_flow) {
+    $step_markup = '<div class="sentinel-step-navigation">';
+    foreach ($steps as $num => $step) {
+      $class = '';
+      if ($num == $data['current']) {
+        $class = 'active-step';
+      }
+      elseif ($num < $data['current']) {
+        $class = 'completed-step';
+      }
 
-  // Company flow.
-  $steps = [
-    1 => [
-      'title' => 'Account',
-      'route' => 'sentinel_portal_sample.anonymous_options',
-    ],
-    2 => [
-      'title' => 'Company Details basis of id',
-      'route' => 'sentinel_portal_sample.anonymous_company_wizard',
-    ],
-    3 => [
-      'title' => 'Property',
-      'route' => 'sentinel_portal_sample.anonymous_details',
-    ],
-  ];
-}
-else {
-//here
-  // Individual flow.
-  $steps = [
-    1 => [
-      'title' => 'Account',
-      'route' => 'sentinel_portal_sample.anonymous_options',
-    ],
-    2 => [
-      'title' => 'Your Details',
-      'route' => 'sentinel_portal_sample.anonymous_individual_contact',
-    ],
-    3 => [
-      'title' => 'Property',
-      'route' => 'sentinel_portal_sample.anonymous_details',
-    ],
-  ];
-}//here
-
-$step_markup = '<div class="sentinel-step-navigation">';
-
-foreach ($steps as $num => $step) {
-
-  $class = '';
-
-  if ($num == $data['current']) {
-    $class = 'active-step';
-  }
-  elseif ($num < $data['current']) {
-    $class = 'completed-step';
-  }
-
-  $url = '#';
-  // $disabled = FALSE;
-
-  // if ($current_sid) {
-
-  //   if ($num == 4 && $data['current'] < 3) {
-  //     $disabled = TRUE;
-  //   }
-
-  //   // if ($num >= 3) {
-
-  //   //   $company_ready = FALSE;
-    
-  //   //   if (
-  //   //     $sample &&
-  //   //     $sample->hasField('company_name') &&
-  //   //     !$sample->get('company_name')->isEmpty()
-  //   //   ) {
-  //   //     $company_ready = TRUE;
-  //   //   }
-    
-  //   //   if (!$company_ready) {
-  //   //     $disabled = TRUE;
-  //   //   }
-  //   // }
-
-  //   $route_params = [];
-
-  //   $route_params['sample_id'] = $current_sid;///here 
-
-  //   $options = [];
-
-
-
-  //   if (!empty($step['wizard_step'])) {
-  //     $options['query'] = [
-  //       'wizard_step' => $step['wizard_step'],
-  //     ];
-  //   }
-    
-  //   $url = \Drupal\Core\Url::fromRoute(
-  //     $step['route'],
-  //     $route_params,
-  //     $options
-  //   )->toString();///here
-  // }
-
-  // $disabled_class = $disabled ? 'disabled-step' : '';
-
-  // $link = $disabled ? 'div' : 'a';
-  
-  // $href = $disabled ? '' : 'href="' . $url . '"';
-
-
-  
-  // $step_markup .= '
-  //   <' . $link . ' class="sentinel-step-item ' . $class . ' ' . $disabled_class . '" ' . $href . '>
-  //     <span class="step-number">' . $num . '</span>
-  //     <span class="step-title">' . $step['title'] . '</span>
-  //   </' . $link . '>
-  // ';
-
-  $url = '#';
-
-if ($current_sid) {
-
-  $route_params = [];
-  $route_params['sample_id'] = $current_sid;
-
-  $options = [];
-
-  if (!empty($step['wizard_step'])) {
-    $options['query'] = [
-      'wizard_step' => $step['wizard_step'],
-    ];
-  }
-
-  $url = \Drupal\Core\Url::fromRoute(
-    $step['route'],
-    $route_params,
-    $options
-  )->toString();
-}
-
-$step_markup .= '
-  <a class="sentinel-step-item ' . $class . '" href="' . $url . '">
-    <span class="step-number">' . $num . '</span>
-    <span class="step-title">' . $step['title'] . '</span>
-  </a>
-';
-}
-//////here
-$step_markup .= '</div>';////here
+      $enabled = !empty($step_access[$num]) && $prn !== '';
+      $title = Html::escape($step['title']);
+      if ($enabled) {
+        $url = Url::fromRoute(
+          $step['route'],
+          [],
+          static::prnRedirectOptions($prn, $lang)
+        )->toString();
+        $step_markup .= '<a class="sentinel-step-item ' . $class . '" href="' . Html::escape($url) . '">'
+          . '<span class="step-number">' . $num . '</span>'
+          . '<span class="step-title">' . $title . '</span></a>';
+      }
+      else {
+        $step_markup .= '<span class="sentinel-step-item ' . $class . ' disabled-step" aria-disabled="true">'
+          . '<span class="step-number">' . $num . '</span>'
+          . '<span class="step-title">' . $title . '</span></span>';
+      }
+    }
+    $step_markup .= '</div>';
     $form['sentinel_anon_wizard_progress'] = [
       '#type' => 'container',
       '#attributes' => $wrap_attributes,
@@ -402,7 +531,13 @@ $step_markup .= '</div>';////here
         ];
 
       case 'anonymous_sample_property_details_form':
-        $company_path = ($resolved === NULL || $is_company);
+        if ($resolved === NULL) {
+          $session_hint = static::normalizeUserTypeKey((string) \Drupal::request()->getSession()->get('sentinel_anonymous_last_flow'));
+          if ($session_hint === 'company' || $session_hint === 'individual') {
+            $resolved = $session_hint;
+          }
+        }
+        $company_path = static::isCompanyFlow($resolved);
         if ($company_path) {
           return [
             'current' => 3,

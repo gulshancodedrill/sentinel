@@ -521,21 +521,72 @@ $ids = $query->execute();
             ],
           ];
         }
-        else {
-
-          // Redirect to options page instead of details page
-          $url = Url::fromRoute('sentinel_portal_sample.anonymous_options', [
-            'sample_id' => $sample_id,
-          ], AnonymousSampleLanguageRedirect::options())->setAbsolute(TRUE);
-
-          return new RedirectResponse($url->toString());
-        }
       }
     }
 
-    // PRN exists but sample doesn't exist - show normal submission form
     $form = $this->formBuilder()->getForm('\Drupal\sentinel_portal_sample\Form\AnonymousSampleSubmissionForm');
     return $form;
+  }
+
+  /**
+   * Legacy /sample/company/{token} → PRN-based company step.
+   */
+  public function redirectLegacyCompanyRoute($token = NULL) {
+    return $this->redirectLegacyWizardRoute($token, 'sentinel_portal_sample.anonymous_submit_company');
+  }
+
+  /**
+   * Legacy /sample/individual/{token} → PRN-based individual step.
+   */
+  public function redirectLegacyIndividualRoute($token = NULL) {
+    return $this->redirectLegacyWizardRoute($token, 'sentinel_portal_sample.anonymous_submit_individual');
+  }
+
+  /**
+   * Legacy /sample/details/{token} → PRN-based property step.
+   */
+  public function redirectLegacyDetailsRoute($token = NULL) {
+    return $this->redirectLegacyWizardRoute($token, 'sentinel_portal_sample.anonymous_submit_other_details');
+  }
+
+  /**
+   * Redirects old token URLs to the matching ?prn= submit route.
+   */
+  protected function redirectLegacyWizardRoute($token, string $target_route): RedirectResponse {
+    $prn = $this->resolvePrnFromLegacyToken((string) $token);
+    if ($prn === '') {
+      return new RedirectResponse(Url::fromRoute('<front>')->setAbsolute()->toString());
+    }
+    $url = Url::fromRoute(
+      $target_route,
+      [],
+      AnonymousSampleWizardProgress::prnRedirectOptions($prn)
+    )->setAbsolute();
+    return new RedirectResponse($url->toString());
+  }
+
+  /**
+   * Resolves PRN from a numeric sample id or draft session token.
+   */
+  protected function resolvePrnFromLegacyToken(string $token): string {
+    $token = trim($token);
+    if ($token === '') {
+      return '';
+    }
+    if (str_starts_with($token, 'draft_')) {
+      $draft = \Drupal::request()->getSession()->get('sentinel_draft_' . $token, []);
+      if (is_array($draft) && !empty($draft['pack_reference_number'])) {
+        return trim((string) $draft['pack_reference_number']);
+      }
+      return '';
+    }
+    if (ctype_digit($token)) {
+      $sample = $this->entityTypeManager()->getStorage('sentinel_sample')->load((int) $token);
+      if ($sample && $sample->hasField('pack_reference_number') && !$sample->get('pack_reference_number')->isEmpty()) {
+        return trim((string) $sample->get('pack_reference_number')->value);
+      }
+    }
+    return '';
   }
 
   /**

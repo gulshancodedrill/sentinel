@@ -75,6 +75,17 @@ class AnonymousSampleOptionsForm extends FormBase {
       return $form;
     }
 
+    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($sample)) {
+      $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['message'] = [
+        '#markup' => '<div class="messages messages--warning">' .
+          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
+          '<p>' . $this->tFlow('This sample has already been submitted with complete details.') . '</p></div>',
+        '#weight' => -10,
+      ];
+      return $form;
+    }
+
     $this->getRequest()->getSession()->set('sentinel_anonymous_entry', 'options');
 
     $languages = \Drupal::languageManager()->getLanguages();
@@ -86,7 +97,7 @@ class AnonymousSampleOptionsForm extends FormBase {
       $lang_options = ['en' => 'English'];
     }
 
-    $resolved_lang = \Drupal::languageManager()->getCurrentLanguage()->getId();
+    $resolved_lang = AnonymousSampleWizardProgress::flowLanguageCode();
     if (!isset($lang_options[$resolved_lang])) {
       $resolved_lang = array_key_first($lang_options);
     }

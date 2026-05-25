@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Url;
 use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 use Drupal\sentinel_portal_sample\AnonymousSampleFlowTranslationTrait;
 use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
@@ -69,32 +70,59 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state, $token = NULL) {
-    if (!$token) {
+    $prn = $this->getAnonymousPrn();
+    if ($prn === '') {
       $this->messenger()->addError($this->tFlow('Invalid sample.'));
       return $form;
     }
 
-    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    if (str_starts_with($token, 'draft_')) {
-      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
-      $sample = $storage->create($draft_data);
-    } else {
-      $sample = $storage->load((int) $token);
-    }
-
-    if (!$sample) {
-      $this->messenger()->addError($this->tFlow('Sample not found.'));
+    $sample = $this->loadAnonymousSampleByPrn($prn);
+    if (!$sample || !$sample->id()) {
+      $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
+      $form['#redirect'] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
       return $form;
     }
 
-    if ($this->anonymousSampleRequiresVerification($token)) {
-      return $this->buildAnonymousVerificationForm($token, $form, $form_state);
+    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($sample)) {
+      $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['message'] = [
+        '#markup' => '<div class="messages messages--warning">' .
+          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
+          '<p>' . $this->tFlow('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+            '@prn' => $prn,
+          ]) . '</p></div>',
+        '#weight' => -10,
+      ];
+      return $form;
     }
 
-    $form_state->set('wizard_token', $token);
+    $flow = AnonymousSampleWizardProgress::resolveUserType($sample, $form_state, $this->getFormId())
+      ?? AnonymousSampleWizardProgress::inferUserTypeFromSample($sample)
+      ?? 'company';
+    if (!AnonymousSampleWizardProgress::isCompanyFlow($flow)) {
+      $form['#redirect'] = Url::fromRoute(
+        'sentinel_portal_sample.anonymous_submit_individual',
+        [],
+        AnonymousSampleWizardProgress::prnRedirectOptions($prn)
+      );
+      return $form;
+    }
+
+    $step_access = AnonymousSampleWizardProgress::wizardStepAccess($sample, $flow);
+    if (empty($step_access[2])) {
+      $form['#redirect'] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
+      return $form;
+    }
+
+    if ($this->anonymousSampleRequiresVerification((int) $sample->id())) {
+      return $this->buildAnonymousVerificationForm((int) $sample->id(), $form, $form_state);
+    }
+
+    $form_state->set('wizard_prn', $prn);
+    $form_state->set('wizard_sample_id', $sample->id());
     $form['#title'] = $this->tFlow('Company details');
 
-    $fetched = $this->getFetchedCompanyData($form_state, $token);
+    $fetched = $this->getFetchedCompanyData($form_state);
     if (empty($fetched) && $this->sampleHasPersistedCompanyWizard($sample)) {
       $fetched = $this->wizardCompanyDataFromSample($sample);
       $form_state->set('fetched_company', $fetched);
@@ -282,6 +310,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
 
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
         '#type' => 'email',
+        '#required' => TRUE,
         '#title' => $this->tFlow('Company email'),
         '#default_value' => $form_state->getValue('company_email') ?? ($data['email'] ?? ''),
         '#weight' => 13,
@@ -347,8 +376,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     if ($selected_id === NULL) {
       return;
     }
-    $token = $form_state->get('wizard_token');
-    $data = $this->getFetchedCompanyData($form_state, $token);
+    $data = $this->getFetchedCompanyData($form_state);
     if (!is_array($data)) {
       return;
     }
@@ -438,16 +466,16 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   /**
    * Fetched company payload from form state, with session fallback for AJAX.
    */
-  protected function getFetchedCompanyData(FormStateInterface $form_state, ?string $token = NULL): ?array {
+  protected function getFetchedCompanyData(FormStateInterface $form_state): ?array {
     $data = $form_state->get('fetched_company');
     if (is_array($data) && $data !== []) {
       return $data;
     }
-    $token = $token ?? $form_state->get('wizard_token');
-    if (!is_string($token) || $token === '') {
+    $sample_id = (int) $form_state->get('wizard_sample_id');
+    if ($sample_id <= 0) {
       return is_array($data) ? $data : NULL;
     }
-    $session_data = $this->getRequest()->getSession()->get('sentinel_company_fetched_' . $token);
+    $session_data = $this->getRequest()->getSession()->get('sentinel_company_fetched_' . $sample_id);
     if (is_array($session_data) && $session_data !== []) {
       $form_state->set('fetched_company', $session_data);
       return $session_data;
@@ -459,11 +487,11 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
    * Persists fetched company data for AJAX rebuilds on the same draft token.
    */
   protected function persistFetchedCompanyToSession(FormStateInterface $form_state, array $data): void {
-    $token = $form_state->get('wizard_token');
-    if (!is_string($token) || $token === '') {
+    $sample_id = (int) $form_state->get('wizard_sample_id');
+    if ($sample_id <= 0) {
       return;
     }
-    $this->getRequest()->getSession()->set('sentinel_company_fetched_' . $token, $data);
+    $this->getRequest()->getSession()->set('sentinel_company_fetched_' . $sample_id, $data);
   }
 
   /**
@@ -563,8 +591,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
    * Persists company data on the sample and continues to property details.
    */
   public function submitCompanyReview(array &$form, FormStateInterface $form_state) {
-    $token = $form_state->get('wizard_token');
-    $data = $this->getFetchedCompanyData($form_state, $token);
+    $data = $this->getFetchedCompanyData($form_state);
     if (empty($data)) {
       $this->messenger()->addError($this->tFlow('Please fetch company details first.'));
       $form_state->setRebuild(TRUE);
@@ -574,20 +601,9 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $data['phone'] = $form_state->getValue('company_phone');
     $data['name'] = $form_state->getValue('company_name');
     $data['address'] = $form_state->getValue('company_address');
-    if (!$token) {
-      $this->messenger()->addError($this->tFlow('Something went wrong. Please start again.'));
-      return;
-    }
-
-    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    if (str_starts_with($token, 'draft_')) {
-      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
-      $sample = $storage->create($draft_data);
-    } else {
-      $sample = $storage->load((int) $token);
-    }
-
-    if (!$sample) {
+    $prn = $form_state->get('wizard_prn') ?: $this->getAnonymousPrn();
+    $sample = $this->loadAnonymousSampleByPrn($prn);
+    if (!$sample || !$sample->id()) {
       $this->messenger()->addError($this->tFlow('Sample not found.'));
       return;
     }
@@ -679,17 +695,21 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       }
     }
 
-    if (str_starts_with($token, 'draft_')) {
-      $this->getRequest()->getSession()->set('sentinel_draft_' . $token, $sample->toArray());
-    } else {
-      $sample->save();
-    }
+    $sample->save();
+    $this->getRequest()->getSession()->set(
+      'sentinel_anonymous_last_flow',
+      'company'
+    );
+    $this->getRequest()->getSession()->set(
+      'sentinel_anonymous_company_locked_' . $sample->id(),
+      \Drupal::time()->getRequestTime()
+    );
 
-    $this->getRequest()->getSession()->set('sentinel_anonymous_company_locked_' . $token, \Drupal::time()->getRequestTime());
-
-    $form_state->setRedirect('sentinel_portal_sample.anonymous_details', [
-      'token' => $token,
-    ], AnonymousSampleLanguageRedirect::options());
+    $form_state->setRedirect(
+      'sentinel_portal_sample.anonymous_submit_other_details',
+      [],
+      AnonymousSampleWizardProgress::prnRedirectOptions($prn)
+    );
   }
 
   /**
@@ -991,6 +1011,12 @@ if (method_exists($client, 'getUcr')) {
   ): ?int {
     $addresses = $data['addresses'] ?? [];
     $selected_id = $this->getCompanyAddressSelectValue($form_state);
+    $manual_mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
+
+    // Dropdown selection: always reuse the existing address entity.
+    if ($selected_id !== NULL && !$manual_mode) {
+      return (int) $selected_id;
+    }
 
     if ($selected_id !== NULL) {
       $row = $this->getFetchedAddressRow($addresses, $selected_id);
@@ -1198,38 +1224,13 @@ if (method_exists($client, 'getUcr')) {
    * Goes back from company ID step to account / language selection.
    */
   public function submitBackCompanyStep1(array &$form, FormStateInterface $form_state): void {
-    $token = $form_state->get('wizard_token');
-    $session = $this->getRequest()->getSession();
-    if ($session->get('sentinel_anonymous_entry') === 'options') {
-      $form_state->setRedirect('sentinel_portal_sample.anonymous_options', [
-        'token' => $token,
-      ], AnonymousSampleLanguageRedirect::options());
-      return;
-    }
-    
-    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    if (str_starts_with($token, 'draft_')) {
-      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
-      $sample = $storage->create($draft_data);
-    } else {
-      $sample = $storage->load((int) $token);
-    }
-    
-    $prn = '';
-    if ($sample && $sample->hasField('pack_reference_number') && !$sample->get('pack_reference_number')->isEmpty()) {
-      $prn = trim((string) $sample->get('pack_reference_number')->value);
-    }
+    $prn = $form_state->get('wizard_prn') ?: $this->getAnonymousPrn();
     if ($prn !== '') {
       $form_state->setRedirect(
         'sentinel_portal_sample.anonymous_submit',
         [],
-        AnonymousSampleLanguageRedirect::options() + ['query' => ['prn' => $prn]]
+        AnonymousSampleWizardProgress::prnRedirectOptions($prn)
       );
-    }
-    else {
-      $form_state->setRedirect('sentinel_portal_sample.anonymous_options', [
-        'token' => $token,
-      ], AnonymousSampleLanguageRedirect::options());
     }
   }
 

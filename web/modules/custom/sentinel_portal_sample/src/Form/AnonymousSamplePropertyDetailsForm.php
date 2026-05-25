@@ -3,6 +3,7 @@
 namespace Drupal\sentinel_portal_sample\Form;
 
 use Drupal\Core\Datetime\DrupalDateTime;
+use Drupal\Core\Form\FormState;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
@@ -40,63 +41,50 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state, $token = NULL) {
-    if (!$token) {
+    $prn = $this->getAnonymousPrn();
+    if ($prn === '') {
       $this->messenger()->addError($this->tFlow('Invalid sample.'));
       return $form;
     }
 
-    $form_state->set('property_token', $token);
+    $form_state->set('property_prn', $prn);
 
-    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    if (str_starts_with($token, 'draft_')) {
-      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
-      $this->sample = $storage->create($draft_data);
-    } else {
-      $this->sample = $storage->load((int) $token);
+    $this->sample = $this->loadAnonymousSampleByPrn($prn);
+    if (!$this->sample || !$this->sample->id()) {
+      $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
+      $form['#redirect'] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
+      return $form;
     }
 
-    if (!$this->sample) {
-      $this->messenger()->addError($this->tFlow('Sample not found.'));
+    $flow = AnonymousSampleWizardProgress::resolveUserType($this->sample, $form_state, $this->getFormId())
+      ?? AnonymousSampleWizardProgress::inferUserTypeFromSample($this->sample)
+      ?? 'company';
+    $step_access = AnonymousSampleWizardProgress::wizardStepAccess($this->sample, $flow);
+    if (empty($step_access[3])) {
+      $step2_route = AnonymousSampleWizardProgress::step2RouteName($flow);
+      $form['#redirect'] = Url::fromRoute($step2_route, [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
       return $form;
     }
 
     $session = $this->getRequest()->getSession();
-    $session_whitelist_key = 'sentinel_sample_add_details_whitelist_' . $token;
+    $session_whitelist_key = 'sentinel_sample_add_details_whitelist_' . $this->sample->id();
     $session_whitelist_timestamp = $session->get($session_whitelist_key);
     $max_age = 1800;
     if ($session_whitelist_timestamp !== NULL) {
       $age = \Drupal::time()->getRequestTime() - (int) $session_whitelist_timestamp;
       if ($age >= 0 && $age <= $max_age) {
-        $session->set('sentinel_sample_verified_' . $token, TRUE);
+        $session->set('sentinel_sample_verified_' . $this->sample->id(), TRUE);
       }
       else {
         $session->remove($session_whitelist_key);
       }
     }
 
-    if ($this->anonymousSampleRequiresVerification($token)) {
-      return $this->buildAnonymousVerificationForm($token, $form, $form_state);
+    if ($this->anonymousSampleRequiresVerification((int) $this->sample->id())) {
+      return $this->buildAnonymousVerificationForm((int) $this->sample->id(), $form, $form_state);
     }
 
-    $has_company_address = FALSE;
-    if ($this->sample->hasField('field_company_address') && !$this->sample->get('field_company_address')->isEmpty()) {
-      $has_company_address = TRUE;
-    }
-    elseif ($this->sample->hasField('sentinel_company_address_target_id')) {
-      $legacy_company_id = $this->sample->get('sentinel_company_address_target_id')->value;
-      $has_company_address = !empty($legacy_company_id);
-    }
-
-    $has_system_address = FALSE;
-    if ($this->sample->hasField('field_sentinel_sample_address') && !$this->sample->get('field_sentinel_sample_address')->isEmpty()) {
-      $has_system_address = TRUE;
-    }
-    elseif ($this->sample->hasField('sentinel_sample_address_target_id')) {
-      $legacy_system_id = $this->sample->get('sentinel_sample_address_target_id')->value;
-      $has_system_address = !empty($legacy_system_id);
-    }
-
-    if ($has_company_address && $has_system_address) {
+    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($this->sample)) {
       $prn = $this->sample->hasField('pack_reference_number') && !$this->sample->get('pack_reference_number')->isEmpty()
         ? $this->sample->get('pack_reference_number')->value
         : $this->tFlow('N/A');
@@ -247,6 +235,17 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         'Regular / heat only' => $this->tFlow('Regular / heat only'),
         'Worcester Bosch' => $this->tFlow('Worcester Bosch'),
         'Other' => $this->tFlow('Other'),
+         'gas' => $this->t('gas'),
+        'GAS 210 ECO 200' => $this->t('GAS 210 ECO 200'),
+        'TOCROSSAL 200' => $this->t('TOCROSSAL 200'),
+        'gas 210 prox2' => $this->t('gas 210 prox2'),
+        'CONCORD SUPER S4X4' => $this->t('CONCORD SUPER S4X4'),
+        'Greenstar 25 si' => $this->t('Greenstar 25 si'),
+        'Greenstar 15Ri' => $this->t('Greenstar 15Ri'),
+        'Greenstar 30i' => $this->t('Greenstar 30i'),
+        'Eco-tech PRO 30' => $this->t('Eco-tech PRO 30'),
+        'Eco-tech PRO 28' => $this->t('Eco-tech PRO 28'),
+        'imax xtra' => $this->t('imax xtra'),
       ],
       '#default_value' => $val_boiler_type,
       '#weight' => 5,
@@ -321,18 +320,15 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
   }
 
   protected function propertyWizardBackUrl(): Url {
-    $token = $this->sample->id(); // Will be replaced in usage or we can just fetch it from route if needed, but wait, the token is what we need.
-    // Actually, propertyWizardBackUrl should just return the Url object.
-    $to_company = $this->anonymousWizardFlowType() === 'company'
-      || $this->sampleHasPersistedCompanyWizardData();
-    if ($to_company) {
-      return Url::fromRoute('sentinel_portal_sample.anonymous_company_wizard', [
-        'token' => '{token_placeholder}',
-      ], AnonymousSampleLanguageRedirect::options());
+    $prn = '';
+    if ($this->sample->hasField('pack_reference_number') && !$this->sample->get('pack_reference_number')->isEmpty()) {
+      $prn = trim((string) $this->sample->get('pack_reference_number')->value);
     }
-    return Url::fromRoute('sentinel_portal_sample.anonymous_individual_contact', [
-      'token' => '{token_placeholder}',
-    ], AnonymousSampleLanguageRedirect::options());
+    $to_company = $this->anonymousWizardFlowType() === 'company';
+    $route = $to_company
+      ? 'sentinel_portal_sample.anonymous_submit_company'
+      : 'sentinel_portal_sample.anonymous_submit_individual';
+    return Url::fromRoute($route, [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
   }
 
   /**
@@ -349,44 +345,27 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
    * Resolves company vs individual for wizard navigation (field + session fallbacks).
    */
   protected function anonymousWizardFlowType(): string {
-    if ($this->sample && $this->sample->hasField('user_type') && !$this->sample->get('user_type')->isEmpty()) {
-      $n = AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $this->sample->get('user_type')->value);
-      if ($n === 'company' || $n === 'individual') {
-        return $n;
-      }
-    }
-    $session = $this->getRequest()->getSession();
-    $n = AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $session->get('sentinel_anonymous_last_flow'));
-    if ($n === 'company' || $n === 'individual') {
-      return $n;
+    $resolved = AnonymousSampleWizardProgress::resolveUserType(
+      $this->sample,
+      new FormState(),
+      $this->getFormId()
+    );
+    if ($resolved === 'company' || $resolved === 'individual') {
+      return $resolved;
     }
     return 'company';
   }
 
   public function submitBackPropertyStep3(array &$form, FormStateInterface $form_state): void {
-    $token = $form_state->get('property_token');
-    
-    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    if (str_starts_with($token, 'draft_')) {
-      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
-      $this->sample = $storage->create($draft_data);
-    } else {
-      $this->sample = $storage->load((int) $token);
-    }
-    
     $url = $this->propertyWizardBackUrl();
-    $route_name = $url->getRouteName();
-    $options = $url->getOptions();
-    
-    $form_state->setRedirect($route_name, ['token' => $token], $options);
+    $form_state->setRedirect($url->getRouteName(), [], $url->getOptions());
   }
 
   /**
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $token = $form_state->get('property_token');
-    if ($token && $this->anonymousSampleRequiresVerification($token)) {
+    if ($this->sample && $this->anonymousSampleRequiresVerification((int) $this->sample->id())) {
       return;
     }
 
@@ -812,14 +791,13 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       $this->sample->save();
 
       $session = $this->getRequest()->getSession();
-      
-      // Clean up the draft session data if we used a draft
-      if (str_starts_with($token, 'draft_')) {
-        $session->remove('sentinel_draft_' . $token);
+      $session->remove('sentinel_anonymous_company_locked_' . $this->sample->id());
+      $flow = AnonymousSampleWizardProgress::resolveUserType($this->sample, $form_state, $this->getFormId())
+        ?? AnonymousSampleWizardProgress::inferUserTypeFromSample($this->sample);
+      if ($flow !== NULL) {
+        $session->set('sentinel_anonymous_last_flow', $flow);
       }
-      
-      $session->remove('sentinel_anonymous_company_locked_' . $token);
-      if ($this->sample->hasField('user_type') && !$this->sample->get('user_type')->isEmpty()) {
+      elseif ($this->sample->hasField('user_type') && !$this->sample->get('user_type')->isEmpty()) {
         $session->set('sentinel_anonymous_last_flow', AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $this->sample->get('user_type')->value));
       }
 
