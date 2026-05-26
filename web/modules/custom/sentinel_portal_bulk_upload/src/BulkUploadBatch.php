@@ -2,8 +2,10 @@
 
 namespace Drupal\sentinel_portal_bulk_upload;
 
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\file\Entity\File;
 use Drupal\Core\Messenger\MessengerInterface;
+use Drupal\sentinel_portal_sample\SentinelCustomerServiceLookup;
 
 /**
  * Batch processing for CSV bulk uploads.
@@ -128,49 +130,17 @@ class BulkUploadBatch {
         }
       }
 
-      // Find or create client by email (installer_email first, then company_email)
-      $installer_email = $data['installer_email'] ?? '';
-      $company_email = $data['company_email'] ?? '';
-      $installer_name = $data['installer_name'] ?? '';
-      $company_name = $data['company_name'] ?? '';
-      
-      $client_entity = self::findOrCreateClientByEmail(
-        $installer_email,
-        $company_email,
-        $installer_name,
-        $company_name,
-        $client
-      );
+      $data = self::applyTemplateFieldMappings($data);
+      $user_type = self::normalizeUserType($data['user_type'] ?? '');
 
-      if ($client_entity) {
-        // Use client found/created by email
-        // Get UCR value - use getRealUcr() to get the actual stored value (not the generated one with check digit)
-        $ucr_value = NULL;
-        if (method_exists($client_entity, 'getRealUcr')) {
-          $ucr_value = $client_entity->getRealUcr();
-        }
-        elseif ($client_entity->hasField('ucr') && !$client_entity->get('ucr')->isEmpty()) {
-          $ucr_value = $client_entity->get('ucr')->value;
-        }
-        
-        $data['ucr'] = $ucr_value;
-        $data['client_id'] = $client_entity->id();
-        if ($client_entity->hasField('name') && !$client_entity->get('name')->isEmpty()) {
-          $data['client_name'] = $client_entity->get('name')->value;
-        }
+      if ($user_type === 'individual') {
+        self::enrichIndividualRow($data, $client);
+      }
+      elseif ($user_type === 'company') {
+        self::enrichCompanyRow($data, $client);
       }
       else {
-        // Fallback to current user's client if both emails are empty
-        if (method_exists($client, 'getRealUcr')) {
-          $data['ucr'] = $client->getRealUcr();
-        }
-        // Try to get client_id and client_name from current user's client
-        if (is_object($client) && method_exists($client, 'id')) {
-          $data['client_id'] = $client->id();
-        }
-        if (is_object($client) && method_exists($client, 'get') && $client->hasField('name') && !$client->get('name')->isEmpty()) {
-          $data['client_name'] = $client->get('name')->value;
-        }
+        self::enrichLegacyRow($data, $client);
       }
 
       // Calculate pack_type from pack_reference_number (map to short DB value: SEN/VAL)
@@ -407,6 +377,13 @@ class BulkUploadBatch {
     $synonyms = [
       'pack reference number' => 'pack_reference_number',
       'pack_reference_number' => 'pack_reference_number',
+      'user type' => 'user_type',
+      'user_type' => 'user_type',
+      'name' => 'contact_name',
+      'email' => 'contact_email',
+      'phone' => 'company_tel',
+      'company id' => 'customer_id',
+      'company_id' => 'customer_id',
       'company email' => 'company_email',
       'installer name' => 'installer_name',
       'installer email' => 'installer_email',
@@ -419,7 +396,6 @@ class BulkUploadBatch {
       'street' => 'street',
       'town city' => 'town_city',
       'town/city' => 'town_city',
-      'county' => 'county',
       'postcode' => 'postcode',
       'landlord' => 'landlord',
       'system age' => 'system_age',
@@ -445,7 +421,7 @@ class BulkUploadBatch {
         $key = str_replace(' ', '_', $normalized);
       }
 
-      if (isset($sample_fields[$key]) || in_array($key, self::defaultHeaders(), TRUE)) {
+      if (isset($sample_fields[$key]) || in_array($key, self::defaultHeaders(), TRUE) || in_array($key, self::templateOnlyHeaders(), TRUE)) {
         $headers[$position] = $key;
       }
     }
@@ -455,6 +431,21 @@ class BulkUploadBatch {
     }
 
     return $headers;
+  }
+
+  /**
+   * CSV columns used by company/individual templates but not always sample fields.
+   *
+   * @return string[]
+   */
+  protected static function templateOnlyHeaders(): array {
+    return [
+      'user_type',
+      'contact_name',
+      'contact_email',
+      'phone',
+      'company_id',
+    ];
   }
 
   /**
@@ -597,6 +588,480 @@ class BulkUploadBatch {
   }
 
   /**
+   * Normalizes USER_TYPE from CSV.
+   */
+  protected static function normalizeUserType(string $raw): string {
+    $v = strtolower(trim($raw));
+    if ($v === 'individual' || $v === 'indiv') {
+      return 'individual';
+    }
+    if ($v === 'company' || str_starts_with($v, 'company')) {
+      return 'company';
+    }
+    return $v;
+  }
+
+  /**
+   * Applies template-specific CSV column aliases to sample field keys.
+   */
+  protected static function applyTemplateFieldMappings(array $data): array {
+    if (!empty($data['phone']) && empty($data['company_tel'])) {
+      $data['company_tel'] = $data['phone'];
+    }
+    if (!empty($data['contact_name']) && empty($data['installer_name'])) {
+      $data['installer_name'] = $data['contact_name'];
+    }
+    if (!empty($data['contact_email']) && empty($data['installer_email'])) {
+      $data['installer_email'] = $data['contact_email'];
+    }
+    if (!empty($data['customer_id']) && empty($data['company_id'])) {
+      $data['company_id'] = $data['customer_id'];
+    }
+    return $data;
+  }
+
+  /**
+   * Legacy bulk upload client resolution (email-based).
+   */
+  protected static function enrichLegacyRow(array &$data, $client): void {
+    $installer_email = $data['installer_email'] ?? '';
+    $company_email = $data['company_email'] ?? '';
+    $installer_name = $data['installer_name'] ?? '';
+    $company_name = $data['company_name'] ?? '';
+
+    $client_entity = self::findOrCreateClientByEmail(
+      $installer_email,
+      $company_email,
+      $installer_name,
+      $company_name,
+      $client
+    );
+
+    self::applyClientEntityToRow($data, $client_entity, $client);
+  }
+
+  /**
+   * Individual template: customer service UCR, property address ECK entity, field mapping.
+   */
+  protected static function enrichIndividualRow(array &$data, $client): void {
+    $api_name = trim((string) ($data['contact_name'] ?? $data['installer_name'] ?? ''));
+    $api_email = trim((string) ($data['contact_email'] ?? $data['installer_email'] ?? ''));
+    $company_label = $api_name;
+
+    if ($api_email !== '' && $api_name !== '') {
+      $http = \Drupal::httpClient();
+      $request = \Drupal::request();
+      $api = SentinelCustomerServiceLookup::fetch($http, $request, $api_email, $api_name, $company_label);
+      if (!empty($api['ucr']) && empty($data['ucr'])) {
+        $data['ucr'] = $api['ucr'];
+      }
+      if (!empty($api['client_cid']) && empty($data['client_id'])) {
+        $data['client_id'] = $api['client_cid'];
+        $loaded = \Drupal::entityTypeManager()->getStorage('sentinel_client')->load($api['client_cid']);
+        if ($loaded) {
+          $label = self::resolveClientDisplayName($loaded);
+          if ($label !== '') {
+            $data['client_name'] = $label;
+          }
+        }
+      }
+    }
+
+    if (empty($data['client_id']) || empty($data['ucr'])) {
+      self::enrichLegacyRow($data, $client);
+    }
+
+    if (!empty($data['ucr'])) {
+      $data['customer_id'] = (string) $data['ucr'];
+    }
+
+    $data['system_location'] = self::buildSystemLocation($data);
+
+    $sample_address_id = self::createAddressEntityFromCsv('address', $data);
+    if ($sample_address_id) {
+      $data['sentinel_sample_address_target_id'] = $sample_address_id;
+    }
+  }
+
+  /**
+   * Company template: resolve client by company ID, reuse last company address, property address.
+   */
+  protected static function enrichCompanyRow(array &$data, $client): void {
+    $company_id_raw = trim((string) ($data['customer_id'] ?? $data['company_id'] ?? ''));
+    if ($company_id_raw !== '') {
+      $data['customer_id'] = $company_id_raw;
+    }
+
+    $portal_client = self::lookupClientByCompanyId($company_id_raw);
+    if ($portal_client) {
+      $company_name = self::resolveClientCompanyName($portal_client);
+      if ($company_name !== '') {
+        $data['company_name'] = $company_name;
+      }
+      $client_name = self::resolveClientDisplayName($portal_client);
+      if ($client_name !== '') {
+        $data['client_name'] = $client_name;
+      }
+      if ($portal_client->hasField('email') && !$portal_client->get('email')->isEmpty()) {
+        $data['company_email'] = trim((string) $portal_client->get('email')->value);
+      }
+      $data['client_id'] = (int) $portal_client->id();
+      if (method_exists($portal_client, 'getRealUcr') && $portal_client->getRealUcr()) {
+        $data['ucr'] = (string) (int) $portal_client->getRealUcr();
+      }
+      elseif ($portal_client->hasField('ucr') && !$portal_client->get('ucr')->isEmpty()) {
+        $data['ucr'] = (string) $portal_client->get('ucr')->value;
+      }
+
+      $company_address_id = self::getLatestCompanyAddressIdForClient($portal_client);
+      if ($company_address_id) {
+        $data['sentinel_company_address_target_id'] = $company_address_id;
+        self::applyCompanyAddressScalarsFromEntity($data, $company_address_id);
+      }
+    }
+    else {
+      self::enrichLegacyRow($data, $client);
+    }
+
+    $data['system_location'] = self::buildSystemLocation($data);
+
+    $sample_address_id = self::createAddressEntityFromCsv('address', $data);
+    if ($sample_address_id) {
+      $data['sentinel_sample_address_target_id'] = $sample_address_id;
+    }
+  }
+
+  /**
+   * Copies UCR / client fields from a sentinel_client entity onto the row.
+   */
+  protected static function applyClientEntityToRow(array &$data, $client_entity, $fallback_client): void {
+    if ($client_entity) {
+      $ucr_value = NULL;
+      if (method_exists($client_entity, 'getRealUcr')) {
+        $ucr_value = $client_entity->getRealUcr();
+      }
+      elseif ($client_entity->hasField('ucr') && !$client_entity->get('ucr')->isEmpty()) {
+        $ucr_value = $client_entity->get('ucr')->value;
+      }
+      $data['ucr'] = $ucr_value;
+      $data['client_id'] = $client_entity->id();
+      $label = self::resolveClientDisplayName($client_entity);
+      if ($label !== '') {
+        $data['client_name'] = $label;
+      }
+      return;
+    }
+
+    if (is_object($fallback_client) && method_exists($fallback_client, 'getRealUcr')) {
+      $data['ucr'] = $fallback_client->getRealUcr();
+    }
+    if (is_object($fallback_client) && method_exists($fallback_client, 'id')) {
+      $data['client_id'] = $fallback_client->id();
+    }
+    if (is_object($fallback_client) && method_exists($fallback_client, 'get')) {
+      $label = self::resolveClientDisplayName($fallback_client);
+      if ($label !== '') {
+        $data['client_name'] = $label;
+      }
+    }
+  }
+
+  /**
+   * Resolves client_name from sentinel_client (name, then company, then email).
+   */
+  protected static function resolveClientDisplayName($client): string {
+    return self::resolveClientFieldValue($client, ['name', 'company', 'email']);
+  }
+
+  /**
+   * Resolves company_name from sentinel_client (company, then name, then email).
+   */
+  protected static function resolveClientCompanyName($client): string {
+    return self::resolveClientFieldValue($client, ['company', 'name', 'email']);
+  }
+
+  /**
+   * Reads the first non-empty string field from a sentinel_client entity.
+   */
+  protected static function resolveClientFieldValue($client, array $fields): string {
+    if (!$client || !method_exists($client, 'hasField')) {
+      return '';
+    }
+    foreach ($fields as $field) {
+      if ($client->hasField($field) && !$client->get($field)->isEmpty()) {
+        $value = trim((string) $client->get($field)->value);
+        if ($value !== '' && strcasecmp($value, 'NOT PROVIDED') !== 0) {
+          return $value;
+        }
+      }
+    }
+    foreach ($fields as $field) {
+      if ($client->hasField($field) && !$client->get($field)->isEmpty()) {
+        $value = trim((string) $client->get($field)->value);
+        if ($value !== '') {
+          return $value;
+        }
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Copies company_address1, company_town, company_postcode from an ECK company_address.
+   */
+  protected static function applyCompanyAddressScalarsFromEntity(array &$data, int $address_entity_id): void {
+    $address = \Drupal::entityTypeManager()->getStorage('address')->load($address_entity_id);
+    if (!$address || !$address->hasField('field_address') || $address->get('field_address')->isEmpty()) {
+      return;
+    }
+    $item = $address->get('field_address')->first();
+    if (!$item) {
+      return;
+    }
+    $line1 = trim((string) ($item->address_line1 ?? ''));
+    $line2_parts = array_filter([
+      trim((string) ($item->address_line2 ?? '')),
+      trim((string) ($item->address_line3 ?? '')),
+    ], static function ($part) {
+      return $part !== '';
+    });
+    $line2 = trim(implode(' ', $line2_parts));
+    $town = trim((string) ($item->locality ?? ''));
+    $postcode = trim((string) ($item->postal_code ?? ''));
+
+    if ($line1 !== '') {
+      $data['company_address1'] = $line1;
+    }
+    if ($line2 !== '') {
+      $data['company_address2'] = $line2;
+    }
+    if ($town !== '') {
+      $data['company_town'] = $town;
+    }
+    if ($postcode !== '') {
+      $data['company_postcode'] = $postcode;
+    }
+  }
+
+  /**
+   * Looks up a portal client from a pasted Company ID / UCR.
+   */
+  protected static function lookupClientByCompanyId(string $raw) {
+    $digits = preg_replace('/\D/', '', $raw);
+    if ($digits === '') {
+      return NULL;
+    }
+    $n = (int) $digits;
+    $candidates = [];
+    if (strlen($digits) > 4) {
+      $candidates[] = (int) floor($n / 10);
+    }
+    $candidates[] = $n;
+    if (strlen($digits) > 1) {
+      $candidates[] = (int) floor($n / 10);
+    }
+    $candidates = array_values(array_unique(array_filter($candidates, static function ($v) {
+      return $v > 0;
+    })));
+    $storage = \Drupal::entityTypeManager()->getStorage('sentinel_client');
+
+    foreach ($candidates as $ucr) {
+      if (function_exists('sentinel_portal_entities_get_client_by_ucr')) {
+        $client = sentinel_portal_entities_get_client_by_ucr($ucr);
+        if ($client) {
+          return $client;
+        }
+      }
+      $ids = $storage->getQuery()
+        ->condition('ucr', $ucr)
+        ->accessCheck(FALSE)
+        ->range(0, 1)
+        ->execute();
+      if (!empty($ids)) {
+        return $storage->load((int) reset($ids));
+      }
+    }
+
+    if ($digits !== '' && ctype_digit($digits)) {
+      $by_cid = $storage->load((int) $digits);
+      if ($by_cid) {
+        return $by_cid;
+      }
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Returns the most recently used company_address entity id for a client.
+   */
+  protected static function getLatestCompanyAddressIdForClient($client): ?int {
+    if (!$client || !method_exists($client, 'id')) {
+      return NULL;
+    }
+
+    $storage = \Drupal::entityTypeManager()->getStorage('sentinel_sample');
+    $query = $storage->getQuery()->accessCheck(FALSE)->sort('pid', 'DESC')->range(0, 100);
+    $or = $query->orConditionGroup();
+    $or->condition('client_id', (int) $client->id());
+    if ($client->hasField('ucr') && !$client->get('ucr')->isEmpty()) {
+      $or->condition('ucr', $client->get('ucr')->value);
+    }
+    $query->condition($or);
+    $sample_ids = $query->execute();
+
+    foreach ($sample_ids as $sample_id) {
+      $sample = $storage->load($sample_id);
+      if (!$sample) {
+        continue;
+      }
+      if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+        return (int) $sample->get('field_company_address')->first()->target_id;
+      }
+      if ($sample->hasField('sentinel_company_address_target_id') && !$sample->get('sentinel_company_address_target_id')->isEmpty()) {
+        return (int) $sample->get('sentinel_company_address_target_id')->value;
+      }
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Builds system_location from street, town and postcode.
+   */
+  protected static function buildSystemLocation(array $data): string {
+    return implode(', ', array_filter([
+      trim((string) ($data['street'] ?? '')),
+      trim((string) ($data['town_city'] ?? '')),
+      trim((string) ($data['postcode'] ?? '')),
+    ], static function ($part) {
+      return $part !== '';
+    }));
+  }
+
+  /**
+   * Creates an ECK address entity from CSV address columns (manual entry).
+   */
+  protected static function createAddressEntityFromCsv(string $bundle, array $data): ?int {
+    $street = trim((string) ($data['street'] ?? ''));
+    $town = trim((string) ($data['town_city'] ?? ''));
+    $postcode = trim((string) ($data['postcode'] ?? ''));
+
+    if ($street === '' && $town === '' && $postcode === '') {
+      return NULL;
+    }
+
+    $field_address = [
+      'country_code' => 'GB',
+    ];
+    if ($street !== '') {
+      $field_address['address_line1'] = $street;
+    }
+    if ($town !== '') {
+      $field_address['locality'] = $town;
+    }
+    if ($postcode !== '') {
+      $field_address['postal_code'] = $postcode;
+    }
+
+    $address_storage = \Drupal::entityTypeManager()->getStorage('address');
+    $entity = $address_storage->create([
+      'type' => $bundle,
+      'field_address' => $field_address,
+    ]);
+    $entity->save();
+
+    return (int) $entity->id();
+  }
+
+  /**
+   * Sets entity reference address fields on a sample after create/update.
+   */
+  protected static function applyAddressFieldsToSample(EntityInterface $sample, array $data): void {
+    $needs_save = FALSE;
+
+    foreach (['sentinel_company_address_target_id', 'sentinel_sample_address_target_id'] as $field_name) {
+      if (isset($data[$field_name]) && $data[$field_name] && $sample->hasField($field_name)) {
+        $current = $sample->get($field_name)->isEmpty() ? NULL : $sample->get($field_name)->value;
+        if ((int) $current !== (int) $data[$field_name]) {
+          $sample->set($field_name, (int) $data[$field_name]);
+          $needs_save = TRUE;
+        }
+      }
+    }
+
+    $ref_map = [
+      'field_company_address' => 'sentinel_company_address_target_id',
+      'field_sentinel_sample_address' => 'sentinel_sample_address_target_id',
+    ];
+    foreach ($ref_map as $field_name => $legacy_key) {
+      $target_id = $data[$legacy_key] ?? NULL;
+      if ($target_id && $sample->hasField($field_name)) {
+        $existing = $sample->get($field_name)->isEmpty() ? NULL : (int) $sample->get($field_name)->first()->target_id;
+        if ($existing !== (int) $target_id) {
+          $sample->set($field_name, ['target_id' => (int) $target_id]);
+          $needs_save = TRUE;
+        }
+      }
+    }
+
+    if ($needs_save) {
+      $sample->save();
+    }
+  }
+
+  /**
+   * Applies scalar sample columns from bulk row data (ensures company_name etc. are saved).
+   */
+  protected static function applyBulkSampleScalarsFromData(EntityInterface $sample, array $data): void {
+    $scalar_fields = [
+      'company_name',
+      'company_email',
+      'company_tel',
+      'company_address1',
+      'company_address2',
+      'company_town',
+      'company_postcode',
+      'client_name',
+      'client_id',
+      'ucr',
+      'customer_id',
+      'installer_name',
+      'installer_email',
+      'system_location',
+      'street',
+      'town_city',
+      'postcode',
+      'system_age',
+      'boiler_id',
+      'boiler_type',
+      'boiler_manufacturer',
+      'date_sent',
+      'date_installed',
+      'pack_type',
+      'property_number',
+    ];
+    $needs_save = FALSE;
+    foreach ($scalar_fields as $field_name) {
+      if (!array_key_exists($field_name, $data) || !$sample->hasField($field_name)) {
+        continue;
+      }
+      $value = $data[$field_name];
+      if ($value === NULL || $value === '') {
+        continue;
+      }
+      $current = $sample->get($field_name)->isEmpty() ? NULL : $sample->get($field_name)->value;
+      if ((string) $current !== (string) $value) {
+        $sample->set($field_name, $value);
+        $needs_save = TRUE;
+      }
+    }
+    if ($needs_save) {
+      $sample->save();
+    }
+  }
+
+  /**
    * Persist a sample row: create or update as necessary.
    */
   protected static function persistSample(array $data, $client, array &$errors): void {
@@ -667,6 +1132,8 @@ class BulkUploadBatch {
             if ($needs_save) {
               $created_sample->save();
             }
+            self::applyBulkSampleScalarsFromData($created_sample, $data);
+            self::applyAddressFieldsToSample($created_sample, $data);
           }
         }
         unset($sample);
@@ -748,6 +1215,9 @@ class BulkUploadBatch {
           if ($needs_save) {
             $updated_sample->save();
           }
+
+          self::applyBulkSampleScalarsFromData($updated_sample, $data);
+          self::applyAddressFieldsToSample($updated_sample, $data);
           
           // Check if emails changed by comparing CSV data with original emails
           // Get new emails from $data array (CSV values) instead of reloaded entity

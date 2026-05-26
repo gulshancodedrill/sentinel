@@ -5,6 +5,7 @@ core_version_requirement: ^11
 package: Sentinel
 dependencies:
   - sentinel_portal_entities
+  - sentinel_portal_sample
   - sentinel_portal_module
   - file
   - user

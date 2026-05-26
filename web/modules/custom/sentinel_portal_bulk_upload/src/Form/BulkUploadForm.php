@@ -79,10 +79,14 @@ class BulkUploadForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $module_path = $this->moduleHandler->getModule('sentinel_portal_bulk_upload')->getPath();
 
-    $template_link = Link::fromTextAndUrl(
-      $this->t('Template'),
-      Url::fromUri('base:/' . $module_path . '/includes/template.csv', ['attributes' => ['download' => TRUE]])
-    )->toString();
+    $company_template_link = $this->buildTemplateDownloadLink(
+      $module_path . '/includes/template_company.csv',
+      $this->t('Company template (CSV)')
+    );
+    $individual_template_link = $this->buildTemplateDownloadLink(
+      $module_path . '/includes/template_individual.csv',
+      $this->t('Individual template (CSV)')
+    );
 
     $guide_link = Link::fromTextAndUrl(
       $this->t('Download guide'),
@@ -90,7 +94,10 @@ class BulkUploadForm extends FormBase {
     )->toString();
 
     $form['wrapper_start'] = [
-      '#markup' => '<div class="landing-well clearfix"><h2><i class="fa fa-upload"></i> &nbsp; ' . $this->t('Submit multiple packs at once') . '</h2><p>' . $this->t('Using our @template_link, upload the information for multiple SystemCheck packs at once. Guidance on correct use of the template can be found below.', ['@template_link' => Markup::create($template_link)]) . '</p>',
+      '#markup' => '<div class="landing-well clearfix"><h2><i class="fa fa-upload"></i> &nbsp; ' . $this->t('Submit multiple packs at once') . '</h2><p>' . $this->t('Download the @company_template or @individual_template, populate it with your pack data, then upload the file below. Guidance on correct use of the templates can be found below.', [
+        '@company_template' => Markup::create($company_template_link),
+        '@individual_template' => Markup::create($individual_template_link),
+      ]) . '</p>',
     ];
 
     $form['csv_file'] = [
@@ -133,10 +140,20 @@ class BulkUploadForm extends FormBase {
     $help_text = '<p>' . $this->t('Any issues found during the import process will be available to view in the @notices area.', ['@notices' => $notices_markup]) . '</p>';
 
     $form['help_text'] = [
-      '#markup' => $help_header . $guide_link . '<br>' . $template_link . $help_text,
+      '#markup' => $help_header . $guide_link . '<br><ul><li>' . $company_template_link . '</li><li>' . $individual_template_link . '</li></ul>' . $help_text,
     ];
 
     return $form;
+  }
+
+  /**
+   * Builds a download link for a CSV template in the module includes directory.
+   */
+  protected function buildTemplateDownloadLink(string $relative_path, string $title): string {
+    return Link::fromTextAndUrl(
+      $title,
+      Url::fromUri('base:/' . $relative_path, ['attributes' => ['download' => TRUE]])
+    )->toString();
   }
 
   /**
