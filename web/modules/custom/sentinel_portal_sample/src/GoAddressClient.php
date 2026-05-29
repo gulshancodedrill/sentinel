@@ -2,6 +2,7 @@
 
 namespace Drupal\sentinel_portal_sample;
 
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Site\Settings;
 use GuzzleHttp\ClientInterface;
 
@@ -11,6 +12,44 @@ use GuzzleHttp\ClientInterface;
 final class GoAddressClient {
 
   private const API_URL = 'https://portal.goaddress.io/api/address/search';
+
+  /**
+   * Reads a trimmed string from form state values or raw user input.
+   *
+   * @param string[][] $parent_paths
+   *   Candidate #parents paths, most specific first.
+   */
+  public static function formStateString(FormStateInterface $form_state, array $parent_paths): string {
+    foreach ($parent_paths as $parents) {
+      $value = $form_state->getValue($parents);
+      if ($value !== NULL && $value !== '') {
+        $trimmed = trim((string) $value);
+        if ($trimmed !== '') {
+          return $trimmed;
+        }
+      }
+    }
+
+    $input = $form_state->getUserInput();
+    foreach ($parent_paths as $parents) {
+      $cursor = $input;
+      foreach ($parents as $key) {
+        if (!is_array($cursor) || !array_key_exists($key, $cursor)) {
+          $cursor = NULL;
+          break;
+        }
+        $cursor = $cursor[$key];
+      }
+      if (is_scalar($cursor)) {
+        $trimmed = trim((string) $cursor);
+        if ($trimmed !== '') {
+          return $trimmed;
+        }
+      }
+    }
+
+    return '';
+  }
 
   /**
    * Searches GoAddress and returns keyed results from new_address_res.

@@ -1,10 +1,12 @@
 anonymous-wizard:
-  version: 1.3
+  version: 1.4
   css:
     theme:
       css/sentinel_anonymous_wizard.css: {}
+      css/sentinel_portal_sample_address.css: {}
   js:
     js/sentinel_anonymous_wizard_progress.js: {}
+    js/sentinel_portal_sample_sample.address.js: {}
   dependencies:
     - core/drupal
     - core/drupal.ajax

@@ -11,6 +11,7 @@ use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 use Drupal\sentinel_portal_sample\AnonymousSampleFlowTranslationTrait;
 use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
 use Drupal\sentinel_portal_sample\AnonymousSampleWizardProgress;
+use Drupal\sentinel_portal_sample\GoAddressClient;
 use Drupal\sentinel_portal_sample\PortalSampleCountryOptions;
 use Drupal\sentinel_portal_sample\SentinelCustomerServiceLookup;
 
@@ -118,76 +119,119 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => -10,
     ];
 
-    $form_state->set('goaddress_property_parents', []);
-    $this->buildGoAddressPropertySearchElements(
-      $form['property_ajax_root'],
-      $form_state,
-      [],
-      'property-ajax-root'
-    );
-
-    $manual_mode = (bool) ($form_state->get('manual_property_mode') ?? FALSE);
-
-    $form['property_ajax_root']['manual_property_btn'] = [
-      '#type' => 'submit',
-      '#value' => $manual_mode ? $this->tFlow('Cancel property details') : $this->tFlow('Enter address manually'),
-      '#submit' => ['::submitToggleManualProperty'],
-      '#ajax' => [
-        'callback' => '::ajaxPropertyRefresh',
-        'wrapper' => 'property-ajax-root',
-        'progress' => ['type' => 'none'],
-      ],
-      '#limit_validation_errors' => [],
-      '#attributes' => ['class' => ['button', 'button--small']],
+    $form['property_ajax_root']['property_house_no'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('House number'),
+      '#default_value' => GoAddressClient::formStateString($form_state, [
+        ['property_ajax_root', 'property_house_no'],
+        ['property_house_no'],
+      ]),
+      '#size' => 12,
+      '#weight' => -14,
     ];
+    $form['property_ajax_root']['property_postcode'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('Postcode'),
+      '#default_value' => $form_state->getValue('property_postcode') ?? '',
+      '#size' => 16,
+      '#weight' => -13,
+    ];
+    $form['property_ajax_root']['anon_goaddress_search_btn'] = [
+      '#type' => 'button',
+      '#name' => 'anon_goaddress_search_btn',
+      '#value' => $this->tFlow('Search address'),
+      '#executes_submit_callback' => TRUE,
+      '#submit' => ['::submitAnonymousGoAddressSearch'],
+      '#ajax' => [
+        'callback' => '::ajaxAnonymousGoAddressSearch',
+        'wrapper' => 'property-ajax-root',
+        'progress' => ['type' => 'throbber'],
+      ],
+      '#limit_validation_errors' => [
+        ['property_ajax_root', 'property_house_no'],
+        ['property_ajax_root', 'property_postcode'],
+      ],
+      '#attributes' => ['class' => ['button', 'button--small']],
+      '#weight' => -12,
+    ];
+    $anon_goaddress_message = $form_state->get('anon_goaddress_message');
+    if (is_string($anon_goaddress_message) && $anon_goaddress_message !== '') {
+      $form['property_ajax_root']['goaddress_search_status'] = [
+        '#markup' => '<p class="goaddress-search-status messages messages--warning">' . htmlspecialchars($anon_goaddress_message, ENT_QUOTES, 'UTF-8') . '</p>',
+        '#weight' => -10,
+      ];
+    }
+
+    $prefill = $form_state->get('anon_goaddress_prefill');
+    if (!is_array($prefill)) {
+      $prefill = [];
+    }
+    $af = $form_state->getValue(['system_details', 'address', 'address_fields']);
+    if (!is_array($af)) {
+      $af = [];
+    }
+    $show_property_address_fields = $this->anonymousGoAddressHasSelection($form_state);
+
+    $form['property_ajax_root']['enter_address_btn'] = [
+      '#type' => 'button',
+      '#value' => $this->tFlow('Enter address'),
+      '#attributes' => ['class' => ['button', 'button--small', 'sample-address-add-button']],
+    ];
+    if ($show_property_address_fields) {
+      $form['property_ajax_root']['enter_address_btn']['#attributes']['style'] = 'display: none;';
+    }
 
     $form['property_ajax_root']['property_wrapper'] = [
       '#type' => 'container',
       '#attributes' => ['id' => 'property-wrapper'],
     ];
 
-    if ($manual_mode) {
-      $prefill = $form_state->get('property_address_prefill');
-      if (!is_array($prefill)) {
-        $prefill = [];
-      }
-      $af = $form_state->getValue(['system_details', 'address', 'address_fields']);
-      if (!is_array($af)) {
-        $af = [];
-      }
-      $form['property_ajax_root']['property_wrapper']['address_fields'] = [
-        '#type' => 'container',
-        '#tree' => TRUE,
-        '#parents' => ['system_details', 'address', 'address_fields'],
-      ];
-      $form['property_ajax_root']['property_wrapper']['address_fields']['country'] = [
-        '#type' => 'select',
-        '#title' => $this->tFlow('Country'),
-        '#options' => PortalSampleCountryOptions::options(function ($label) {
-          return $this->tFlow($label);
-        }),
-        '#default_value' => $prefill['country'] ?? $af['country'] ?? 'GB',
-        '#weight' => 1,
-      ];
-      $form['property_ajax_root']['property_wrapper']['address_fields']['address_1'] = [
-        '#type' => 'textfield',
-        '#title' => $this->tFlow('Address 1'),
-        '#default_value' => $prefill['address_1'] ?? $af['address_1'] ?? $this->getSampleScalar('street'),
-        '#weight' => 2,
-      ];
-      $form['property_ajax_root']['property_wrapper']['address_fields']['town_city'] = [
-        '#type' => 'textfield',
-        '#title' => $this->tFlow('Town/City'),
-        '#default_value' => $prefill['town_city'] ?? $af['town_city'] ?? $this->getSampleScalar('town_city'),
-        '#weight' => 3,
-      ];
-      $form['property_ajax_root']['property_wrapper']['address_fields']['postcode'] = [
-        '#type' => 'textfield',
-        '#title' => $this->tFlow('Postcode'),
-        '#default_value' => $prefill['postcode'] ?? $af['postcode'] ?? $this->getSampleScalar('postcode') ?: $this->getSampleScalar('company_postcode'),
-        '#weight' => 4,
-      ];
+    $form['property_ajax_root']['property_wrapper']['address_fields'] = [
+      '#type' => 'container',
+      '#tree' => TRUE,
+      '#parents' => ['system_details', 'address', 'address_fields'],
+      '#attributes' => [
+        'id' => 'anon-sample-address-fields',
+        'class' => ['sample-address-fields'],
+      ],
+    ];
+    if ($show_property_address_fields) {
+      $form['property_ajax_root']['property_wrapper']['address_fields']['#attributes']['style'] = 'display: block;';
     }
+
+    $form['property_ajax_root']['property_wrapper']['address_fields']['country'] = [
+      '#type' => 'select',
+      '#title' => $this->tFlow('Country'),
+      '#options' => PortalSampleCountryOptions::options(function ($label) {
+        return $this->tFlow($label);
+      }),
+      '#default_value' => $prefill['country'] ?? $af['country'] ?? 'GB',
+      '#weight' => 1,
+    ];
+    $form['property_ajax_root']['property_wrapper']['address_fields']['address_1'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('Address 1'),
+      '#default_value' => $prefill['address_1'] ?? $af['address_1'] ?? $this->getSampleScalar('street'),
+      '#weight' => 2,
+    ];
+    $form['property_ajax_root']['property_wrapper']['address_fields']['town_city'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('Town/City'),
+      '#default_value' => $prefill['town_city'] ?? $af['town_city'] ?? $this->getSampleScalar('town_city'),
+      '#weight' => 3,
+    ];
+    $form['property_ajax_root']['property_wrapper']['address_fields']['postcode'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('Postcode'),
+      '#default_value' => $prefill['postcode'] ?? $af['postcode'] ?? $this->getSampleScalar('postcode') ?: $this->getSampleScalar('company_postcode'),
+      '#weight' => 4,
+    ];
+    $form['property_ajax_root']['property_wrapper']['address_fields']['close_address_btn'] = [
+      '#type' => 'button',
+      '#value' => $this->tFlow('Close address'),
+      '#attributes' => ['class' => ['button', 'button--small', 'sample-address-close-button']],
+      '#weight' => 5,
+    ];
 
     $val_6m = $form_state->getValue('system_6_months') ?? $this->getSampleScalar('system_6_months');
     if ($val_6m === '') $val_6m = NULL;
@@ -345,27 +389,17 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       $form_state->setErrorByName('system_6_months', $this->tFlow('Please select the age of the system.'));
     }
     
-    $manual_mode = (bool) ($form_state->get('manual_property_mode') ?? FALSE);
-    $prefill = $form_state->get('property_address_prefill');
-    if (!is_array($prefill)) {
-      $prefill = [];
-    }
+    $resolved = $this->anonymousResolvePropertyAddressFields($form_state);
+    $has_goaddress = $this->anonymousGoAddressHasSelection($form_state);
 
-    if ($manual_mode) {
-      $af_err = 'system_details][address][address_fields';
-      $af = $form_state->getValue(['system_details', 'address', 'address_fields']) ?? [];
-      if (!is_array($af)) {
-        $af = [];
-      }
-      if (trim((string) ($af['address_1'] ?? $prefill['address_1'] ?? '')) === '') {
-        $form_state->setErrorByName($af_err . '][address_1', $this->tFlow('Address 1 is required. Select a property address or enter it manually.'));
-      }
-      if (trim((string) ($af['postcode'] ?? $prefill['postcode'] ?? '')) === '') {
-        $form_state->setErrorByName($af_err . '][postcode', $this->tFlow('Postcode is required.'));
-      }
+    if (!$has_goaddress && trim($resolved['address_1']) === '') {
+      $form_state->setErrorByName('property_house_no', $this->tFlow('Please search for a property address using house number and postcode, or click “Enter address”.'));
     }
-    elseif (!$this->goAddressPropertySearchHasSelection($form_state)) {
-      $form_state->setErrorByName('property_house_no', $this->tFlow('Please search for a property address using house number and postcode, or click “Enter address manually”.'));
+    elseif (trim($resolved['address_1']) === '') {
+      $form_state->setErrorByName('system_details][address][address_fields][address_1', $this->tFlow('Address 1 is required. Search for a property address or enter it manually.'));
+    }
+    elseif (trim($resolved['postcode']) === '') {
+      $form_state->setErrorByName('system_details][address][address_fields][postcode', $this->tFlow('Postcode is required.'));
     }
     $this->validateEmailFormValue(
       $form_state,
@@ -381,78 +415,113 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
   }
 
   /**
-   * {@inheritdoc}
+   * Submit handler: anonymous wizard GoAddress property search.
    */
-  protected function onGoAddressPropertySelected(FormStateInterface $form_state): void {
-    $form_state->set('manual_property_mode', TRUE);
+  public function submitAnonymousGoAddressSearch(array &$form, FormStateInterface $form_state): void {
+    $house_no = GoAddressClient::formStateString($form_state, [
+      ['property_ajax_root', 'property_house_no'],
+      ['property_house_no'],
+    ]);
+    $postcode = GoAddressClient::formStateString($form_state, [
+      ['property_ajax_root', 'property_postcode'],
+      ['property_postcode'],
+    ]);
+
+    $form_state->set('anon_goaddress_message', NULL);
+    $form_state->set('anon_goaddress_prefill', []);
+
+    if ($house_no === '' || $postcode === '') {
+      $form_state->set('anon_goaddress_message', (string) $this->tFlow('Please enter both house number and postcode.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
+    $results = GoAddressClient::search(\Drupal::httpClient(), $house_no, $postcode);
+    if ($results === []) {
+      $form_state->set('anon_goaddress_message', (string) $this->tFlow('No addresses found for that house number and postcode.'));
+    }
+    else {
+      $first = reset($results);
+      $fields = $first['fields'] ?? [];
+      if (is_array($fields) && $fields !== []) {
+        unset($fields['goaddress_id']);
+        $form_state->set('anon_goaddress_prefill', $fields);
+        $this->anonymousGoAddressSyncSystemAddressFields($form_state, $fields);
+      }
+    }
+
+    $form_state->setRebuild(TRUE);
   }
 
   /**
-   * {@inheritdoc}
+   * AJAX callback: rebuild property block with searched address fields.
    */
-  protected function goAddressPropertySearchAjaxElement(array &$form, FormStateInterface $form_state) {
+  public function ajaxAnonymousGoAddressSearch(array &$form, FormStateInterface $form_state) {
     return $form['property_ajax_root'];
   }
 
   /**
-   * Loads GoAddress prefill into manual address fields when opening manual entry.
+   * Whether anonymous GoAddress search produced address data.
    */
-  protected function applyPropertyAddressSelectionToFormState(FormStateInterface $form_state, bool $open_manual_fields = FALSE): void {
-    if (!$this->goAddressPropertySearchHasSelection($form_state)) {
-      return;
-    }
-    $prefill = $form_state->get('property_address_prefill');
-    if (!is_array($prefill)) {
-      return;
-    }
-    if ($open_manual_fields) {
-      $form_state->set('manual_property_mode', TRUE);
-      $input = $form_state->getUserInput();
-      if (!isset($input['system_details']) || !is_array($input['system_details'])) {
-        $input['system_details'] = [];
-      }
-      if (!isset($input['system_details']['address']) || !is_array($input['system_details']['address'])) {
-        $input['system_details']['address'] = [];
-      }
-      $input['system_details']['address']['address_fields'] = $prefill;
-      $form_state->setUserInput($input);
-      $form_state->setValue(['system_details', 'address', 'address_fields'], $prefill);
-    }
+  protected function anonymousGoAddressHasSelection(FormStateInterface $form_state): bool {
+    $prefill = $form_state->get('anon_goaddress_prefill');
+    return is_array($prefill)
+      && trim((string) ($prefill['address_1'] ?? '')) !== ''
+      && trim((string) ($prefill['postcode'] ?? '')) !== '';
   }
 
   /**
-   * Clears nested manual address + landlord values from raw user input.
+   * Resolves submitted system address fields, falling back to GoAddress prefill.
    */
-  protected function clearPortalStylePropertyManualUserInput(array &$input): void {
-    if (!isset($input['system_details']) || !is_array($input['system_details'])) {
-      return;
+  protected function anonymousResolvePropertyAddressFields(FormStateInterface $form_state): array {
+    $af = $form_state->getValue(['system_details', 'address', 'address_fields']) ?? [];
+    if (!is_array($af)) {
+      $af = [];
     }
-    if (isset($input['system_details']['address']['address_fields']) && is_array($input['system_details']['address']['address_fields'])) {
-      foreach (['country', 'address_1', 'property_name', 'property_number', 'town_city', 'postcode'] as $k) {
-        unset($input['system_details']['address']['address_fields'][$k]);
+    $prefill = $form_state->get('anon_goaddress_prefill');
+    if (!is_array($prefill)) {
+      $prefill = [];
+    }
+
+    $pick = static function (array $primary, array $fallback, string $key): string {
+      $value = trim((string) ($primary[$key] ?? ''));
+      if ($value !== '') {
+        return $value;
       }
-    }
-    if (isset($input['system_details']['landlord_wrapper']['landlord'])) {
-      unset($input['system_details']['landlord_wrapper']['landlord']);
-    }
+      return trim((string) ($fallback[$key] ?? ''));
+    };
+
+    return [
+      'country' => $pick($af, $prefill, 'country') ?: 'GB',
+      'address_1' => $pick($af, $prefill, 'address_1'),
+      'town_city' => $pick($af, $prefill, 'town_city'),
+      'postcode' => $pick($af, $prefill, 'postcode'),
+      'county' => $pick($af, $prefill, 'county'),
+    ];
   }
 
-  public function submitToggleManualProperty(array &$form, FormStateInterface $form_state) {
-    $mode = (bool) ($form_state->get('manual_property_mode') ?? FALSE);
+  /**
+   * Writes GoAddress result into anonymous system_details address form state.
+   */
+  protected function anonymousGoAddressSyncSystemAddressFields(FormStateInterface $form_state, array $fields): void {
+    $address_values = [
+      'country' => strtoupper(trim((string) ($fields['country'] ?? ''))) ?: 'GB',
+      'address_1' => trim((string) ($fields['address_1'] ?? '')),
+      'town_city' => trim((string) ($fields['town_city'] ?? '')),
+      'postcode' => trim((string) ($fields['postcode'] ?? '')),
+      'county' => trim((string) ($fields['county'] ?? '')),
+    ];
+    $form_state->setValue(['system_details', 'address', 'address_fields'], $address_values);
 
-    if (!$mode) {
-      $form_state->set('manual_property_mode', TRUE);
-      $this->applyPropertyAddressSelectionToFormState($form_state, TRUE);
+    $input = $form_state->getUserInput();
+    if (!isset($input['system_details']) || !is_array($input['system_details'])) {
+      $input['system_details'] = [];
     }
-    else {
-      $form_state->set('manual_property_mode', FALSE);
-      $form_state->set('property_address_prefill', []);
-      $input = $form_state->getUserInput();
-      $this->clearPortalStylePropertyManualUserInput($input);
-      $form_state->setUserInput($input);
+    if (!isset($input['system_details']['address']) || !is_array($input['system_details']['address'])) {
+      $input['system_details']['address'] = [];
     }
-
-    $form_state->setRebuild(TRUE);
+    $input['system_details']['address']['address_fields'] = $address_values;
+    $form_state->setUserInput($input);
   }
 
   /**
@@ -464,8 +533,8 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       return;
     }
 
-    if ($this->goAddressPropertySearchHasSelection($form_state)) {
-      $this->applyPropertyAddressSelectionToFormState($form_state, FALSE);
+    if ($this->anonymousGoAddressHasSelection($form_state)) {
+      $this->anonymousGoAddressSyncSystemAddressFields($form_state, $form_state->get('anon_goaddress_prefill'));
     }
     $search_val = '';
 
@@ -477,19 +546,12 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $country = 'GB';
     $landlord = 'Not specified';
 
-    $prefill = $form_state->get('property_address_prefill');
-    if (!is_array($prefill)) {
-      $prefill = [];
-    }
-    $af = $form_state->getValue(['system_details', 'address', 'address_fields']) ?? [];
-    if (!is_array($af)) {
-      $af = [];
-    }
-    $postcode = trim((string) ($af['postcode'] ?? $prefill['postcode'] ?? ''));
-    $street = trim((string) ($af['address_1'] ?? $prefill['address_1'] ?? ''));
-    $town_city = trim((string) ($af['town_city'] ?? $prefill['town_city'] ?? ''));
-    $county = trim((string) ($af['county'] ?? $prefill['county'] ?? ''));
-    $country = trim((string) ($af['country'] ?? $prefill['country'] ?? '')) ?: 'GB';
+    $resolved = $this->anonymousResolvePropertyAddressFields($form_state);
+    $postcode = $resolved['postcode'];
+    $street = $resolved['address_1'];
+    $town_city = $resolved['town_city'];
+    $county = $resolved['county'];
+    $country = $resolved['country'];
 
     $system_location_parts = array_filter([$street, $town_city, $postcode]);
     $system_location = implode(', ', $system_location_parts);

@@ -11,8 +11,12 @@ use Drupal\sentinel_portal_sample\PortalSampleCountryOptions;
 use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
 use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\InvokeCommand;
+use Drupal\Core\Ajax\MessageCommand;
+use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\sentinel_portal_sample\Controller\SentinelSampleController;
-use Drupal\sentinel_portal_sample\GoAddressPropertySearchTrait;
+use Drupal\sentinel_portal_sample\GoAddressClient;
 use Drupal\user\Entity\User;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -20,8 +24,6 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Sample submission form.
  */
 class SentinelSampleSubmissionForm extends FormBase {
-
-  use GoAddressPropertySearchTrait;
 
   /**
    * The entity type manager.
@@ -268,37 +270,76 @@ class SentinelSampleSubmissionForm extends FormBase {
 
     $form['job_details']['goaddress_search'] = [
       '#type' => 'container',
-      '#attributes' => ['id' => 'goaddress-property-search'],
+      '#attributes' => ['id' => 'portal-goaddress-search'],
       // '#weight' => 2,
     ];
-    $form_state->set('goaddress_property_parents', ['job_details']);
-    $this->buildGoAddressPropertySearchElements(
-      $form['job_details']['goaddress_search'],
-      $form_state,
-      ['job_details'],
-      'goaddress-property-search'
-    );
+    $form['job_details']['goaddress_search']['property_house_no'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('House number'),
+      '#parents' => ['portal_property_house_no'],
+      '#default_value' => GoAddressClient::formStateString($form_state, [
+        ['portal_property_house_no'],
+        ['job_details', 'goaddress_search', 'property_house_no'],
+      ]),
+      '#size' => 12,
+      '#weight' => -14,
+    ];
+    $form['job_details']['goaddress_search']['property_postcode'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Postcode'),
+      '#parents' => ['portal_property_postcode'],
+      '#default_value' => GoAddressClient::formStateString($form_state, [
+        ['portal_property_postcode'],
+        ['job_details', 'goaddress_search', 'property_postcode'],
+      ]),
+      '#size' => 16,
+      '#weight' => -13,
+    ];
+    $form['job_details']['goaddress_search']['portal_goaddress_search_btn'] = [
+      '#type' => 'button',
+      '#name' => 'portal_goaddress_search_btn',
+      '#value' => $this->t('Search address'),
+      '#executes_submit_callback' => TRUE,
+      '#submit' => ['::submitPortalGoAddressSearch'],
+      '#ajax' => [
+        'callback' => '::ajaxPortalGoAddressSearch',
+        'wrapper' => 'portal-sample-address-fields',
+        'progress' => ['type' => 'throbber'],
+      ],
+      // Skip full-form validation (pack reference, etc.) so search always runs.
+      '#limit_validation_errors' => [],
+      '#attributes' => ['class' => ['button', 'button--small']],
+      '#weight' => -12,
+    ];
+    $portal_goaddress_message = $form_state->get('portal_goaddress_message');
+    if (is_string($portal_goaddress_message) && $portal_goaddress_message !== '') {
+      $form['job_details']['goaddress_search']['goaddress_search_status'] = [
+        '#markup' => '<p class="goaddress-search-status messages messages--warning">' . htmlspecialchars($portal_goaddress_message, ENT_QUOTES, 'UTF-8') . '</p>',
+        '#weight' => -10,
+      ];
+    }
 
     $form['job_details']['sample_address_add'] = [
       '#type' => 'button',
-      '#value' => $this->t('Enter address manually'),
+      '#value' => $this->t('Enter address'),
       // '#weight' => 3,
       '#attributes' => [
         'class' => ['sample-address-add-button'],
       ],
     ];
 
-    $property_prefill = $form_state->get('property_address_prefill');
+    $property_prefill = $form_state->get('portal_goaddress_prefill');
     if (!is_array($property_prefill)) {
       $property_prefill = [];
     }
     $show_property_address_fields = trim((string) ($property_prefill['address_1'] ?? '')) !== '';
 
-    // Address fields wrapper - hidden by default, shown via JavaScript
+    // Address fields wrapper - hidden by default, shown after GoAddress search.
     $form['job_details']['address_fields'] = [
       '#type' => 'container',
       // '#weight' => 4,
       '#attributes' => [
+        'id' => 'portal-sample-address-fields',
         'class' => ['sample-address-fields'],
       ],
     ];
@@ -350,7 +391,7 @@ class SentinelSampleSubmissionForm extends FormBase {
 
     $form['job_details']['address_fields']['sample_address_close'] = [
       '#type' => 'button',
-      '#value' => $this->t('Close address manually'),
+      '#value' => $this->t('Close address'),
       // '#weight' => 11,
       '#attributes' => [
         'class' => ['sample-address-close-button'],
@@ -616,10 +657,146 @@ $form['job_details']['installer_name'] = [
   }
 
   /**
-   * {@inheritdoc}
+   * Submit handler: portal GoAddress property search.
    */
-  protected function goAddressPropertySearchUsesInvokeOnlyAjax(): bool {
-    return TRUE;
+  public function submitPortalGoAddressSearch(array &$form, FormStateInterface $form_state): void {
+    $this->performPortalGoAddressSearch($form_state);
+    $form_state->setRebuild(TRUE);
+  }
+
+  /**
+   * Calls GoAddress API and stores portal property address prefill.
+   */
+  protected function performPortalGoAddressSearch(FormStateInterface $form_state): void {
+    $house_no = GoAddressClient::formStateString($form_state, [
+      ['portal_property_house_no'],
+      ['job_details', 'goaddress_search', 'property_house_no'],
+    ]);
+    $postcode = GoAddressClient::formStateString($form_state, [
+      ['portal_property_postcode'],
+      ['job_details', 'goaddress_search', 'property_postcode'],
+    ]);
+
+    $form_state->set('portal_goaddress_message', NULL);
+    $form_state->set('portal_goaddress_prefill', []);
+
+    if ($house_no === '' || $postcode === '') {
+      $form_state->set('portal_goaddress_message', (string) $this->t('Please enter both house number and postcode.'));
+      return;
+    }
+
+    $results = GoAddressClient::search(\Drupal::httpClient(), $house_no, $postcode);
+    if ($results === []) {
+      $form_state->set('portal_goaddress_message', (string) $this->t('No addresses found for that house number and postcode.'));
+      return;
+    }
+
+    $first = reset($results);
+    $fields = $first['fields'] ?? [];
+    if (!is_array($fields) || $fields === []) {
+      $form_state->set('portal_goaddress_message', (string) $this->t('No addresses found for that house number and postcode.'));
+      return;
+    }
+
+    unset($fields['goaddress_id']);
+    $form_state->set('portal_goaddress_prefill', $fields);
+    $this->portalGoAddressSyncJobDetailsAddressFields($form_state, $fields);
+  }
+
+  /**
+   * AJAX callback: populate sample property address fields after GoAddress search.
+   */
+  public function ajaxPortalGoAddressSearch(array &$form, FormStateInterface $form_state) {
+    $message = $form_state->get('portal_goaddress_message');
+    if (is_string($message) && $message !== '') {
+      $response = new AjaxResponse();
+      $response->addCommand(new MessageCommand($message, NULL, ['type' => 'warning']));
+      return $response;
+    }
+
+    $prefill = $form_state->get('portal_goaddress_prefill');
+    if (!is_array($prefill) || trim((string) ($prefill['address_1'] ?? '')) === '') {
+      return new AjaxResponse();
+    }
+
+    $response = new AjaxResponse();
+    foreach ($this->buildPortalSampleAddressInvokeCommands($prefill) as $command) {
+      $response->addCommand($command);
+    }
+    return $response;
+  }
+
+  /**
+   * Invoke commands for portal sample address fields (flat name="address_1", etc.).
+   *
+   * @return \Drupal\Core\Ajax\InvokeCommand[]
+   */
+  protected function buildPortalSampleAddressInvokeCommands(array $prefill): array {
+    $clean = static function ($val) {
+      return preg_replace('/[\r\n]+/', ' ', trim((string) $val));
+    };
+    $country = strtoupper($clean($prefill['country'] ?? '')) ?: 'GB';
+    $scope = '#portal-sample-address-fields';
+
+    return [
+      new InvokeCommand($scope . ' select[name="country"]', 'val', [$country]),
+      new InvokeCommand($scope . ' input[name="address_1"]', 'val', [$clean($prefill['address_1'] ?? '')]),
+      new InvokeCommand($scope . ' input[name="town_city"]', 'val', [$clean($prefill['town_city'] ?? '')]),
+      new InvokeCommand($scope . ' input[name="postcode"]', 'val', [$clean($prefill['postcode'] ?? '')]),
+      new InvokeCommand($scope, 'show'),
+      new InvokeCommand('.sample-address-add-button', 'hide'),
+    ];
+  }
+
+  /**
+   * Writes GoAddress result into portal sample address field form state.
+   */
+  /**
+   * Merges GoAddress prefill into flattened submit values when fields are empty.
+   */
+  protected function applyPortalGoAddressPrefillToValues(array &$values, FormStateInterface $form_state): void {
+    $prefill = $form_state->get('portal_goaddress_prefill');
+    if (!is_array($prefill) || $prefill === []) {
+      return;
+    }
+
+    foreach (['country', 'address_1', 'town_city', 'postcode', 'county'] as $key) {
+      if (trim((string) ($values[$key] ?? '')) === '' && trim((string) ($prefill[$key] ?? '')) !== '') {
+        $values[$key] = trim((string) $prefill[$key]);
+      }
+    }
+
+    if (trim((string) ($values['street'] ?? '')) === '' && trim((string) ($values['address_1'] ?? '')) !== '') {
+      $values['street'] = $values['address_1'];
+    }
+
+    if (isset($values['address_fields']) && is_array($values['address_fields'])) {
+      foreach (['country', 'address_1', 'town_city', 'postcode', 'county'] as $key) {
+        if (trim((string) ($values['address_fields'][$key] ?? '')) === '' && trim((string) ($prefill[$key] ?? '')) !== '') {
+          $values['address_fields'][$key] = trim((string) $prefill[$key]);
+        }
+      }
+    }
+  }
+
+  protected function portalGoAddressSyncJobDetailsAddressFields(FormStateInterface $form_state, array $fields): void {
+    $country = strtoupper(trim((string) ($fields['country'] ?? ''))) ?: 'GB';
+    $address_values = [
+      'country' => $country,
+      'address_1' => trim((string) ($fields['address_1'] ?? '')),
+      'town_city' => trim((string) ($fields['town_city'] ?? '')),
+      'postcode' => trim((string) ($fields['postcode'] ?? '')),
+      'county' => trim((string) ($fields['county'] ?? '')),
+    ];
+    foreach ($address_values as $key => $value) {
+      $form_state->setValue($key, $value);
+    }
+
+    $input = $form_state->getUserInput();
+    foreach ($address_values as $key => $value) {
+      $input[$key] = $value;
+    }
+    $form_state->setUserInput($input);
   }
 
   /**
@@ -729,6 +906,8 @@ $form['job_details']['installer_name'] = [
         $validation_data[$field] = is_string($value) ? trim($value) : $value;
       }
     }
+
+    $this->applyPortalGoAddressPrefillToValues($validation_data, $form_state);
     
     // Ensure property number propagates even if the form values are flattened.
     $property_number_value = $form_state->getValue([
@@ -771,28 +950,35 @@ $form['job_details']['installer_name'] = [
       $validation_data['customer_id'] = $validation_data['sentinel_customer_id'];
     }
     
-    // Map system address fields from nested structure
+    // Map system address fields (stored flat: address_1, town_city, etc.).
+    $sample_address = [];
     if (isset($form_values['job_details']['address_fields']) && is_array($form_values['job_details']['address_fields'])) {
-      $address_fields = $form_values['job_details']['address_fields'];
-
-      if (isset($address_fields['property_number'])) {
-        $validation_data['property_number'] = trim($address_fields['property_number']);
+      $sample_address = $form_values['job_details']['address_fields'];
+    }
+    foreach (['address_1', 'town_city', 'postcode', 'property_number', 'property_name', 'county', 'country'] as $key) {
+      if (($sample_address[$key] ?? '') === '' && isset($form_values[$key])) {
+        $sample_address[$key] = $form_values[$key];
       }
-      if (isset($address_fields['address_1'])) {
-        $validation_data['address_1'] = trim($address_fields['address_1']);
-        $validation_data['street'] = trim($address_fields['address_1']);
+    }
+    if ($sample_address !== []) {
+      if (isset($sample_address['property_number'])) {
+        $validation_data['property_number'] = trim($sample_address['property_number']);
       }
-      if (isset($address_fields['property_name'])) {
-        $validation_data['property_name'] = trim($address_fields['property_name']);
+      if (isset($sample_address['address_1'])) {
+        $validation_data['address_1'] = trim($sample_address['address_1']);
+        $validation_data['street'] = trim($sample_address['address_1']);
       }
-      if (isset($address_fields['town_city'])) {
-        $validation_data['town_city'] = trim($address_fields['town_city']);
+      if (isset($sample_address['property_name'])) {
+        $validation_data['property_name'] = trim($sample_address['property_name']);
       }
-      if (isset($address_fields['county'])) {
-        $validation_data['county'] = trim($address_fields['county']);
+      if (isset($sample_address['town_city'])) {
+        $validation_data['town_city'] = trim($sample_address['town_city']);
       }
-      if (isset($address_fields['postcode'])) {
-        $validation_data['postcode'] = trim($address_fields['postcode']);
+      if (isset($sample_address['county'])) {
+        $validation_data['county'] = trim($sample_address['county']);
+      }
+      if (isset($sample_address['postcode'])) {
+        $validation_data['postcode'] = trim($sample_address['postcode']);
       }
 
       // If sentinel_addresses module is enabled, mimic nested address structure expected by legacy validation.
@@ -949,6 +1135,8 @@ $form['job_details']['installer_name'] = [
         }
       }
     }
+
+    $this->applyPortalGoAddressPrefillToValues($values, $form_state);
 
     // Fallback mappings so validation always sees street/town/county/postcode.
     if (empty($validation_data['street']) && !empty($validation_data['address_1'])) {
@@ -1736,11 +1924,12 @@ $form['job_details']['installer_name'] = [
    */
   protected function buildSampleAddressFieldValues(array $values, array $original_values = []): array {
     $address_section = $values['address']['address_fields']
+      ?? $values['address_fields']
       ?? $this->getArrayPathValue($values, ['system_details', 'address', 'address_fields'])
       ?? $this->getArrayPathValue($original_values, ['system_details', 'address', 'address_fields'])
       ?? [];
 
-    $country = strtoupper(trim((string) ($address_section['country'] ?? '')));
+    $country = strtoupper(trim((string) ($address_section['country'] ?? ($values['country'] ?? ''))));
     if ($country === '') {
       $country = 'GB';
     }
