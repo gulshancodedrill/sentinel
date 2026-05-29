@@ -480,6 +480,10 @@ if ($user_type == 'individual') {
     // Validate using the validation service (static method)
     $errors = SentinelSampleValidation::validateSample($validation_data);
 
+    foreach (['boiler_manufacturer', 'boiler_id', 'date_installed'] as $optional_field) {
+      unset($errors[$optional_field]);
+    }
+
     // Display validation errors
     foreach ($errors as $field => $message) {
       // Map field names to form element paths if needed
@@ -622,9 +626,6 @@ if ($user_type == 'individual') {
     }
     if ($this->sample->hasField('system_age') && !$this->sample->get('system_age')->isEmpty()) {
       $form['job_details']['system_age']['#default_value'] = $this->sample->get('system_age')->value;
-    }
-    if ($this->sample->hasField('boiler_type') && !$this->sample->get('boiler_type')->isEmpty()) {
-      $form['job_details']['boiler_type']['#default_value'] = $this->sample->get('boiler_type')->value;
     }
     if ($this->sample->hasField('project_id') && !$this->sample->get('project_id')->isEmpty()) {
       $form['job_details']['project_id']['#default_value'] = $this->sample->get('project_id')->value;

@@ -12,6 +12,7 @@ use Drupal\Core\Url;
 use Drupal\sentinel_portal_sample\Ajax\GenericDataCommand;
 use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
 use Drupal\sentinel_portal_sample\AnonymousSampleWizardProgress;
+use Drupal\sentinel_portal_sample\GoAddressClient;
 use Drupal\sentinel_sample\Entity\SentinelSample;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -116,63 +117,24 @@ class SentinelSampleController extends ControllerBase {
   }
 
   /**
-   * Property address autocomplete callback using entity type manager.
+   * Property address autocomplete via GoAddress (house number + postcode).
    */
   public function propertyAddressAutocomplete(Request $request, $user_type = 'any') {
-    $string = trim((string) $request->query->get('q', ''));
+    $house_no = trim((string) $request->query->get('q', ''));
+    $postcode = trim((string) $request->query->get('postcode', ''));
     $matches = [];
 
-    if ($string !== '') {
-      try {
-        $storage = $this->entityTypeManager()->getStorage('address');
-        $query = $storage->getQuery()
-          ->condition('type', 'address')
-          ->range(0, 15)
-          ->accessCheck(FALSE);
-        // OR conditions
-        $or = $query->orConditionGroup()
-          ->condition('field_address.address_line1', $string, 'CONTAINS')
-          ->condition('field_address.address_line2', $string, 'CONTAINS')
-          ->condition('field_address.address_line2', $string, 'CONTAINS')
-          ->condition('field_address.locality', $string, 'CONTAINS')
-          ->condition('field_address.postal_code', $string, 'CONTAINS');
-
-// Add OR group to main query
-$query->condition($or);
-
-$ids = $query->execute();
-        if ($ids) {
-          $entities = $storage->loadMultiple($ids);
-          foreach ($entities as $entity) {
-            if ($entity->hasField('field_address') && !$entity->get('field_address')->isEmpty()) {
-              $address_item = $entity->get('field_address')->first();
-              
-              $parts = array_filter([
-                $address_item->address_line1,
-                $address_item->address_line2,
-                $address_item->address_line3,
-                $address_item->locality,
-                $address_item->postal_code,
-                $address_item->country_code,
-              ], function ($value) {
-                return !empty(trim((string) $value)) && trim((string) $value) !== '-';
-              });
-
-              $label = implode(', ', $parts);
-              
-              if ($label !== '') {
-                $matches[] = [
-                  'value' => $label . ' (' . $entity->id() . ')',
-                  'label' => Html::escape($label),
-                ];
-              }
-            }
-          }
-        }
-      } catch (\Exception $e) {
-        \Drupal::logger('sentinel_portal_sample')->error('Property address autocomplete error: @message', [
-          '@message' => $e->getMessage(),
-        ]);
+    if ($house_no !== '' && $postcode !== '') {
+      $results = GoAddressClient::search($this->httpClient(), $house_no, $postcode);
+      foreach ($results as $id => $row) {
+        $label = $row['label'] ?? $id;
+        $matches[] = [
+          'value' => $label,
+          'label' => Html::escape($label),
+          'data' => [
+            'addressid' => $id,
+          ],
+        ];
       }
     }
 

@@ -118,22 +118,13 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => -10,
     ];
 
-    $form['property_ajax_root']['property_address_search'] = [
-      '#type' => 'textfield',
-      '#title' => $this->tFlow('Search property address'),
-      '#placeholder' => $this->tFlow('Start typing to search property addresses...'),
-      '#limit_validation_errors' => [],
-      '#autocomplete_route_name' => 'sentinel_portal_sample.property_address_autocomplete',
-      '#autocomplete_route_parameters' => [
-        'user_type' => $this->anonymousWizardFlowType(),
-      ],
-      '#ajax' => [
-        'callback' => '::ajaxPropertyAddressResolve',
-        'event' => 'change',
-        'wrapper' => 'property-ajax-root',
-      ],
-      '#weight' => -15,
-    ];
+    $form_state->set('goaddress_property_parents', []);
+    $this->buildGoAddressPropertySearchElements(
+      $form['property_ajax_root'],
+      $form_state,
+      [],
+      'property-ajax-root'
+    );
 
     $manual_mode = (bool) ($form_state->get('manual_property_mode') ?? FALSE);
 
@@ -216,38 +207,18 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $form['boiler_id'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Boiler serial number'),
-      '#required' => TRUE,
       '#default_value' => $form_state->getValue('boiler_id')
         ?? $this->getSampleScalar('boiler_id'),
       '#weight' => 4,
     ];
 
-    $val_boiler_type = $form_state->getValue('boiler_type') ?? $this->getSampleScalar('boiler_type');
+    $val_boiler_manufacturer = $form_state->getValue('boiler_manufacturer')
+      ?? $this->getSampleScalar('boiler_manufacturer');
 
-    $form['boiler_type'] = [
-      '#type' => 'select',
-      '#title' => $this->tFlow('Boiler type'),
-      '#required' => TRUE,
-      '#options' => [
-        '' => $this->tFlow('- Select -'),
-        'Combi' => $this->tFlow('Combi'),
-        'System' => $this->tFlow('System'),
-        'Regular / heat only' => $this->tFlow('Regular / heat only'),
-        'Worcester Bosch' => $this->tFlow('Worcester Bosch'),
-        'Other' => $this->tFlow('Other'),
-         'gas' => $this->t('gas'),
-        'GAS 210 ECO 200' => $this->t('GAS 210 ECO 200'),
-        'TOCROSSAL 200' => $this->t('TOCROSSAL 200'),
-        'gas 210 prox2' => $this->t('gas 210 prox2'),
-        'CONCORD SUPER S4X4' => $this->t('CONCORD SUPER S4X4'),
-        'Greenstar 25 si' => $this->t('Greenstar 25 si'),
-        'Greenstar 15Ri' => $this->t('Greenstar 15Ri'),
-        'Greenstar 30i' => $this->t('Greenstar 30i'),
-        'Eco-tech PRO 30' => $this->t('Eco-tech PRO 30'),
-        'Eco-tech PRO 28' => $this->t('Eco-tech PRO 28'),
-        'imax xtra' => $this->t('imax xtra'),
-      ],
-      '#default_value' => $val_boiler_type,
+    $form['boiler_manufacturer'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('Boiler manufacturer'),
+      '#default_value' => $val_boiler_manufacturer,
       '#weight' => 5,
     ];
 
@@ -266,7 +237,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     }
     $form['date_installed'] = [
       '#type' => 'datetime',
-      '#title' => $this->tFlow('Boiler install date (optional)'),
+      '#title' => $this->tFlow('Boiler install date'),
       '#date_date_element' => 'date',
       '#date_time_element' => 'none',
       '#date_timezone' => date_default_timezone_get(),
@@ -278,7 +249,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form['installer_name'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow('Installer name (optional)'),
+      '#title' => $this->tFlow('Installer name'),
       '#default_value' => $form_state->getValue('installer_name')
         ?? $this->getSampleScalar('installer_name'),
       '#weight' => 7,
@@ -286,7 +257,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form['installer_email'] = [
       '#type' => 'email',
-      '#title' => $this->tFlow('Installer email (optional)'),
+      '#title' => $this->tFlow('Installer email'),
       '#default_value' => $form_state->getValue('installer_email')
         ?? $this->getSampleScalar('installer_email'),
       '#weight' => 8,
@@ -393,16 +364,9 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         $form_state->setErrorByName($af_err . '][postcode', $this->tFlow('Postcode is required.'));
       }
     }
-    elseif (!$this->propertySearchHasValidSelection($form_state)) {
-      $form_state->setErrorByName('property_address_search', $this->tFlow('Please select a property address from search, or click “Enter address manually”.'));
+    elseif (!$this->goAddressPropertySearchHasSelection($form_state)) {
+      $form_state->setErrorByName('property_house_no', $this->tFlow('Please search for a property address using house number and postcode, or click “Enter address manually”.'));
     }
-    if (trim((string) $form_state->getValue('boiler_id')) === '') {
-      $form_state->setErrorByName('boiler_id', $this->tFlow('Boiler serial number is required.'));
-    }
-    if (trim((string) $form_state->getValue('boiler_type')) === '') {
-      $form_state->setErrorByName('boiler_type', $this->tFlow('Boiler type is required.'));
-    }
-
     $this->validateEmailFormValue(
       $form_state,
       'installer_email',
@@ -417,38 +381,30 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
   }
 
   /**
-   * When a property autocomplete value is chosen, open manual fields and fill them.
+   * {@inheritdoc}
    */
-  public function ajaxPropertyAddressResolve(array &$form, FormStateInterface $form_state) {
-    if ($this->propertySearchHasValidSelection($form_state)) {
-      $this->applyPropertyAddressSelectionToFormState($form_state, FALSE);
-    }
-    $form_state->setRebuild(TRUE);
+  protected function onGoAddressPropertySelected(FormStateInterface $form_state): void {
+    $form_state->set('manual_property_mode', TRUE);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function goAddressPropertySearchAjaxElement(array &$form, FormStateInterface $form_state) {
     return $form['property_ajax_root'];
   }
 
   /**
-   * Loads a selected property address into manual address fields.
+   * Loads GoAddress prefill into manual address fields when opening manual entry.
    */
   protected function applyPropertyAddressSelectionToFormState(FormStateInterface $form_state, bool $open_manual_fields = FALSE): void {
-    $address_id = $this->propertySearchSelectionId($form_state);
-    if ($address_id === NULL) {
+    if (!$this->goAddressPropertySearchHasSelection($form_state)) {
       return;
     }
-    $address_entity = $this->entityTypeManager->getStorage('address')->load($address_id);
-    if (!$address_entity || !$address_entity->hasField('field_address') || $address_entity->get('field_address')->isEmpty()) {
+    $prefill = $form_state->get('property_address_prefill');
+    if (!is_array($prefill)) {
       return;
     }
-    $addr = $address_entity->get('field_address')->first();
-    $fields = [
-      'country' => strtoupper(trim((string) ($addr->country_code ?? ''))) ?: 'GB',
-      'address_1' => trim((string) ($addr->address_line1 ?? '')),
-      'town_city' => trim((string) ($addr->locality ?? '')),
-      'postcode' => trim((string) ($addr->postal_code ?? '')),
-      'county' => trim((string) ($addr->administrative_area ?? '')),
-    ];
-    $form_state->set('property_address_prefill', $fields);
-
     if ($open_manual_fields) {
       $form_state->set('manual_property_mode', TRUE);
       $input = $form_state->getUserInput();
@@ -458,35 +414,10 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       if (!isset($input['system_details']['address']) || !is_array($input['system_details']['address'])) {
         $input['system_details']['address'] = [];
       }
-      $input['system_details']['address']['address_fields'] = $fields;
+      $input['system_details']['address']['address_fields'] = $prefill;
       $form_state->setUserInput($input);
-      $form_state->setValue(['system_details', 'address', 'address_fields'], $fields);
+      $form_state->setValue(['system_details', 'address', 'address_fields'], $prefill);
     }
-  }
-
-  /**
-   * Parsed address entity id from property search autocomplete, if any.
-   */
-  protected function propertySearchSelectionId(FormStateInterface $form_state): ?int {
-    $input = $form_state->getUserInput();
-    $val = trim((string) ($input['property_address_search'] ?? $form_state->getValue('property_address_search') ?? ''));
-    if ($val === '') {
-      return NULL;
-    }
-    if (preg_match('/\((\d+)\)\s*$/', $val, $m)) {
-      return (int) $m[1];
-    }
-    if (preg_match('/^\((\d+)\)\s+/', $val, $m)) {
-      return (int) $m[1];
-    }
-    return NULL;
-  }
-
-  /**
-   * Whether the property address search field contains a chosen autocomplete row.
-   */
-  protected function propertySearchHasValidSelection(FormStateInterface $form_state): bool {
-    return $this->propertySearchSelectionId($form_state) !== NULL;
   }
 
   /**
@@ -533,10 +464,10 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       return;
     }
 
-    if ($this->propertySearchHasValidSelection($form_state)) {
+    if ($this->goAddressPropertySearchHasSelection($form_state)) {
       $this->applyPropertyAddressSelectionToFormState($form_state, FALSE);
     }
-    $search_val = trim((string) ($form_state->getUserInput()['property_address_search'] ?? $form_state->getValue('property_address_search') ?? ''));
+    $search_val = '';
 
     $postcode = '';
     $property_number = '';
@@ -565,17 +496,14 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $system_6 = (string) $form_state->getValue('system_6_months');
     $boiler_id = trim((string) $form_state->getValue('boiler_id'));
-    $boiler_type = trim((string) $form_state->getValue('boiler_type'));
+    $boiler_manufacturer = trim((string) $form_state->getValue('boiler_manufacturer'));
+    if ($boiler_manufacturer === '') {
+      $boiler_manufacturer = 'Not specified';
+    }
     $installer_name = trim((string) $form_state->getValue('installer_name')) ?: 'Not provided';
     $installer_email = trim((string) $form_state->getValue('installer_email'));
-    $boiler_manufacturer = 'Not specified';
 
     $date_installed = $this->normalizeDateFormValue($form_state->getValue('date_installed'));
-    if ($date_installed === '') {
-      $date_installed = $this->normalizeDateFormValue(DrupalDateTime::createFromTimestamp(\Drupal::time()->getRequestTime()));
-    }
-
-    $boiler_manufacturer = 'Not specified';
     if ($installer_name === '') {
       $installer_name = 'Not provided';
     }
@@ -609,7 +537,6 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       'system_location' => $system_location,
       'system_6_months' => $system_6,
       'boiler_id' => $boiler_id,
-      'boiler_type' => $boiler_type,
       'boiler_manufacturer' => $boiler_manufacturer,
       'date_installed' => $date_installed,
       'installer_name' => $installer_name,
@@ -646,7 +573,6 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       ],
       'job_details' => [
         'boiler_id' => $boiler_id,
-        'boiler_type' => $boiler_type,
         'boiler_manufacturer' => $boiler_manufacturer,
         'date_installed' => $date_installed,
         'installer_name' => $installer_name,
@@ -679,9 +605,13 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         $this->sample->set('system_6_months', $system_6);
       }
       $this->sample->set('boiler_id', $boiler_id);
-      $this->sample->set('boiler_type', $boiler_type);
       $this->sample->set('boiler_manufacturer', $boiler_manufacturer);
-      $this->sample->set('date_installed', $date_installed);
+      if ($date_installed !== '') {
+        $this->sample->set('date_installed', $date_installed);
+      }
+      elseif ($this->sample->hasField('date_installed')) {
+        $this->sample->set('date_installed', NULL);
+      }
       $this->sample->set('installer_name', $installer_name);
       if ($this->sample->hasField('installer_email')) {
         if ($installer_email !== '') {

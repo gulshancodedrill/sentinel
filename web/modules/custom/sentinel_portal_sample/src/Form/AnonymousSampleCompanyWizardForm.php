@@ -217,19 +217,22 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $options = ['' => $this->tFlow('- Select an address or enter manually below -')];
       if (count($addresses) > 0) {
         foreach ($addresses as $entity_id => $addr_data) {
-          $addr_str = implode(', ', array_filter([
-            $addr_data['address1'],
-            $addr_data['address2'],
-            $addr_data['address3'],
-            $addr_data['locality'],
-            $addr_data['admin_area'],
-            $addr_data['postcode'],
-            $addr_data['country'],
-          ]));
-          $options[(string) $entity_id] = $addr_str;
+          $options[(string) $entity_id] = $this->formatCompanyAddressSelectLabel($addr_data);
         }
       }
       $selected_address = $this->getCompanyAddressSelectValue($form_state);
+      if ($selected_address === NULL && count($addresses) > 0) {
+        $client = NULL;
+        if (!empty($data['client_cid'])) {
+          $client = $this->entityTypeManager->getStorage('sentinel_client')->load($data['client_cid']);
+        }
+        $latest_id = $this->resolveDefaultCompanyAddressId($client, $addresses);
+        if ($latest_id !== NULL) {
+          $selected_address = (string) $latest_id;
+          $form_state->set('company_address_selected_id', $selected_address);
+          $form_state->setValue('company_address_select', $selected_address);
+        }
+      }
       if ($selected_address !== NULL && empty($form_state->get('company_address_prefill'))) {
         $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
       }
@@ -572,9 +575,23 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     $form_state->set('company_id_alert', NULL);
-    $form_state->set('fetched_company', $this->clientToWizardData($client, $company_id));
+    $wizard_data = $this->clientToWizardData($client, $company_id);
+    $form_state->set('fetched_company', $wizard_data);
     $form_state->set('manual_address_mode', FALSE);
     $form_state->set('company_address_prefill', []);
+
+    $addresses = $wizard_data['addresses'] ?? [];
+    $latest_id = $this->resolveDefaultCompanyAddressId($client, $addresses);
+    if ($latest_id !== NULL) {
+      $selection = (string) $latest_id;
+      $form_state->set('company_address_selected_id', $selection);
+      $form_state->setValue('company_address_select', $selection);
+      $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
+    }
+    else {
+      $form_state->set('company_address_selected_id', NULL);
+      $form_state->setValue('company_address_select', '');
+    }
 
     // Clear user-entered values so they are replaced by the new fetched data.
     $input = $form_state->getUserInput();
@@ -776,6 +793,7 @@ if (method_exists($client, 'getUcr')) {
         ->select('address__field_address', 'a')
         ->fields('a', [
           'entity_id',
+          'field_address_organization',
           'field_address_address_line1',
           'field_address_address_line2',
           'field_address_address_line3',
@@ -785,10 +803,12 @@ if (method_exists($client, 'getUcr')) {
           'field_address_country_code',
         ])
         ->condition('field_address_organization', $company)
+        ->orderBy('entity_id', 'DESC')
         ->execute();
 
       foreach ($address_query as $address_row) {
         $addresses[$address_row->entity_id] = [
+          'organization' => $address_row->field_address_organization ?? '',
           'address1' => $address_row->field_address_address_line1 ?? '',
           'address2' => $address_row->field_address_address_line2 ?? '',
           'address3' => $address_row->field_address_address_line3 ?? '',
@@ -1234,5 +1254,82 @@ if (method_exists($client, 'getUcr')) {
     }
   }
 
+  /**
+   * Dropdown label for a company address (street lines, town, postcode).
+   */
+  protected function formatCompanyAddressSelectLabel(array $addr): string {
+    $parts = array_filter([
+      trim((string) ($addr['address1'] ?? '')),
+      trim((string) ($addr['address2'] ?? '')),
+      trim((string) ($addr['locality'] ?? '')),
+      trim((string) ($addr['postcode'] ?? '')),
+    ], static function ($part) {
+      return $part !== '';
+    });
+    return implode(', ', $parts);
+  }
+
+  /**
+   * Default company address: latest used on a sample for the client, else newest entity.
+   */
+  protected function resolveDefaultCompanyAddressId($client, array $address_map): ?int {
+    if ($address_map === []) {
+      return NULL;
+    }
+    if ($client) {
+      $from_sample = $this->getLatestCompanyAddressIdFromClientSamples($client);
+      if ($from_sample !== NULL && isset($address_map[$from_sample])) {
+        return $from_sample;
+      }
+    }
+    return $this->getLatestCompanyAddressEntityId($address_map);
+  }
+
+  /**
+   * Company address entity id from the client's most recently saved sample.
+   */
+  protected function getLatestCompanyAddressIdFromClientSamples($client): ?int {
+    if (!$client || !method_exists($client, 'id')) {
+      return NULL;
+    }
+
+    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
+    $query = $storage->getQuery()->accessCheck(FALSE)->sort('pid', 'DESC')->range(0, 100);
+    $or = $query->orConditionGroup();
+    $or->condition('client_id', (int) $client->id());
+    if ($client->hasField('ucr') && !$client->get('ucr')->isEmpty()) {
+      $or->condition('ucr', $client->get('ucr')->value);
+    }
+    $query->condition($or);
+
+    foreach ($query->execute() as $sample_id) {
+      $sample = $storage->load($sample_id);
+      if (!$sample) {
+        continue;
+      }
+      if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+        return (int) $sample->get('field_company_address')->first()->target_id;
+      }
+      if ($sample->hasField('sentinel_company_address_target_id') && !$sample->get('sentinel_company_address_target_id')->isEmpty()) {
+        return (int) $sample->get('sentinel_company_address_target_id')->value;
+      }
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Highest address entity id from an id-keyed address list or select options.
+   */
+  protected function getLatestCompanyAddressEntityId(array $address_map): ?int {
+    $ids = [];
+    foreach (array_keys($address_map) as $key) {
+      if ($key === '' || $key === NULL) {
+        continue;
+      }
+      $ids[] = (int) $key;
+    }
+    return $ids ? max($ids) : NULL;
+  }
 
 }

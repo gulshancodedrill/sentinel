@@ -12,6 +12,7 @@ use Drupal\sentinel_portal_entities\Entity\SentinelClient;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
 use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 use Drupal\sentinel_portal_sample\Controller\SentinelSampleController;
+use Drupal\sentinel_portal_sample\GoAddressPropertySearchTrait;
 use Drupal\user\Entity\User;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -19,6 +20,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Sample submission form.
  */
 class SentinelSampleSubmissionForm extends FormBase {
+
+  use GoAddressPropertySearchTrait;
 
   /**
    * The entity type manager.
@@ -103,8 +106,8 @@ class SentinelSampleSubmissionForm extends FormBase {
 
     $form['sentinel_customer_id'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Sentinel Customer ID'),
-      '#description' => $this->t('Your Sentinel (Boiler/Customer) Reference number (SCR). This can be found in your account settings.'),
+      '#title' => $this->t('Sentinel Company ID'),
+      '#description' => $this->t('Enter your Sentinel UCR number (Unique Customer Reference Number). This number is provided by Sentinel'),
       // '#weight' => -2,
     ];
 
@@ -158,17 +161,13 @@ class SentinelSampleSubmissionForm extends FormBase {
     // ];
 
     $company_address_options = ['' => $this->t('Please select')];
+    $company_address_map = [];
     $fetched_addresses = $form_state->get('company_fetched_addresses');
     if (is_array($fetched_addresses)) {
+      $company_address_map = $fetched_addresses;
       foreach ($fetched_addresses as $entity_id => $addr) {
-        $parts = array_filter([
-          $addr['organization'] ?? '',
-          $addr['address1'] ?? '',
-          $addr['address2'] ?? '',
-          $addr['locality'] ?? '',
-          $addr['postcode'] ?? '',
-        ]);
-        $company_address_options[$entity_id] = implode(', ', $parts) ?: $this->t('Address @id', ['@id' => $entity_id]);
+        $label = $this->formatCompanyAddressSelectLabel($addr);
+        $company_address_options[$entity_id] = $label !== '' ? $label : $this->t('Address @id', ['@id' => $entity_id]);
       }
     } else {
       $client = $this->getCurrentClient();
@@ -178,17 +177,23 @@ class SentinelSampleSubmissionForm extends FormBase {
 
         $addresses = get_company_addresses_for_cids($cids);
         foreach ($addresses as $address) {
-          $parts = array_filter([
-            $address->field_address_organization ?? '',
-            $address->field_address_address_line1 ?? '',
-            $address->field_address_address_line2 ?? '',
-            $address->field_address_address_line3 ?? '',
-            $address->field_address_locality ?? '',
-            $address->field_address_postal_code ?? '',
-          ]);
-          $label = implode(', ', $parts);
-          $company_address_options[$address->entity_id] = $label ?: $this->t('Address @id', ['@id' => $address->entity_id]);
+          $company_address_map[$address->entity_id] = [
+            'address1' => $address->field_address_address_line1 ?? '',
+            'address2' => $address->field_address_address_line2 ?? '',
+            'locality' => $address->field_address_locality ?? '',
+            'postcode' => $address->field_address_postal_code ?? '',
+          ];
+          $label = $this->formatCompanyAddressSelectLabel($company_address_map[$address->entity_id]);
+          $company_address_options[$address->entity_id] = $label !== '' ? $label : $this->t('Address @id', ['@id' => $address->entity_id]);
         }
+      }
+    }
+
+    $company_address_default = $form_state->getValue('company_address_selection');
+    if (($company_address_default === NULL || $company_address_default === '') && count($company_address_options) > 1) {
+      $latest_id = $this->resolveDefaultCompanyAddressId($this->getCurrentClient(), $company_address_map);
+      if ($latest_id !== NULL) {
+        $company_address_default = (string) $latest_id;
       }
     }
 
@@ -196,6 +201,7 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#type' => 'select',
       '#title' => $this->t('Select company address'),
       '#options' => $company_address_options,
+      '#default_value' => $company_address_default,
       '#ajax' => [
         'callback' => '::ajaxSelectCompanyAddress',
         'event' => 'change',
@@ -204,6 +210,10 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#prefix' => '<div id="company-address-selection-wrapper">',
       '#suffix' => '</div>',
     ];
+
+    if ($company_address_default !== NULL && $company_address_default !== '') {
+      $this->applyPortalCompanyAddressFieldDefaults($form, $form_state, (int) $company_address_default);
+    }
 
     $form['company_country'] = [
       '#type' => 'select',
@@ -256,17 +266,18 @@ class SentinelSampleSubmissionForm extends FormBase {
 //      //#weight' => 1,
 //     ];
 
-    $form['job_details']['sample_address_selection'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Search for property address'),
-      '#description' => $this->t('Please input the property number or street name to find the full property address.'),
-      '#autocomplete_route_name' => 'sentinel_portal_sample.property_address_autocomplete',
-      '#ajax' => [
-        'callback' => '::ajaxSelectSampleAddress',
-        'event' => 'autocompleteclose',
-      ],
+    $form['job_details']['goaddress_search'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'goaddress-property-search'],
       // '#weight' => 2,
     ];
+    $form_state->set('goaddress_property_parents', ['job_details']);
+    $this->buildGoAddressPropertySearchElements(
+      $form['job_details']['goaddress_search'],
+      $form_state,
+      ['job_details'],
+      'goaddress-property-search'
+    );
 
     $form['job_details']['sample_address_add'] = [
       '#type' => 'button',
@@ -277,6 +288,12 @@ class SentinelSampleSubmissionForm extends FormBase {
       ],
     ];
 
+    $property_prefill = $form_state->get('property_address_prefill');
+    if (!is_array($property_prefill)) {
+      $property_prefill = [];
+    }
+    $show_property_address_fields = trim((string) ($property_prefill['address_1'] ?? '')) !== '';
+
     // Address fields wrapper - hidden by default, shown via JavaScript
     $form['job_details']['address_fields'] = [
       '#type' => 'container',
@@ -285,18 +302,23 @@ class SentinelSampleSubmissionForm extends FormBase {
         'class' => ['sample-address-fields'],
       ],
     ];
+    if ($show_property_address_fields) {
+      $form['job_details']['address_fields']['#attributes']['style'] = 'display: block;';
+      $form['job_details']['sample_address_add']['#attributes']['style'] = 'display: none;';
+    }
 
     $form['job_details']['address_fields']['country'] = [
       '#type' => 'select',
       '#title' => $this->t('Country'),
       '#options' => PortalSampleCountryOptions::options(fn (string $label) => $this->t($label)),
-      '#default_value' => 'GB',
+      '#default_value' => $property_prefill['country'] ?? 'GB',
       // '#weight' => 5,
     ];
 
     $form['job_details']['address_fields']['address_1'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Address 1'),
+      '#default_value' => $property_prefill['address_1'] ?? '',
       // '#weight' => 6,
     ];
 
@@ -315,12 +337,14 @@ class SentinelSampleSubmissionForm extends FormBase {
     $form['job_details']['address_fields']['town_city'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Town/City'),
+      '#default_value' => $property_prefill['town_city'] ?? '',
       // '#weight' => 9,
     ];
 
     $form['job_details']['address_fields']['postcode'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Postcode'),
+      '#default_value' => $property_prefill['postcode'] ?? '',
       // '#weight' => 10,
     ];
 
@@ -349,38 +373,11 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#description' => $this->t('Boiler serial number as provided by the boiler manufacturer.'),
       // '#weight' => 18
     ];
- $form['job_details']['boiler_type'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Boiler Type'),
-      '#options' => [
-        '' => $this->t('- Select -'),
-        'Combi' => $this->t('Combi'),
-        'System' => $this->t('System'),
-        'Regular / heat only' => $this->t('Regular / heat only'),
-        'Worcester Bosch' => $this->t('Worcester Bosch'),
-        'gas' => $this->t('gas'),
-        'GAS 210 ECO 200' => $this->t('GAS 210 ECO 200'),
-        'TOCROSSAL 200' => $this->t('TOCROSSAL 200'),
-        'gas 210 prox2' => $this->t('gas 210 prox2'),
-        'CONCORD SUPER S4X4' => $this->t('CONCORD SUPER S4X4'),
-        'Greenstar 25 si' => $this->t('Greenstar 25 si'),
-        'Greenstar 15Ri' => $this->t('Greenstar 15Ri'),
-        'Greenstar 30i' => $this->t('Greenstar 30i'),
-        'Eco-tech PRO 30' => $this->t('Eco-tech PRO 30'),
-        'Eco-tech PRO 28' => $this->t('Eco-tech PRO 28'),
-        'imax xtra' => $this->t('imax xtra'),
-
-      ],
-      '#description' => $this->t('The type of boiler (Gas/Oil, combi, system).'),
-      // '#weight' => 17
+    $form['job_details']['boiler_manufacturer'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Boiler Manufacturer'),
+      '#description' => $this->t('Manufacturer of the boiler.'),
     ];
-    // $form['job_details']['boiler_manufacturer'] = [
-    //   '#type' => 'textfield',
-    //   '#title' => $this->t('Boiler Manufacturer'),
-    //   '#description' => $this->t('Manufacturer of the boiler.'),
-    //   '#required' => FALSE,
-    //   // '#weight' => 15,
-    // ];
 
     // $form['job_details']['system_age'] = [
     //   '#type' => 'textfield',
@@ -426,12 +423,11 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#date_time_element' => 'none',
       '#date_timezone' => date_default_timezone_get(),
       '#date_date_format' => 'd/m/Y',
-      '#required' => TRUE,
       // '#weight' => 20
     ];
 $form['job_details']['installer_name'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Installer Name (Optional)'),
+      '#title' => $this->t('Installer Name'),
       '#description' => $this->t('Name of the accredited installer who carried out the work and commissioned the pack.'),
       '#required' => FALSE,
       // '#weight' => 12,
@@ -439,7 +435,7 @@ $form['job_details']['installer_name'] = [
 
     $form['job_details']['installer_email'] = [
       '#type' => 'email',
-      '#title' => $this->t('Installer Email (Optional)'),
+      '#title' => $this->t('Installer Email'),
       '#description' => $this->t('Email address of the accredited installer who carried out the work and commissioned the pack.'),
       // '#weight' => 13,
     ];
@@ -612,109 +608,18 @@ $form['job_details']['installer_name'] = [
       return $response;
     }
 
-    $fetched_addresses = $form_state->get('company_fetched_addresses');
-    $address = null;
-
-    if (is_array($fetched_addresses) && isset($fetched_addresses[$selection])) {
-      $address = [
-        'country' => $fetched_addresses[$selection]['country'] ?? '',
-        'organization' => $fetched_addresses[$selection]['organization'] ?? '',
-        'address1' => $fetched_addresses[$selection]['address1'] ?? '',
-        'address2' => $fetched_addresses[$selection]['address2'] ?? '',
-        'address3' => $fetched_addresses[$selection]['address3'] ?? '',
-        'locality' => $fetched_addresses[$selection]['locality'] ?? '',
-        'postcode' => $fetched_addresses[$selection]['postcode'] ?? '',
-      ];
-    } else {
-      $cids = [];
-      $client = $this->getCurrentClient();
-      if ($client instanceof SentinelClient) {
-        $cids = function_exists('get_more_clients_based_client_cohorts') ? get_more_clients_based_client_cohorts($client) : [];
-        $cids[] = $client->id();
-      }
-      $addresses = function_exists('get_company_addresses_for_cids') ? get_company_addresses_for_cids($cids, (int) $selection) : [];
-      $db_addr = $addresses ? reset($addresses) : FALSE;
-      if ($db_addr) {
-        $address = [
-          'country' => $db_addr->field_address_country_code ?? '',
-          'organization' => $db_addr->field_address_organization ?? '',
-          'address1' => $db_addr->field_address_address_line1 ?? '',
-          'address2' => $db_addr->field_address_address_line2 ?? '',
-          'address3' => $db_addr->field_address_address_line3 ?? '',
-          'locality' => $db_addr->field_address_locality ?? '',
-          'postcode' => $db_addr->field_address_postal_code ?? '',
-        ];
-      }
-    }
-
-    if ($address) {
-      $clean = function($val) {
-        return preg_replace('/[\r\n]+/', ' ', trim((string) $val));
-      };
-
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('select[name="company_country"]', 'val', [$clean($address['country'] ?: 'GB')]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company"]', 'val', [$clean($address['organization'])]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_address_1"]', 'val', [$clean($address['address1'])]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_name"]', 'val', [$clean($address['address2'])]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_number"]', 'val', [$clean($address['address3'])]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_town_city"]', 'val', [$clean($address['locality'])]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_postcode"]', 'val', [$clean($address['postcode'])]));
+    foreach ($this->buildCompanyAddressFieldInvokeCommands((int) $selection, $form_state) as $command) {
+      $response->addCommand($command);
     }
 
     return $response;
   }
 
   /**
-   * AJAX callback when a sample address is selected from autocomplete.
+   * {@inheritdoc}
    */
-  public function ajaxSelectSampleAddress(array &$form, FormStateInterface $form_state) {
-    $response = new \Drupal\Core\Ajax\AjaxResponse();
-
-    $selection = $form_state->getValue('sample_address_selection');
-    if (empty($selection)) {
-      return $response;
-    }
-
-    $address_id = NULL;
-    if (preg_match('/\((\d+)\)$/', trim((string) $selection), $matches)) {
-      $address_id = (int) $matches[1];
-    }
-
-    if (!$address_id) {
-      return $response;
-    }
-
-    $address_entity = \Drupal::entityTypeManager()->getStorage('address')->load($address_id);
-    if (!$address_entity || !$address_entity->hasField('field_address') || $address_entity->get('field_address')->isEmpty()) {
-      return $response;
-    }
-
-    $addr = $address_entity->get('field_address')->first();
-    if ($addr) {
-      $clean = function($val) {
-        return preg_replace('/[\r\n]+/', ' ', trim((string) $val));
-      };
-
-      $country = strtoupper($clean($addr->country_code ?? '')) ?: 'GB';
-      $address_1 = $clean($addr->address_line1 ?? '');
-      $address_2 = $clean($addr->address_line2 ?? '');
-      $address_3 = $clean($addr->address_line3 ?? '');
-      $town_city = $clean($addr->locality ?? '');
-      $postcode = $clean($addr->postal_code ?? '');
-
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('select[name="country"]', 'val', [$country]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="address_1"]', 'val', [$address_1]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="property_name"]', 'val', [$address_2]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="property_number"]', 'val', [$address_3]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="town_city"]', 'val', [$town_city]));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="postcode"]', 'val', [$postcode]));
-      
-      // Auto-show the fields now that they're populated
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('.sample-address-fields', 'slideDown'));
-      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('.sample-address-add-button', 'slideUp'));
-    }
-
-    return $response;
+  protected function goAddressPropertySearchUsesInvokeOnlyAjax(): bool {
+    return TRUE;
   }
 
   /**
@@ -936,6 +841,10 @@ $form['job_details']['installer_name'] = [
       // Remove company_name from validation errors (matches D7 behavior)
       if (isset($invalid_fields['company_name'])) {
         unset($invalid_fields['company_name']);
+      }
+
+      foreach (['boiler_manufacturer', 'boiler_id', 'date_installed'] as $optional_field) {
+        unset($invalid_fields[$optional_field]);
       }
       
       // Set form errors for invalid fields (matches D7 form_set_error logic)
@@ -1280,6 +1189,15 @@ $form['job_details']['installer_name'] = [
         $sample->set('pack_type', PackTypeFilter::getPackTypeDbValue($pack_type));
       }
 
+      if ($sample->hasField('boiler_manufacturer') && trim((string) ($sample->get('boiler_manufacturer')->value ?? '')) === '') {
+        $manufacturer = trim((string) ($values['boiler_manufacturer'] ?? ''));
+        $sample->set('boiler_manufacturer', $manufacturer !== '' ? $manufacturer : 'Not specified');
+      }
+      if ($sample->hasField('date_installed') && $sample->get('date_installed')->isEmpty()) {
+        $installed = $this->normalizeDateFormValue($values['date_installed'] ?? '');
+        $sample->set('date_installed', $installed !== '' ? $installed : NULL);
+      }
+
       $sample->save();
 
       $this->messenger()->addMessage($this->t('Your sample has been added.'));
@@ -1554,34 +1472,15 @@ $form['job_details']['installer_name'] = [
 
       $sample->set('sentinel_company_address_target_id', $company_target_id ?: NULL);
 
-      $sample_selection = $values['sample_address_selection']
-        ?? $this->getArrayPathValue($values, ['system_details', 'address', 'sample_address_selection'])
-        ?? $this->getArrayPathValue($original_values, ['system_details', 'address', 'sample_address_selection'])
-        ?? NULL;
-      $sample_target_id = $this->parseAddressSelection($sample_selection);
-
-      if ($sample_target_id) {
-        $sample_entity = $address_storage->load($sample_target_id);
-        if (!$sample_entity) {
-          $sample_target_id = NULL;
-        }
-      }
-
-      if (!$sample_target_id) {
-        $sample_address_data = $this->buildSampleAddressFieldValues($values, $original_values);
-        if (!empty($sample_address_data)) {
-          $existing_id = $this->findExistingAddress('address', $sample_address_data);
-          if ($existing_id) {
-            $sample_target_id = $existing_id;
-          } else {
-            $sample_entity = $address_storage->create([
-              'type' => 'address',
-              'field_address' => $sample_address_data,
-            ]);
-            $sample_entity->save();
-            $sample_target_id = (int) $sample_entity->id();
-          }
-        }
+      $sample_target_id = NULL;
+      $sample_address_data = $this->buildSampleAddressFieldValues($values, $original_values);
+      if (!empty($sample_address_data)) {
+        $sample_entity = $address_storage->create([
+          'type' => 'address',
+          'field_address' => $sample_address_data,
+        ]);
+        $sample_entity->save();
+        $sample_target_id = (int) $sample_entity->id();
       }
 
       if ($sample->hasField('field_sentinel_sample_address')) {
@@ -1907,12 +1806,30 @@ $form['job_details']['installer_name'] = [
       $response->addCommand(new \Drupal\Core\Ajax\ReplaceCommand('#company-address-selection-wrapper', $form['company_address_selection']));
     }
 
-    // Clear the company address fields because a new client is selected
-    $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_address_1"]', 'val', ['']));
-    $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_name"]', 'val', ['']));
-    $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_number"]', 'val', ['']));
-    $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_town_city"]', 'val', ['']));
-    $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_postcode"]', 'val', ['']));
+    $selection = $form_state->getValue('company_address_selection');
+    if ($selection === NULL || $selection === '') {
+      $fetched = $form_state->get('company_fetched_addresses');
+      if (is_array($fetched) && $fetched !== []) {
+        $latest_id = $this->resolveDefaultCompanyAddressId($this->getCurrentClient(), $fetched);
+        if ($latest_id !== NULL) {
+          $selection = (string) $latest_id;
+          $form_state->setValue('company_address_selection', $selection);
+        }
+      }
+    }
+
+    if ($selection !== NULL && $selection !== '') {
+      foreach ($this->buildCompanyAddressFieldInvokeCommands((int) $selection, $form_state) as $command) {
+        $response->addCommand($command);
+      }
+    }
+    else {
+      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_address_1"]', 'val', ['']));
+      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_name"]', 'val', ['']));
+      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_number"]', 'val', ['']));
+      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_town_city"]', 'val', ['']));
+      $response->addCommand(new \Drupal\Core\Ajax\InvokeCommand('input[name="company_postcode"]', 'val', ['']));
+    }
 
     return $response;
   }
@@ -1943,19 +1860,20 @@ $form['job_details']['installer_name'] = [
       $form_state->setValue('company_email', $email);
       $form_state->setValue('company_telephone', $phone);
       $form_state->setValue('company', $company);
-      $form_state->setValue('company_address_selection', '');
-
       $input = $form_state->getUserInput();
       $input['company_email'] = $email;
       $input['company_telephone'] = $phone;
       $input['company'] = $company;
-      $input['company_address_selection'] = '';
-
-      $form_state->setUserInput($input);
 
       // Load addresses and store in form_state
       $addresses = $this->getCompanyAddressesForClient($client);
       $form_state->set('company_fetched_addresses', $addresses);
+      $latest_id = $this->resolveDefaultCompanyAddressId($client, $addresses);
+      $selection = $latest_id !== NULL ? (string) $latest_id : '';
+      $form_state->setValue('company_address_selection', $selection);
+      $input['company_address_selection'] = $selection;
+
+      $form_state->setUserInput($input);
     } else {
       $this->messenger()->addWarning($this->t('Sentinel Customer ID is not valid.'));
     }
@@ -2015,6 +1933,7 @@ $form['job_details']['installer_name'] = [
           'field_address_country_code',
         ])
         ->condition('field_address_organization', $company)
+        ->orderBy('entity_id', 'DESC')
         ->execute();
 
       foreach ($address_query as $address_row) {
@@ -2031,6 +1950,177 @@ $form['job_details']['installer_name'] = [
       }
     }
     return $addresses;
+  }
+
+  /**
+   * Dropdown label for a company address (street lines, town, postcode).
+   */
+  protected function formatCompanyAddressSelectLabel(array $addr): string {
+    $parts = array_filter([
+      trim((string) ($addr['address1'] ?? '')),
+      trim((string) ($addr['address2'] ?? '')),
+      trim((string) ($addr['locality'] ?? '')),
+      trim((string) ($addr['postcode'] ?? '')),
+    ], static function ($part) {
+      return $part !== '';
+    });
+    return implode(', ', $parts);
+  }
+
+  /**
+   * Default company address: latest used on a sample for the client, else newest entity.
+   */
+  protected function resolveDefaultCompanyAddressId(?SentinelClient $client, array $address_map): ?int {
+    if ($address_map === []) {
+      return NULL;
+    }
+    if ($client instanceof SentinelClient) {
+      $from_sample = $this->getLatestCompanyAddressIdFromClientSamples($client);
+      if ($from_sample !== NULL && isset($address_map[$from_sample])) {
+        return $from_sample;
+      }
+    }
+    return $this->getLatestCompanyAddressEntityId($address_map);
+  }
+
+  /**
+   * Company address entity id from the client's most recently saved sample.
+   */
+  protected function getLatestCompanyAddressIdFromClientSamples(SentinelClient $client): ?int {
+    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
+    $query = $storage->getQuery()->accessCheck(FALSE)->sort('pid', 'DESC')->range(0, 100);
+    $or = $query->orConditionGroup();
+    $or->condition('client_id', (int) $client->id());
+    if ($client->hasField('ucr') && !$client->get('ucr')->isEmpty()) {
+      $or->condition('ucr', $client->get('ucr')->value);
+    }
+    $query->condition($or);
+
+    foreach ($query->execute() as $sample_id) {
+      $sample = $storage->load($sample_id);
+      if (!$sample) {
+        continue;
+      }
+      if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+        return (int) $sample->get('field_company_address')->first()->target_id;
+      }
+      if ($sample->hasField('sentinel_company_address_target_id') && !$sample->get('sentinel_company_address_target_id')->isEmpty()) {
+        return (int) $sample->get('sentinel_company_address_target_id')->value;
+      }
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Highest address entity id from an id-keyed address list or select options.
+   */
+  protected function getLatestCompanyAddressEntityId(array $address_map): ?int {
+    $ids = [];
+    foreach (array_keys($address_map) as $key) {
+      if ($key === '' || $key === NULL) {
+        continue;
+      }
+      $ids[] = (int) $key;
+    }
+    return $ids ? max($ids) : NULL;
+  }
+
+  /**
+   * Sets company address field #default_value from a selected address id.
+   */
+  protected function applyPortalCompanyAddressFieldDefaults(array &$form, FormStateInterface $form_state, int $selection_id): void {
+    $address = $this->resolveCompanyAddressRowById($selection_id, $form_state);
+    if (!$address) {
+      return;
+    }
+    $clean = static function ($val) {
+      return preg_replace('/[\r\n]+/', ' ', trim((string) $val));
+    };
+    if (isset($form['company_country'])) {
+      $form['company_country']['#default_value'] = $clean($address['country'] ?: 'GB');
+    }
+    if (isset($form['company_address_1'])) {
+      $form['company_address_1']['#default_value'] = $clean($address['address1']);
+    }
+    if (isset($form['company_property_name'])) {
+      $form['company_property_name']['#default_value'] = $clean($address['address2']);
+    }
+    if (isset($form['company_property_number'])) {
+      $form['company_property_number']['#default_value'] = $clean($address['address3']);
+    }
+    if (isset($form['company_town_city'])) {
+      $form['company_town_city']['#default_value'] = $clean($address['locality']);
+    }
+    if (isset($form['company_postcode'])) {
+      $form['company_postcode']['#default_value'] = $clean($address['postcode']);
+    }
+  }
+
+  /**
+   * Resolves company address components for AJAX or form defaults.
+   */
+  protected function resolveCompanyAddressRowById(int $selection_id, FormStateInterface $form_state): ?array {
+    $fetched_addresses = $form_state->get('company_fetched_addresses');
+    if (is_array($fetched_addresses) && isset($fetched_addresses[$selection_id])) {
+      $row = $fetched_addresses[$selection_id];
+      return [
+        'country' => $row['country'] ?? '',
+        'organization' => $row['organization'] ?? '',
+        'address1' => $row['address1'] ?? '',
+        'address2' => $row['address2'] ?? '',
+        'address3' => $row['address3'] ?? '',
+        'locality' => $row['locality'] ?? '',
+        'postcode' => $row['postcode'] ?? '',
+      ];
+    }
+
+    $cids = [];
+    $client = $this->getCurrentClient();
+    if ($client instanceof SentinelClient) {
+      $cids = function_exists('get_more_clients_based_client_cohorts') ? get_more_clients_based_client_cohorts($client) : [];
+      $cids[] = $client->id();
+    }
+    $addresses = function_exists('get_company_addresses_for_cids') ? get_company_addresses_for_cids($cids, $selection_id) : [];
+    $db_addr = $addresses ? reset($addresses) : FALSE;
+    if (!$db_addr) {
+      return NULL;
+    }
+
+    return [
+      'country' => $db_addr->field_address_country_code ?? '',
+      'organization' => $db_addr->field_address_organization ?? '',
+      'address1' => $db_addr->field_address_address_line1 ?? '',
+      'address2' => $db_addr->field_address_address_line2 ?? '',
+      'address3' => $db_addr->field_address_address_line3 ?? '',
+      'locality' => $db_addr->field_address_locality ?? '',
+      'postcode' => $db_addr->field_address_postal_code ?? '',
+    ];
+  }
+
+  /**
+   * AJAX invoke commands to populate company address fields from a selection.
+   *
+   * @return \Drupal\Core\Ajax\InvokeCommand[]
+   */
+  protected function buildCompanyAddressFieldInvokeCommands(int $selection_id, FormStateInterface $form_state): array {
+    $address = $this->resolveCompanyAddressRowById($selection_id, $form_state);
+    if (!$address) {
+      return [];
+    }
+
+    $clean = static function ($val) {
+      return preg_replace('/[\r\n]+/', ' ', trim((string) $val));
+    };
+
+    return [
+      new \Drupal\Core\Ajax\InvokeCommand('select[name="company_country"]', 'val', [$clean($address['country'] ?: 'GB')]),
+      new \Drupal\Core\Ajax\InvokeCommand('input[name="company_address_1"]', 'val', [$clean($address['address1'])]),
+      new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_name"]', 'val', [$clean($address['address2'])]),
+      new \Drupal\Core\Ajax\InvokeCommand('input[name="company_property_number"]', 'val', [$clean($address['address3'])]),
+      new \Drupal\Core\Ajax\InvokeCommand('input[name="company_town_city"]', 'val', [$clean($address['locality'])]),
+      new \Drupal\Core\Ajax\InvokeCommand('input[name="company_postcode"]', 'val', [$clean($address['postcode'])]),
+    ];
   }
 
 }

@@ -5,7 +5,6 @@ anonymous-wizard:
       css/sentinel_anonymous_wizard.css: {}
   js:
     js/sentinel_anonymous_wizard_progress.js: {}
-    js/sentinel_anonymous_address_autocomplete.js: {}
   dependencies:
     - core/drupal
     - core/drupal.ajax
