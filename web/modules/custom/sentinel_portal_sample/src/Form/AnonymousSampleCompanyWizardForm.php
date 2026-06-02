@@ -586,7 +586,12 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $selection = (string) $latest_id;
       $form_state->set('company_address_selected_id', $selection);
       $form_state->setValue('company_address_select', $selection);
-      $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
+      $input = $form_state->getUserInput();
+      $input['company_address_select'] = $selection;
+      $form_state->setUserInput($input);
+      // Match portal submit behavior by showing the selected address prefilled
+      // in the editable company address fields right after company fetch.
+      $this->applyCompanyAddressSelectionToFormState($form_state, TRUE);
     }
     else {
       $form_state->set('company_address_selected_id', NULL);

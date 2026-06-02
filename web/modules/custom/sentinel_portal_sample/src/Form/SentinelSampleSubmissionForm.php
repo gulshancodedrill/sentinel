@@ -136,7 +136,7 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#type' => 'email',
       '#title' => $this->t('Company Email'),
       '#description' => $this->t('Email address of the company managing installation/maintenance. A copy of the Sentinel Pack report will be made available to this email address.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
       // '#weight' => 1,
     ];
 
