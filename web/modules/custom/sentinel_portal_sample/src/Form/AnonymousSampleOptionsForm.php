@@ -2,8 +2,6 @@
 
 namespace Drupal\sentinel_portal_sample\Form;
 
-use Drupal\Core\Ajax\AjaxResponse;
-use Drupal\Core\Ajax\RedirectCommand;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -89,9 +87,10 @@ class AnonymousSampleOptionsForm extends FormBase {
 
     $this->getRequest()->getSession()->set('sentinel_anonymous_entry', 'options');
 
-    $lang_options = AnonymousSampleFormTranslations::languageOptions();
-
-    $resolved_lang = AnonymousSampleWizardProgress::flowLanguageCode();
+    $resolved_lang = AnonymousSampleFormTranslations::normalizeLangcode(
+      (string) \Drupal::languageManager()->getCurrentLanguage()->getId()
+    );
+    $lang_options = AnonymousSampleFormTranslations::languageOptions($resolved_lang);
     if (!isset($lang_options[$resolved_lang])) {
       $resolved_lang = 'en';
     }
@@ -107,6 +106,18 @@ class AnonymousSampleOptionsForm extends FormBase {
       '#weight' => -10,
     ];
 
+    $language_redirects = [];
+    foreach (array_keys($lang_options) as $code) {
+      $language = \Drupal::languageManager()->getLanguage($code);
+      if ($language) {
+        $language_redirects[$code] = Url::fromRoute(
+          'sentinel_portal_sample.anonymous_options',
+          ['token' => $token],
+          ['language' => $language]
+        )->toString();
+      }
+    }
+
     $form['wrapper']['language'] = [
       '#type' => 'select',
       '#title' => $this->tFlow('Select Language'),
@@ -115,16 +126,13 @@ class AnonymousSampleOptionsForm extends FormBase {
       '#required' => TRUE,
       // Keep values at the form root so submit handlers and language resolution work.
       '#parents' => ['language'],
-      '#submit' => ['::persistLanguageSelectionAjax'],
-      '#ajax' => [
-        'callback' => '::ajaxLanguageChange',
-        'event' => 'change',
-        'progress' => [
-          'type' => 'throbber',
-          'message' => NULL,
-        ],
+      '#attributes' => [
+        'data-language-redirect-key' => 'anonymous_options',
       ],
     ];
+
+    $form['#attached']['library'][] = 'sentinel_portal_sample/anonymous-language-redirect';
+    $form['#attached']['drupalSettings']['sentinelPortalSample']['languageRedirects']['anonymous_options'] = $language_redirects;
 
     $user_type_default = NULL;
     if ($sample->hasField('user_type') && !$sample->get('user_type')->isEmpty()) {
@@ -180,75 +188,6 @@ class AnonymousSampleOptionsForm extends FormBase {
 
     return $form;
   }
-
-  /**
-   * Saves language choice on the sample before the interface reloads in that language.
-   */
-  public function persistLanguageSelectionAjax(array &$form, FormStateInterface $form_state): void {
-    $token = $form_state->get('options_token');
-    $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
-    if (!$token || $langcode === NULL || $langcode === '') {
-      return;
-    }
-    
-    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    if (str_starts_with($token, 'draft_')) {
-      $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
-      $sample = $storage->create($draft_data);
-    } else {
-      $sample = $storage->load((int) $token);
-    }
-    
-    if ($sample && $sample->hasField('language')) {
-      $sample->set('language', $langcode);
-      if (str_starts_with($token, 'draft_')) {
-        $this->getRequest()->getSession()->set('sentinel_draft_' . $token, $sample->toArray());
-      } else {
-        $sample->save();
-      }
-    }
-  }
-
-  /**
-   * Full page redirect to the URL language prefix (site uses path-based negotiation).
-   */
-public function ajaxLanguageChange(array &$form, FormStateInterface $form_state) {
-
-  $token = $form_state->get('options_token');
-
-  $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
-
-  $language = $langcode
-    ? \Drupal::languageManager()->getLanguage($langcode)
-    : NULL;
-
-  if (!$token || !$language) {
-    return $form['wrapper'];
-  }
-
-  // Store selected language in session.
-  $this->getRequest()
-    ->getSession()
-    ->set('sentinel_anonymous_language', $langcode);
-
-  $url = Url::fromRoute(
-    'sentinel_portal_sample.anonymous_options',
-    [
-      'token' => $token,
-    ],
-    [
-      'language' => $language,
-    ]
-  )->setAbsolute(TRUE);
-
-  $response = new AjaxResponse();
-
-  $response->addCommand(
-    new RedirectCommand($url->toString())
-  );
-
-  return $response;
-}
 
   /**
    * Submit handler for "Add Details Now".

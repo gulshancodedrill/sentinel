@@ -82,5 +82,11 @@ return [
   'Verification code is incorrect.' => 'Le code de verification est incorrect.',
   'Submit Sample' => 'Soumettre un echantillon',
   'Account type and language' => 'Type de compte et langue',
+  'Step @current of @total' => 'Etape @current sur @total',
+  'Account' => 'Compte',
+  'Property' => 'Propriete',
+  'Invalid QR Code' => 'Code QR invalide',
+  'Invalid QR, please scan the correct QR' => 'QR invalide, veuillez scanner le QR correct',
+  'The QR code is missing or invalid. Please scan the correct QR code from your pack.' => 'Le code QR est manquant ou invalide. Veuillez scanner le code QR correct de votre pack.',
 ];
 

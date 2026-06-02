@@ -36,12 +36,22 @@ final class AnonymousSampleWizardProgress {
    * Interface language code for anonymous flow strings (session or negotiated).
    */
   public static function flowLanguageCode(): string {
+    $current = AnonymousSampleFormTranslations::normalizeLangcode(
+      (string) \Drupal::languageManager()->getCurrentLanguage()->getId()
+    );
+    if ($current !== '') {
+      return $current;
+    }
+
     $session = \Drupal::request()->getSession();
-    $lang = $session->get('sentinel_anonymous_language');
-    if (is_string($lang) && $lang !== '') {
+    $lang = AnonymousSampleFormTranslations::normalizeLangcode(
+      (string) $session->get('sentinel_anonymous_language')
+    );
+    if ($lang !== '') {
       return $lang;
     }
-    return \Drupal::languageManager()->getCurrentLanguage()->getId();
+
+    return 'en';
   }
 
   /**

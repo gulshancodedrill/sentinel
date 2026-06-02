@@ -423,11 +423,11 @@ class SentinelSampleController extends ControllerBase {
     // PRN is mandatory in query string
     if (empty($prn)) {
       return [
-        '#title' => $this->t('Invalid QR Code'),
+        '#title' => AnonymousSampleWizardProgress::trans('Invalid QR Code'),
         'error_message' => [
           '#markup' => '<div class="messages messages--error">' .
-            '<p><strong>' . $this->t('Invalid QR, please scan the correct QR') . '</strong></p>' .
-            '<p>' . $this->t('The QR code is missing or invalid. Please scan the correct QR code from your pack.') . '</p>' .
+            '<p><strong>' . AnonymousSampleWizardProgress::trans('Invalid QR, please scan the correct QR') . '</strong></p>' .
+            '<p>' . AnonymousSampleWizardProgress::trans('The QR code is missing or invalid. Please scan the correct QR code from your pack.') . '</p>' .
             '</div>',
         ],
       ];
@@ -472,11 +472,11 @@ class SentinelSampleController extends ControllerBase {
         if ($has_company_address && $has_system_address) {
           // Sample is complete - show message
           return [
-            '#title' => $this->t('Sample Already Submitted'),
+            '#title' => AnonymousSampleWizardProgress::trans('Sample Already Submitted'),
             'message' => [
               '#markup' => '<div class="messages messages--warning">' .
-                '<p><strong>' . $this->t('This record already exists.') . '</strong></p>' .
-                '<p>' . $this->t('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+                '<p><strong>' . AnonymousSampleWizardProgress::trans('This record already exists.') . '</strong></p>' .
+                '<p>' . AnonymousSampleWizardProgress::trans('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
                   '@prn' => $prn,
                 ]) . '</p>' .
                 '</div>',

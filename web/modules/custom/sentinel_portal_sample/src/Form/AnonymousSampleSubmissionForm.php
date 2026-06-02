@@ -2,8 +2,6 @@
 
 namespace Drupal\sentinel_portal_sample\Form;
 
-use Drupal\Core\Ajax\AjaxResponse;
-use Drupal\Core\Ajax\RedirectCommand;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -98,8 +96,10 @@ class AnonymousSampleSubmissionForm extends FormBase {
       '#weight' => 0,
     ];
 
-    $lang_options = AnonymousSampleFormTranslations::languageOptions();
-    $current_lang = AnonymousSampleWizardProgress::flowLanguageCode();
+    $current_lang = AnonymousSampleFormTranslations::normalizeLangcode(
+      (string) \Drupal::languageManager()->getCurrentLanguage()->getId()
+    );
+    $lang_options = AnonymousSampleFormTranslations::languageOptions($current_lang);
     if (!isset($lang_options[$current_lang])) {
       $current_lang = 'en';
     }
@@ -117,6 +117,17 @@ class AnonymousSampleSubmissionForm extends FormBase {
       $user_type_default = $session_flow;
     }
 
+    $language_redirects = [];
+    foreach (array_keys($lang_options) as $code) {
+      $language = \Drupal::languageManager()->getLanguage($code);
+      if ($language) {
+        $language_redirects[$code] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], [
+          'language' => $language,
+          'query' => ['prn' => $prn],
+        ])->toString();
+      }
+    }
+
     $form['language'] = [
       '#type' => 'select',
       '#title' => $this->tFlow('Language'),
@@ -124,15 +135,13 @@ class AnonymousSampleSubmissionForm extends FormBase {
       '#default_value' => $language_default,
       '#required' => TRUE,
       '#weight' => 5,
-      '#ajax' => [
-        'callback' => '::ajaxSubmissionLanguageChange',
-        'event' => 'change',
-        'progress' => [
-          'type' => 'throbber',
-          'message' => NULL,
-        ],
+      '#attributes' => [
+        'data-language-redirect-key' => 'anonymous_submit',
       ],
     ];
+
+    $form['#attached']['library'][] = 'sentinel_portal_sample/anonymous-language-redirect';
+    $form['#attached']['drupalSettings']['sentinelPortalSample']['languageRedirects']['anonymous_submit'] = $language_redirects;
 
     $form['user_type'] = [
       '#type' => 'radios',
@@ -186,36 +195,6 @@ class AnonymousSampleSubmissionForm extends FormBase {
     AnonymousSampleWizardProgress::prependToForm($form, $form_state, 'anonymous_sample_submission_form', $existing_sample);
 
     return $form;
-  }
-
-  /**
-   * Redirects to this form under the selected language prefix (keeps ?prn=).
-   */
-  public function ajaxSubmissionLanguageChange(array &$form, FormStateInterface $form_state) {
-    $prn = trim((string) $this->getRequest()->query->get('prn', ''));
-    $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
-    $language = $langcode ? \Drupal::languageManager()->getLanguage($langcode) : NULL;
-    if ($prn === '' || !$language) {
-      return $form;
-    }
-    
-    // Set session language
-    $this->getRequest()->getSession()->set('sentinel_anonymous_language', $langcode);
-    
-    // Save language to the sample so it persists for future visits
-    $sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
-    if ($sample && $sample->hasField('language')) {
-      $sample->set('language', $langcode);
-      $sample->save();
-    }
-    
-    $url = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], [
-      'language' => $language,
-      'query' => ['prn' => $prn],
-    ])->setAbsolute(TRUE);
-    $response = new AjaxResponse();
-    $response->addCommand(new RedirectCommand($url->toString()));
-    return $response;
   }
 
   /**

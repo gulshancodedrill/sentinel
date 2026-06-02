@@ -27,3 +27,11 @@ sample-form:
     - core/drupal.ajax
     - core/jquery
     - core/once
+
+anonymous-language-redirect:
+  version: 1.0
+  js:
+    js/sentinel_anonymous_language_redirect.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
