@@ -295,3 +295,238 @@
     width: 100%;
   }
 }
+
+/* Visual refresh for anonymous flow (inspired by demo) */
+.sentinel-anon-progress-wrap {
+  background: linear-gradient(180deg, #f4f8ff 0%, #ffffff 100%);
+  border: 1px solid #dce8ff;
+  border-radius: 14px;
+  padding: 14px 16px 16px;
+}
+
+.sentinel-anon-progress-meta {
+  color: #1f2d5c;
+  font-weight: 700;
+}
+
+.sentinel-anon-progress-subtitle {
+  color: #39508f;
+}
+
+.sentinel-step-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 12px;
+  margin: 12px 0 14px;
+  align-items: stretch;
+}
+
+.sentinel-step-navigation .sentinel-step-item:first-child {
+  margin-top: 0 !important;
+}
+
+.sentinel-step-navigation .sentinel-step-item {
+  margin-top: 0 !important;
+}
+
+.sentinel-step-item {
+  width: 100%;
+  height: 100%;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid #d9dee8;
+  background: #f5f7fb;
+  color: #1f2937;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+.sentinel-step-item .step-number {
+  background: #dce3ee;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.sentinel-step-item.active-step {
+  background: #1f232b;
+  border-color: #1f232b;
+  color: #fff !important;
+}
+
+.sentinel-step-item.active-step .step-number {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.sentinel-step-item.completed-step {
+  background: #3a404c;
+  border-color: #3a404c;
+  color: #fff !important;
+}
+
+.sentinel-step-item.completed-step .step-number {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+/* Account type cards */
+fieldset[data-drupal-selector="edit-user-type"] {
+  border: 0 !important;
+  margin: 18px 0 10px;
+  padding: 0;
+}
+
+/* Neutralize Bootstrap/utility spacing on this fieldset wrapper. */
+fieldset[data-drupal-selector="edit-user-type"].mb-3,
+fieldset.fieldgroup.form-composite.required.js-form-item.form-item.js-form-wrapper.form-wrapper.mb-3 {
+  margin-top: 10px !important;
+  margin-bottom: 10px !important;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] > legend {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1f2d5c;
+  margin-bottom: 10px;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] #edit-user-type.radio,
+fieldset[data-drupal-selector="edit-user-type"] .form-radios {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .fieldset-wrapper {
+  margin-top: 8px;
+}
+
+/* Remove inherited sibling spacing inside radio wrapper. */
+fieldset[data-drupal-selector="edit-user-type"] #edit-user-type.radio > * + *,
+fieldset[data-drupal-selector="edit-user-type"] .radio > * + * {
+  margin-top: 0 !important;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check,
+fieldset[data-drupal-selector="edit-user-type"] .form-item {
+  position: relative;
+  margin: 0;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check-label,
+fieldset[data-drupal-selector="edit-user-type"] .form-item > label {
+  display: block;
+  margin: 0;
+  padding: 14px 14px 14px 44px;
+  min-height: 52px;
+  line-height: 1.35;
+  border-radius: 12px;
+  border: 1px solid #d9dee8;
+  background: #f8f9fc;
+  color: #111827;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check-label::before,
+fieldset[data-drupal-selector="edit-user-type"] .form-item > label::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #9aa3b2;
+  background: #fff;
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check-input:hover + .form-check-label,
+fieldset[data-drupal-selector="edit-user-type"] .form-radio:hover + label {
+  border-color: #a8b1bf;
+  background: #f1f4f8;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check-input:focus + .form-check-label,
+fieldset[data-drupal-selector="edit-user-type"] .form-radio:focus + label {
+  border-color: #1f232b;
+  box-shadow: 0 0 0 2px rgba(31, 35, 43, 0.18);
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check-input:checked + .form-check-label,
+fieldset[data-drupal-selector="edit-user-type"] .form-radio:checked + label {
+  border-color: #1f232b;
+  background: #eef1f6;
+  box-shadow: 0 0 0 2px rgba(31, 35, 43, 0.12);
+  color: #111827;
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-check-input:checked + .form-check-label::before,
+fieldset[data-drupal-selector="edit-user-type"] .form-radio:checked + label::before {
+  border-color: #1f232b;
+  background: radial-gradient(circle at center, #1f232b 0 42%, #fff 43% 100%);
+}
+
+fieldset[data-drupal-selector="edit-user-type"] .form-radio {
+  accent-color: #1f232b;
+}
+
+@media (max-width: 768px) {
+  .sentinel-anon-progress-wrap {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .sentinel-step-navigation {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .sentinel-step-item {
+    width: 100%;
+    height: auto;
+    min-height: 72px;
+    padding: 10px 12px;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    text-align: left;
+  }
+
+  .step-number {
+    width: 30px;
+    height: 30px;
+    margin: 0 10px 0 0;
+    flex-shrink: 0;
+  }
+
+  .step-title {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.3;
+    text-align: left;
+  }
+}

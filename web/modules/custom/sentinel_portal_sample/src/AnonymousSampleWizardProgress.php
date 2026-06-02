@@ -464,17 +464,6 @@ final class AnonymousSampleWizardProgress {
       'subtitle' => [
         '#markup' => '<p class="sentinel-anon-progress-subtitle">' . Html::escape($subtitle) . '</p>',
       ],
-      // 'track' => [
-      //   '#type' => 'container',
-      //   '#attributes' => ['class' => ['sentinel-anon-progress-track']],
-      //   'fill' => [
-      //     '#type' => 'container',
-      //     '#attributes' => [
-      //       'class' => ['sentinel-anon-progress-fill'],
-      //       'style' => 'width: ' . $pct . '%;',
-      //     ],
-      //   ],
-      // ],
     ];
   }
 
