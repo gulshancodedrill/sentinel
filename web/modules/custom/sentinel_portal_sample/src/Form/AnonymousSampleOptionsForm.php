@@ -9,6 +9,7 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Drupal\sentinel_portal_sample\AnonymousSampleFlowTranslationTrait;
+use Drupal\sentinel_portal_sample\AnonymousSampleFormTranslations;
 use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
 use Drupal\sentinel_portal_sample\AnonymousSampleWizardProgress;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -88,18 +89,11 @@ class AnonymousSampleOptionsForm extends FormBase {
 
     $this->getRequest()->getSession()->set('sentinel_anonymous_entry', 'options');
 
-    $languages = \Drupal::languageManager()->getLanguages();
-    $lang_options = [];
-    foreach ($languages as $code => $language) {
-      $lang_options[$code] = $language->getName();
-    }
-    if ($lang_options === []) {
-      $lang_options = ['en' => 'English'];
-    }
+    $lang_options = AnonymousSampleFormTranslations::languageOptions();
 
     $resolved_lang = AnonymousSampleWizardProgress::flowLanguageCode();
     if (!isset($lang_options[$resolved_lang])) {
-      $resolved_lang = array_key_first($lang_options);
+      $resolved_lang = 'en';
     }
 
     $form['wrapper'] = [
@@ -192,7 +186,7 @@ class AnonymousSampleOptionsForm extends FormBase {
    */
   public function persistLanguageSelectionAjax(array &$form, FormStateInterface $form_state): void {
     $token = $form_state->get('options_token');
-    $langcode = $form_state->getValue('language');
+    $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
     if (!$token || $langcode === NULL || $langcode === '') {
       return;
     }
@@ -222,7 +216,7 @@ public function ajaxLanguageChange(array &$form, FormStateInterface $form_state)
 
   $token = $form_state->get('options_token');
 
-  $langcode = $form_state->getValue('language');
+  $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
 
   $language = $langcode
     ? \Drupal::languageManager()->getLanguage($langcode)
@@ -263,7 +257,7 @@ public function ajaxLanguageChange(array &$form, FormStateInterface $form_state)
     $token = $form_state->get('options_token');
     
     // Redirect to anonymous details form
-    $langcode = $form_state->getValue('language');
+    $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
     $target_lang = $langcode ? \Drupal::languageManager()->getLanguage($langcode) : NULL;
     $form_state->setRedirect('sentinel_portal_sample.anonymous_details', [
       'token' => $token,

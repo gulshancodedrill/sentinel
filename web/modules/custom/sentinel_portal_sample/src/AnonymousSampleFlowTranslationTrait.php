@@ -13,10 +13,15 @@ trait AnonymousSampleFlowTranslationTrait {
    * Translates a string using the flow language when set on the session.
    */
   protected function tFlow(string $string, array $args = []): TranslatableMarkup {
-    return new TranslatableMarkup(
+    $translated = AnonymousSampleFormTranslations::translate(
       $string,
+      [],
+      AnonymousSampleWizardProgress::flowLanguageCode()
+    );
+    return new TranslatableMarkup(
+      $translated,
       $args,
-      ['langcode' => AnonymousSampleWizardProgress::flowLanguageCode()]
+      []
     );
   }
 

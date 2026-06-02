@@ -48,10 +48,15 @@ final class AnonymousSampleWizardProgress {
    * Translates using the flow language (session) so labels match the chosen locale.
    */
   public static function trans(string $string, array $args = []): string {
-    return (string) \Drupal::translation()->translate(
+    $translated = AnonymousSampleFormTranslations::translate(
       $string,
+      [],
+      static::flowLanguageCode()
+    );
+    return (string) \Drupal::translation()->translate(
+      $translated,
       $args,
-      ['langcode' => static::flowLanguageCode()]
+      []
     );
   }
 

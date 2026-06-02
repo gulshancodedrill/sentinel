@@ -10,6 +10,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
 use Drupal\sentinel_portal_sample\AnonymousSampleFlowTranslationTrait;
+use Drupal\sentinel_portal_sample\AnonymousSampleFormTranslations;
 use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
 use Drupal\sentinel_portal_sample\AnonymousSampleWizardProgress;
 use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
@@ -80,7 +81,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
     }
 
     // PRN should be present (controller handles validation, but we need it for the form)
-    $form['#title'] = $this->t('Submit Sample');
+    $form['#title'] = $this->tFlow('Submit Sample');
 
     $form['help_text'] = [
       '#markup' => '<p>' . $this->tFlow('Confirm your pack reference number, choose your language and account type, then continue.') . '</p>',
@@ -97,17 +98,10 @@ class AnonymousSampleSubmissionForm extends FormBase {
       '#weight' => 0,
     ];
 
-    $languages = \Drupal::languageManager()->getLanguages();
-    $lang_options = [];
-    foreach ($languages as $code => $language) {
-      $lang_options[$code] = $language->getName();
-    }
-    if ($lang_options === []) {
-      $lang_options = ['en' => 'English'];
-    }
+    $lang_options = AnonymousSampleFormTranslations::languageOptions();
     $current_lang = AnonymousSampleWizardProgress::flowLanguageCode();
     if (!isset($lang_options[$current_lang])) {
-      $current_lang = array_key_first($lang_options);
+      $current_lang = 'en';
     }
 
     $user_type_default = NULL;
@@ -199,7 +193,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
    */
   public function ajaxSubmissionLanguageChange(array &$form, FormStateInterface $form_state) {
     $prn = trim((string) $this->getRequest()->query->get('prn', ''));
-    $langcode = $form_state->getValue('language');
+    $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
     $language = $langcode ? \Drupal::languageManager()->getLanguage($langcode) : NULL;
     if ($prn === '' || !$language) {
       return $form;
@@ -316,7 +310,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
         $sample->set('user_type', $user_type);
       }
 
-      $langcode = $form_state->getValue('language');
+      $langcode = AnonymousSampleFormTranslations::normalizeLangcode((string) $form_state->getValue('language'));
       if ($sample->hasField('language') && is_string($langcode) && $langcode !== '') {
         $sample->set('language', $langcode);
       }
