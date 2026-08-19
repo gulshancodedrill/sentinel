@@ -1,6 +1,40 @@
 /**
  * Anonymous multi-step sample flow: progress bar and nav row.
  */
+.sentinel-anon-hint-red,
+.form-item.sentinel-anon-hint-red-label > label,
+.form-item.sentinel-anon-hint-red-label label,
+.sentinel-anon-hint-red-label .form-item label,
+label.sentinel-anon-hint-red {
+  color: #c62828 !important;
+}
+
+.sentinel-anon-share-notice,
+.sentinel-anon-share-notice p {
+  color: #c62828 !important;
+  font-weight: 600;
+  margin: 1.25rem 0 1rem;
+}
+
+.sentinel-anon-marketing-consent,
+.form-item.sentinel-anon-marketing-consent,
+.form-item.sentinel-anon-marketing-consent > label,
+.form-item.sentinel-anon-marketing-consent label,
+.sentinel-anon-marketing-consent .form-check-label,
+.sentinel-anon-marketing-consent label.option,
+label.sentinel-anon-marketing-consent-label {
+  color: #c62828 !important;
+}
+
+.sentinel-anon-marketing-consent {
+  margin: 0 0 1.25rem;
+}
+
+.sentinel-anon-marketing-consent label {
+  display: inline;
+  white-space: normal;
+}
+
 .sentinel-anon-progress-wrap {
   margin: 0 0 1.5rem;
 }

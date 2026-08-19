@@ -137,10 +137,26 @@ final class AnonymousSampleWizardProgress {
   }
 
   /**
+   * Converts QR/query PRN separators (- or _) to the canonical colon format.
+   *
+   * Examples: 456-345333 or 456_3A45333 → 456:3A45333
+   */
+  public static function normalizeAnonymousPrn(string $prn): string {
+    $prn = trim($prn);
+    if ($prn === '') {
+      return '';
+    }
+    if (preg_match('/^(\d{3})[-_](.+)$/', $prn, $matches)) {
+      return $matches[1] . ':' . $matches[2];
+    }
+    return $prn;
+  }
+
+  /**
    * Loads a sentinel_sample by pack reference number.
    */
   public static function loadSampleByPrn(string $prn): ?EntityInterface {
-    $prn = trim($prn);
+    $prn = static::normalizeAnonymousPrn($prn);
     if ($prn === '') {
       return NULL;
     }
@@ -161,7 +177,7 @@ final class AnonymousSampleWizardProgress {
    */
   public static function prnRedirectOptions(string $prn, $language = NULL): array {
     $options = AnonymousSampleLanguageRedirect::options($language);
-    $options['query'] = ['prn' => $prn];
+    $options['query'] = ['prn' => static::normalizeAnonymousPrn($prn)];
     return $options;
   }
 
@@ -172,9 +188,14 @@ final class AnonymousSampleWizardProgress {
     if (!$sample) {
       return NULL;
     }
-    // Company wizard: customer_id or saved company address reference.
-    if ($sample->hasField('customer_id') && !$sample->get('customer_id')->isEmpty()) {
-      return 'company';
+    // Company wizard: saved UCR or company address reference.
+    if ($sample->hasField('ucr') && !$sample->get('ucr')->isEmpty()) {
+      if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+        return 'company';
+      }
+      if ($sample->hasField('company_name') && trim((string) $sample->get('company_name')->value) !== '') {
+        return 'company';
+      }
     }
     if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
       return 'company';
@@ -369,7 +390,7 @@ final class AnonymousSampleWizardProgress {
       ];
     }
 
-    $prn = trim((string) \Drupal::request()->query->get('prn', ''));
+    $prn = static::normalizeAnonymousPrn((string) \Drupal::request()->query->get('prn', ''));
     if ($prn === '' && $sample && $sample->hasField('pack_reference_number') && !$sample->get('pack_reference_number')->isEmpty()) {
       $prn = trim((string) $sample->get('pack_reference_number')->value);
     }
@@ -473,7 +494,7 @@ final class AnonymousSampleWizardProgress {
   public static function phaseSubtitle(string $phase): string {
     $map = [
       'account' => static::trans('Account type and language'),
-      'company_id' => static::trans('Company ID'),
+      'company_id' => static::trans('Client UCR'),
       'company_details' => static::trans('Company details'),
       'your_details' => static::trans('Your details'),
       'property' => static::trans('Property details'),

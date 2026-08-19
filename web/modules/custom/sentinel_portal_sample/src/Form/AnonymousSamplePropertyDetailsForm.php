@@ -121,7 +121,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form['property_ajax_root']['property_house_no'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow('House number'),
+      '#title' => $this->tFlow('House Number/Name'),
       '#default_value' => GoAddressClient::formStateString($form_state, [
         ['property_ajax_root', 'property_house_no'],
         ['property_house_no'],
@@ -210,7 +210,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     ];
     $form['property_ajax_root']['property_wrapper']['address_fields']['address_1'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow('Address 1'),
+      '#title' => $this->tFlow('Address'),
       '#default_value' => $prefill['address_1'] ?? $af['address_1'] ?? $this->getSampleScalar('street'),
       '#weight' => 2,
     ];
@@ -291,12 +291,53 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => 6,
     ];
 
+   $form['customer_id'] = [
+       '#type' => 'textfield',
+       '#title' => $this->tFlow('Customer ID (Vaillant Only)'),
+       '#default_value' => $form_state->getValue('customer_id')
+         ?? $this->getSampleScalar('customer_id'),
+       '#weight' => 7,
+       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+     ];
+
+   $form['project_id'] = [
+       '#type' => 'textfield',
+       '#title' => $this->tFlow('Project ID (Vaillant Only)'),
+      '#description' => $this->tFlow('The project ID. Required for claiming boiler manufacturer support.'),
+       '#default_value' => $form_state->getValue('project_id')
+         ?? $this->getSampleScalar('project_id'),
+       '#weight' => 8,
+       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+     ];
+
+    $form['engineers_code'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow("Engineer's code (Worcester Service Only)"),
+      '#default_value' => $form_state->getValue('engineers_code')
+        ?? $this->getSampleScalar('engineers_code'),
+      '#weight' => 9,
+      '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+    ];
+
+    $form['service_call_id'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('Service call ID (Worcester Service Only)'),
+      '#default_value' => $form_state->getValue('service_call_id')
+        ?? $this->getSampleScalar('service_call_id'),
+      '#weight' => 10,
+      '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+    ];
+
     $form['installer_name'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Installer name'),
       '#default_value' => $form_state->getValue('installer_name')
         ?? $this->getSampleScalar('installer_name'),
-      '#weight' => 7,
+      '#weight' => 11,
     ];
 
     $form['installer_email'] = [
@@ -304,7 +345,26 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#title' => $this->tFlow('Installer email'),
       '#default_value' => $form_state->getValue('installer_email')
         ?? $this->getSampleScalar('installer_email'),
-      '#weight' => 8,
+      '#weight' => 12,
+    ];
+
+    $form['data_sharing_notice'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['sentinel-anon-share-notice']],
+      '#weight' => 18,
+      'text' => [
+        '#markup' => '<p>' . $this->tFlow('By submitting this form, you acknowledge that your information may be shared with trusted third-party companies where necessary to provide our services or fulfil your request.') . '</p>',
+      ],
+    ];
+
+    $form['marketing_consent'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->tFlow('I agree to receive marketing communications from Sentinel Performance Solutions Ltd. Part of Aalberts Group. My contact details may be shared with trusted third-party service providers who assist in delivering these communications. I can withdraw my consent at any time.'),
+      '#required' => TRUE,
+      '#return_value' => 1,
+      '#weight' => 19,
+      '#wrapper_attributes' => ['class' => ['sentinel-anon-marketing-consent']],
+      '#label_attributes' => ['class' => ['sentinel-anon-marketing-consent-label', 'sentinel-anon-hint-red']],
     ];
 
     $form['actions'] = ['#type' => 'actions', '#weight' => 20];
@@ -326,7 +386,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $form['actions']['submit'] = [
       '#type' => 'submit',
       '#name' => 'property_next',
-      '#value' => (string) $this->tFlow('Next'),
+      '#value' => (string) $this->tFlow('Submit'),
       '#button_type' => 'primary',
       '#weight' => 0,
     ];
@@ -350,10 +410,16 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
    * True when the sample has a company ID from the company wizard (strong signal for company path).
    */
   protected function sampleHasPersistedCompanyWizardData(): bool {
-    if (!$this->sample || !$this->sample->hasField('customer_id')) {
+    if (!$this->sample) {
       return FALSE;
     }
-    return !$this->sample->get('customer_id')->isEmpty();
+    if ($this->sample->hasField('ucr') && !$this->sample->get('ucr')->isEmpty()) {
+      return TRUE;
+    }
+    if ($this->sample->hasField('field_company_address') && !$this->sample->get('field_company_address')->isEmpty()) {
+      return TRUE;
+    }
+    return FALSE;
   }
 
   /**
@@ -396,7 +462,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       $form_state->setErrorByName('property_house_no', $this->tFlow('Please search for a property address using house number and postcode, or click “Enter address”.'));
     }
     elseif (trim($resolved['address_1']) === '') {
-      $form_state->setErrorByName('system_details][address][address_fields][address_1', $this->tFlow('Address 1 is required. Search for a property address or enter it manually.'));
+      $form_state->setErrorByName('system_details][address][address_fields][address_1', $this->tFlow('Address is required. Search for a property address or enter it manually.'));
     }
     elseif (trim($resolved['postcode']) === '') {
       $form_state->setErrorByName('system_details][address][address_fields][postcode', $this->tFlow('Postcode is required.'));
@@ -408,6 +474,14 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       FALSE,
       (string) $this->tFlow('Please enter a valid installer email address.')
     );
+
+    $trigger = $form_state->getTriggeringElement();
+    $trigger_name = is_array($trigger) ? (string) ($trigger['#name'] ?? '') : '';
+    if ($trigger_name === 'property_next' || $trigger_name === '') {
+      if (empty($form_state->getValue('marketing_consent'))) {
+        $form_state->setErrorByName('marketing_consent', $this->tFlow('You must agree before submitting.'));
+      }
+    }
   }
 
   public function ajaxPropertyRefresh(array &$form, FormStateInterface $form_state) {
@@ -558,6 +632,10 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $system_6 = (string) $form_state->getValue('system_6_months');
     $boiler_id = trim((string) $form_state->getValue('boiler_id'));
+    $project_id = trim((string) $form_state->getValue('project_id'));
+    $customer_id = trim((string) $form_state->getValue('customer_id'));
+    $engineers_code = trim((string) $form_state->getValue('engineers_code'));
+    $service_call_id = trim((string) $form_state->getValue('service_call_id'));
     $boiler_manufacturer = trim((string) $form_state->getValue('boiler_manufacturer'));
     if ($boiler_manufacturer === '') {
       $boiler_manufacturer = 'Not specified';
@@ -599,6 +677,10 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       'system_location' => $system_location,
       'system_6_months' => $system_6,
       'boiler_id' => $boiler_id,
+      'project_id' => $project_id,
+      'customer_id' => $customer_id,
+      'engineers_code' => $engineers_code,
+      'service_call_id' => $service_call_id,
       'boiler_manufacturer' => $boiler_manufacturer,
       'date_installed' => $date_installed,
       'installer_name' => $installer_name,
@@ -638,6 +720,10 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         'boiler_manufacturer' => $boiler_manufacturer,
         'date_installed' => $date_installed,
         'installer_name' => $installer_name,
+        'project_id' => $project_id,
+        'customer_id' => $customer_id,
+        'engineers_code' => $engineers_code,
+        'service_call_id' => $service_call_id,
       ],
     ];
 
@@ -667,6 +753,18 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         $this->sample->set('system_6_months', $system_6);
       }
       $this->sample->set('boiler_id', $boiler_id);
+      if ($this->sample->hasField('project_id')) {
+        $this->sample->set('project_id', $project_id);
+      }
+      if ($this->sample->hasField('customer_id')) {
+        $this->sample->set('customer_id', $customer_id);
+      }
+      if ($this->sample->hasField('engineers_code')) {
+        $this->sample->set('engineers_code', $engineers_code);
+      }
+      if ($this->sample->hasField('service_call_id')) {
+        $this->sample->set('service_call_id', $service_call_id);
+      }
       $this->sample->set('boiler_manufacturer', $boiler_manufacturer);
       if ($date_installed !== '') {
         $this->sample->set('date_installed', $date_installed);
@@ -694,6 +792,20 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       $this->mapFormValuesToEntity($this->sample, $values, $form);
       $this->ensureAddressEntities($this->sample, $values, $original_values, $form);
       $this->setLegacyAddressTargetIds($this->sample);
+
+      // Re-apply after mapping so nested job_details values cannot overwrite these.
+      if ($this->sample->hasField('customer_id')) {
+        $this->sample->set('customer_id', $customer_id);
+      }
+      if ($this->sample->hasField('project_id')) {
+        $this->sample->set('project_id', $project_id);
+      }
+      if ($this->sample->hasField('engineers_code')) {
+        $this->sample->set('engineers_code', $engineers_code);
+      }
+      if ($this->sample->hasField('service_call_id')) {
+        $this->sample->set('service_call_id', $service_call_id);
+      }
 
       $ucr = NULL;
       if ($this->sample->hasField('ucr') && !$this->sample->get('ucr')->isEmpty()) {

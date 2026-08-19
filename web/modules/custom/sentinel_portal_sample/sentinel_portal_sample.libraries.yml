@@ -1,5 +1,5 @@
 anonymous-wizard:
-  version: 1.4
+  version: 1.8
   css:
     theme:
       css/sentinel_anonymous_wizard.css: {}
@@ -14,7 +14,7 @@ anonymous-wizard:
     - core/once
 
 sample-form:
-  version: 4.3
+  version: 4.4
   css:
     theme:
       css/sentinel_portal_sample_address.css: {}

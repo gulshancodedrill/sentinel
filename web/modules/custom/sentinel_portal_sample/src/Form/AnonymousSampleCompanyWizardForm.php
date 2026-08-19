@@ -148,7 +148,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     ];
 
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['help'] = [
-      '#markup' => '<p>' . $this->tFlow('Enter your Company ID (Sentinel customer reference). We will load your company name and email where available.') . '</p>',
+      '#markup' => '<p>' . $this->tFlow('Enter your Client UCR. We will load your company name and email where available.') . '</p>',
       '#weight' => -10,
     ];
 
@@ -170,7 +170,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
 
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_id'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow('Company ID'),
+      '#title' => $this->tFlow('Client UCR'),
       '#required' => FALSE,
       '#default_value' => $form_state->getValue('company_id') ?? ($fetched['company_id'] ?? ''),
       '#weight' => 0,
@@ -238,7 +238,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       }
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_select'] = [
         '#type' => 'select',
-        '#title' => $this->tFlow('Select company address'),
+        '#title' => $this->tFlow('Select company address From Dropdown'),
         '#options' => $options,
         '#default_value' => $selected_address !== NULL ? (string) $selected_address : NULL,
         '#limit_validation_errors' => [],
@@ -288,7 +288,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         ];
         $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_address_1'] = [
           '#type' => 'textfield',
-          '#title' => $this->tFlow('Address 1'),
+          '#title' => $this->tFlow('Address'),
           '#default_value' => $prefill['company_address_1'] ?? $form_state->getValue('company_address_1') ?? '',
           '#weight' => 1,
         ];
@@ -631,8 +631,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     $cid_value = $form_state->getValue('company_id');
-    if ($sample->hasField('customer_id')) {
-      $sample->set('customer_id', $cid_value);
+    if ($sample->hasField('ucr') && $cid_value !== NULL && trim((string) $cid_value) !== '') {
+      $sample->set('ucr', trim((string) $cid_value));
     }
     if ($sample->hasField('company_name') && !empty($data['name'])) {
       $sample->set('company_name', $data['name']);
@@ -673,15 +673,9 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $sample->set('sentinel_company_address_target_id', $company_address_target_id ?: NULL);
     }
 
-    if ($sample->hasField('ucr')) {
+    if ($sample->hasField('ucr') && $sample->get('ucr')->isEmpty()) {
       if (!empty($data['stored_real_ucr'])) {
         $sample->set('ucr', (string) (int) $data['stored_real_ucr']);
-      }
-      else {
-        $entered_ucr = preg_replace('/\D/', '', (string) $cid_value);
-        if ($entered_ucr !== '' && (int) $entered_ucr > 0) {
-          $sample->set('ucr', (string) (int) $entered_ucr);
-        }
       }
     }
 
@@ -860,7 +854,7 @@ if (method_exists($client, 'getUcr')) {
    * Whether the sample already has company wizard data saved (return from property step).
    */
   protected function sampleHasPersistedCompanyWizard(EntityInterface $sample): bool {
-    if ($sample->hasField('customer_id') && !$sample->get('customer_id')->isEmpty()) {
+    if ($sample->hasField('ucr') && !$sample->get('ucr')->isEmpty()) {
       return TRUE;
     }
     if ($sample->hasField('company_name') && !$sample->get('company_name')->isEmpty()) {
@@ -874,8 +868,8 @@ if (method_exists($client, 'getUcr')) {
    */
   protected function wizardCompanyDataFromSample(EntityInterface $sample): array {
     $entered_id = '';
-    if ($sample->hasField('customer_id') && !$sample->get('customer_id')->isEmpty()) {
-      $entered_id = trim((string) $sample->get('customer_id')->value);
+    if ($sample->hasField('ucr') && !$sample->get('ucr')->isEmpty()) {
+      $entered_id = trim((string) $sample->get('ucr')->value);
     }
 
     if ($entered_id !== '') {

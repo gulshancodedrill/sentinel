@@ -1036,6 +1036,7 @@ class BulkUploadBatch {
       'boiler_id',
       'boiler_type',
       'boiler_manufacturer',
+      'project_id',
       'date_sent',
       'date_installed',
       'pack_type',

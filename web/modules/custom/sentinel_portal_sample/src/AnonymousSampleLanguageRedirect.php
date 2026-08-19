@@ -24,7 +24,9 @@ final class AnonymousSampleLanguageRedirect {
         ->get('sentinel_anonymous_language');
 
       if (!$session_langcode) {
-        $prn = trim((string) \Drupal::request()->query->get('prn', ''));
+        $prn = AnonymousSampleWizardProgress::normalizeAnonymousPrn(
+          (string) \Drupal::request()->query->get('prn', '')
+        );
         if ($prn !== '') {
           $sample = \Drupal::entityTypeManager()
             ->getStorage('sentinel_sample')

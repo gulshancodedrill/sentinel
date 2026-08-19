@@ -15,7 +15,9 @@ trait AnonymousSampleAccessGateTrait {
    * Pack reference number from the current request query string.
    */
   protected function getAnonymousPrn(): string {
-    return trim((string) $this->getRequest()->query->get('prn', ''));
+    return AnonymousSampleWizardProgress::normalizeAnonymousPrn(
+      (string) $this->getRequest()->query->get('prn', '')
+    );
   }
 
   /**

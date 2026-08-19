@@ -60,7 +60,9 @@ class AnonymousSampleSubmissionForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $request = $this->getRequest();
-    $prn = trim($request->query->get('prn', ''));
+    $prn = AnonymousSampleWizardProgress::normalizeAnonymousPrn(
+      (string) $request->query->get('prn', '')
+    );
 
     $request->getSession()->set('sentinel_anonymous_entry', 'submit');
 
@@ -89,7 +91,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
     // Pack Reference Number (pre-filled from query string)
     $form['pack_reference_number'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow('Packet Reference Number'),
+      '#title' => $this->tFlow('Sample Pack Ref No'),
       '#default_value' => $prn,
       '#required' => TRUE,
       '#disabled' => TRUE, // Always disabled since it comes from query string

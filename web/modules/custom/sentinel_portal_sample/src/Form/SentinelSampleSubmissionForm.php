@@ -106,11 +106,10 @@ class SentinelSampleSubmissionForm extends FormBase {
     //   '#attributes' => ['id' => 'company-details-wrapper'],
     // ];
 
-    $form['sentinel_customer_id'] = [
+    $form['client_ucr'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Sentinel Company ID'),
+      '#title' => $this->t('Client UCR'),
       '#description' => $this->t('Enter your Sentinel UCR number (Unique Customer Reference Number). This number is provided by Sentinel'),
-      // '#weight' => -2,
     ];
 
     $form['fetch_details'] = [
@@ -124,8 +123,7 @@ class SentinelSampleSubmissionForm extends FormBase {
           'message' => $this->t('Fetching details...'),
         ],
       ],
-      '#limit_validation_errors' => [['sentinel_customer_id']],
-      // '#weight' => -1,
+      '#limit_validation_errors' => [['client_ucr']],
     ];
  $form['company'] = [
       '#type' => 'textfield',
@@ -227,7 +225,7 @@ class SentinelSampleSubmissionForm extends FormBase {
 
     $form['company_address_1'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Address 1'),
+      '#title' => $this->t('Address'),
       // '#weight' => 4,
     ];
 
@@ -358,7 +356,7 @@ class SentinelSampleSubmissionForm extends FormBase {
 
     $form['job_details']['address_fields']['address_1'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Address 1'),
+      '#title' => $this->t('Address'),
       '#default_value' => $property_prefill['address_1'] ?? '',
       // '#weight' => 6,
     ];
@@ -429,12 +427,38 @@ class SentinelSampleSubmissionForm extends FormBase {
                                     
    
 
-    // $form['job_details']['project_id'] = [
-    //   '#type' => 'textfield',
-    //   '#title' => $this->t('Project ID'),
-    //   '#description' => $this->t('The project ID. Required for claiming boiler manufacturer support.'),
-    //   '#weight' => 7,
-    // ];
+   $form['job_details']['sentinel_customer_id'] = [
+       '#type' => 'textfield',
+       '#title' => $this->t('Customer ID (Vaillant Only)'),
+       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+       '#weight' => 6,
+     ];
+
+   $form['job_details']['project_id'] = [
+       '#type' => 'textfield',
+       '#title' => $this->t('Project ID (Vaillant Only)'),
+      '#description' => $this->t('The project ID. Required for claiming boiler manufacturer support.'),
+       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+       '#weight' => 7,
+     ];
+
+    $form['job_details']['engineers_code'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t("Engineer's code (Worcester Service Only)"),
+      '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+      '#weight' => 8,
+    ];
+
+    $form['job_details']['service_call_id'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Service call ID (Worcester Service Only)'),
+      '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
+      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+      '#weight' => 9,
+    ];
 
     $form['job_details']['date_sent'] = [
       '#type' => 'datetime',
@@ -882,10 +906,10 @@ $form['job_details']['installer_name'] = [
     // Map top-level fields that are already flattened
     $top_level_fields = ['pack_reference_number', 'company', 'company_address_1', 'company_property_name',
                          'company_town_city', 'company_postcode', 'company_telephone', 'company_email',
-                         'sentinel_customer_id', 'address_1', 'property_name', 'property_number',
+                         'client_ucr', 'sentinel_customer_id', 'address_1', 'property_name', 'property_number',
                          'town_city', 'postcode', 'county', 'landlord', 'installer_name', 'installer_email',
                          'installer_company', 'boiler_manufacturer', 'system_age', 'boiler_type',
-                         'project_id', 'date_sent', 'uprn', 'boiler_id', 'date_installed'];
+                         'project_id', 'engineers_code', 'service_call_id', 'date_sent', 'uprn', 'boiler_id', 'date_installed'];
     foreach ($top_level_fields as $field) {
       if (in_array($field, $date_fields, TRUE)) {
         $validation_data[$field] = $normalized_dates[$field];
@@ -1286,6 +1310,8 @@ $form['job_details']['installer_name'] = [
         // Misc identifiers
         'boiler_id' => ['job_details', 'boiler_id'],
         'project_id' => ['job_details', 'project_id'],
+        'engineers_code' => ['job_details', 'engineers_code'],
+        'service_call_id' => ['job_details', 'service_call_id'],
         'uprn' => ['job_details', 'uprn'],
       ];
 
@@ -1319,6 +1345,8 @@ $form['job_details']['installer_name'] = [
         'date_installed' => 'date_installed',
         'boiler_id' => 'boiler_id',
         'project_id' => 'project_id',
+        'engineers_code' => 'engineers_code',
+        'service_call_id' => 'service_call_id',
         'uprn' => 'uprn',
       ];
 
@@ -1359,9 +1387,33 @@ $form['job_details']['installer_name'] = [
       $this->ensureAddressEntities($sample, $values, $original_values, $form);
       $this->setLegacyAddressTargetIds($sample);
 
-      // Set customer_id if provided
+      // Set customer_id from the Vaillant Customer ID field (not Client UCR).
       if ($sentinel_customer_id !== NULL && $sample->hasField('customer_id')) {
         $sample->set('customer_id', $sentinel_customer_id);
+      }
+
+      $entered_ucr = trim((string) $form_state->getValue('client_ucr'));
+      if ($entered_ucr !== '' && $sample->hasField('ucr')) {
+        $sample->set('ucr', $entered_ucr);
+      }
+
+      if ($sample->hasField('engineers_code')) {
+        $engineers_code = $form_state->getValue(['job_details', 'engineers_code']);
+        if ($engineers_code === NULL) {
+          $engineers_code = $form_state->getValue('engineers_code');
+        }
+        if ($engineers_code !== NULL) {
+          $sample->set('engineers_code', trim((string) $engineers_code));
+        }
+      }
+      if ($sample->hasField('service_call_id')) {
+        $service_call_id = $form_state->getValue(['job_details', 'service_call_id']);
+        if ($service_call_id === NULL) {
+          $service_call_id = $form_state->getValue('service_call_id');
+        }
+        if ($service_call_id !== NULL) {
+          $sample->set('service_call_id', trim((string) $service_call_id));
+        }
       }
 
       // Set client_id and client_name if available
@@ -2027,9 +2079,9 @@ $form['job_details']['installer_name'] = [
    * Submits Sentinel Customer ID fetch request to find Sentinel client and retrieve data.
    */
   public function submitFetchCompanyDetails(array &$form, FormStateInterface $form_state) {
-    $customer_id = trim((string) $form_state->getValue('sentinel_customer_id'));
+    $customer_id = trim((string) $form_state->getValue('client_ucr'));
     if ($customer_id === '') {
-      $this->messenger()->addWarning($this->t('Please enter a Sentinel Customer ID.'));
+      $this->messenger()->addWarning($this->t('Please enter a Client UCR.'));
       $form_state->setRebuild(TRUE);
       return;
     }

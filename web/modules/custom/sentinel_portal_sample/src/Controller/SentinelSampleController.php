@@ -418,7 +418,17 @@ class SentinelSampleController extends ControllerBase {
    *   Either a redirect response or the form render array.
    */
   public function anonymousSubmit(Request $request) {
-    $prn = trim($request->query->get('prn', ''));
+    $raw_prn = trim((string) $request->query->get('prn', ''));
+    $prn = AnonymousSampleWizardProgress::normalizeAnonymousPrn($raw_prn);
+
+    // Canonicalize hyphen/underscore QR PRNs to colon in the URL.
+    if ($prn !== '' && $prn !== $raw_prn) {
+      $query = $request->query->all();
+      $query['prn'] = $prn;
+      $options = AnonymousSampleLanguageRedirect::options();
+      $options['query'] = $query;
+      return $this->redirect('sentinel_portal_sample.anonymous_submit', [], $options);
+    }
 
     // PRN is mandatory in query string
     if (empty($prn)) {

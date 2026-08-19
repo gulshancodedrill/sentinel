@@ -124,7 +124,7 @@ class AnonymousSampleIndividualContactForm extends FormBase {
 
     $form['pack_reference_number'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow('Pack number'),
+      '#title' => $this->tFlow('Sample Pack Ref No'),
       '#default_value' => $prn,
       '#disabled' => TRUE,
     ];
