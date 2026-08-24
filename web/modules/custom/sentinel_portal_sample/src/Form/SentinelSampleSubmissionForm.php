@@ -431,7 +431,7 @@ class SentinelSampleSubmissionForm extends FormBase {
        '#type' => 'textfield',
        '#title' => $this->t('Customer ID (Vaillant Only)'),
        '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+       //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
        '#weight' => 6,
      ];
 
@@ -440,7 +440,7 @@ class SentinelSampleSubmissionForm extends FormBase {
        '#title' => $this->t('Project ID (Vaillant Only)'),
       '#description' => $this->t('The project ID. Required for claiming boiler manufacturer support.'),
        '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+       //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
        '#weight' => 7,
      ];
 
@@ -448,7 +448,7 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t("Engineer's code (Worcester Service Only)"),
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+      //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
       '#weight' => 8,
     ];
 
@@ -456,7 +456,7 @@ class SentinelSampleSubmissionForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Service call ID (Worcester Service Only)'),
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+      //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
       '#weight' => 9,
     ];
 

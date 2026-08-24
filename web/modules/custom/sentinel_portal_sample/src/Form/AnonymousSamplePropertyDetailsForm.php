@@ -298,7 +298,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
          ?? $this->getSampleScalar('customer_id'),
        '#weight' => 7,
        '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+       //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
      ];
 
    $form['project_id'] = [
@@ -309,7 +309,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
          ?? $this->getSampleScalar('project_id'),
        '#weight' => 8,
        '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-       '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+       //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
      ];
 
     $form['engineers_code'] = [
@@ -319,7 +319,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         ?? $this->getSampleScalar('engineers_code'),
       '#weight' => 9,
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+      //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
     ];
 
     $form['service_call_id'] = [
@@ -329,7 +329,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         ?? $this->getSampleScalar('service_call_id'),
       '#weight' => 10,
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
-      '#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
+      //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
     ];
 
     $form['installer_name'] = [
@@ -350,7 +350,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form['data_sharing_notice'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['sentinel-anon-share-notice']],
+      //'#attributes' => ['class' => ['sentinel-anon-share-notice']],
       '#weight' => 18,
       'text' => [
         '#markup' => '<p>' . $this->tFlow('By submitting this form, you acknowledge that your information may be shared with trusted third-party companies where necessary to provide our services or fulfil your request.') . '</p>',
@@ -364,7 +364,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#return_value' => 1,
       '#weight' => 19,
       '#wrapper_attributes' => ['class' => ['sentinel-anon-marketing-consent']],
-      '#label_attributes' => ['class' => ['sentinel-anon-marketing-consent-label', 'sentinel-anon-hint-red']],
+      '#label_attributes' => ['class' => ['sentinel-anon-marketing-consent-label']],
     ];
 
     $form['actions'] = ['#type' => 'actions', '#weight' => 20];
