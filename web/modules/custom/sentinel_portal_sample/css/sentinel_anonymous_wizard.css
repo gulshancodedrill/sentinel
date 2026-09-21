@@ -530,7 +530,7 @@ fieldset[data-drupal-selector="edit-user-type"] .form-radio {
 [class*="route-sentinel-portal-sample-anonymous-submit"] div#main.container {
   max-width: 75rem;
 }
-[class*="route-sentinel-portal-sample-anonymous-submit"]  main#content {
+.layout-no-sidebars[class*="route-sentinel-portal-sample-anonymous-submit"]  main#content {
   padding-left: 0 !important;
   padding-right: 0 !important;
 }
