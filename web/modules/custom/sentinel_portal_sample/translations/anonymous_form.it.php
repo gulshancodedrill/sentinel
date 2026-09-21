@@ -101,6 +101,7 @@ return [
   'Verify' => 'Verifica',
   'Verification code is incorrect.' => 'Il codice di verifica non e corretto.',
   'Submit Sample' => 'Invia campione',
+  'Welcome to Sentinel. Please proceed by submitting a sample.' => 'Benvenuto in Sentinel. Procedi inviando un campione.',
   'Account type and language' => 'Tipo di account e lingua',
   'Step @current of @total' => 'Passo @current di @total',
   'Account' => 'Account',

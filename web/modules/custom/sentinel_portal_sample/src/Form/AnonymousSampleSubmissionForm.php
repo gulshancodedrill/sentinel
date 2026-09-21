@@ -81,7 +81,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
     }
 
     // PRN should be present (controller handles validation, but we need it for the form)
-    $form['#title'] = $this->tFlow('Submit Sample');
+    $form['#title'] = $this->tFlow('Welcome to Sentinel. Please proceed by submitting a sample.');
 
     $form['help_text'] = [
       '#markup' => '<p>' . $this->tFlow('Confirm your pack reference number, choose your language and account type, then continue.') . '</p>',

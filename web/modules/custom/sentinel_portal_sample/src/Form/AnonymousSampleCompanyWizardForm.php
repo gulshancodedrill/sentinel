@@ -171,7 +171,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_id'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Client UCR'),
-      '#required' => FALSE,
+      '#required' => TRUE,
       '#default_value' => $form_state->getValue('company_id') ?? ($fetched['company_id'] ?? ''),
       '#weight' => 0,
       '#attributes' => (is_string($company_id_alert) && $company_id_alert !== '') ? [
