@@ -53,15 +53,24 @@
             // Initialize the AJAX command
             addAjaxCommand();
 
-            // Handle the "Enter address manually" button click
+            // Handle the "Enter address" button click (portal + anonymous wizard).
             once('sample-address-toggle', '.sample-address-add-button', context).forEach(function(element) {
                 $(element).on('click', function(e) {
                     e.preventDefault();
-                    console.log('Address button clicked');
-                    var $fields = $('.sample-address-fields');
-                    console.log('Found address fields:', $fields.length);
-                    $fields.slideDown();
-                    $(this).slideUp();
+                    var $form = $(element).closest('form');
+                    $form.find('.sample-address-fields').show();
+                    $(element).hide();
+                    return false;
+                });
+            });
+
+            // Handle the "Close address" button click (portal + anonymous wizard).
+            once('sample-address-close', '.sample-address-close-button', context).forEach(function(element) {
+                $(element).on('click', function(e) {
+                    e.preventDefault();
+                    var $form = $(element).closest('form');
+                    $form.find('.sample-address-fields').hide();
+                    $form.find('.sample-address-add-button').show();
                     return false;
                 });
             });

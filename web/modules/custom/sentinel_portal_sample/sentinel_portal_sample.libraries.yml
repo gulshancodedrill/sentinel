@@ -1,5 +1,20 @@
+anonymous-wizard:
+  version: 1.8
+  css:
+    theme:
+      css/sentinel_anonymous_wizard.css: {}
+      css/sentinel_portal_sample_address.css: {}
+  js:
+    js/sentinel_anonymous_wizard_progress.js: {}
+    js/sentinel_portal_sample_sample.address.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.ajax
+    - core/jquery
+    - core/once
+
 sample-form:
-  version: 4.3
+  version: 4.4
   css:
     theme:
       css/sentinel_portal_sample_address.css: {}
@@ -11,4 +26,12 @@ sample-form:
     - core/drupal
     - core/drupal.ajax
     - core/jquery
+    - core/once
+
+anonymous-language-redirect:
+  version: 1.0
+  js:
+    js/sentinel_anonymous_language_redirect.js: {}
+  dependencies:
+    - core/drupal
     - core/once

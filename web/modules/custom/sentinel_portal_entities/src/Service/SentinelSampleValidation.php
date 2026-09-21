@@ -105,7 +105,6 @@ class SentinelSampleValidation {
       'installer_email',
       'company_name',
       'company_tel',
-      'property_number',
       'postcode',
     ];
 
@@ -217,17 +216,11 @@ class SentinelSampleValidation {
         // Check if sentinel_addresses module is active for address field validation
         $module_handler = \Drupal::moduleHandler();
         if ($module_handler->moduleExists('sentinel_addresses') && isset($data['form_id'])) {
-          if (empty($data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0]['sub_premise'])) {
-            $errors['property_number'] = self::formatErrorMessage('property_number', 'field is empty.');
-          }
           // if (empty($data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0]['thoroughfare'])) {
           //   $errors['street'] = self::formatErrorMessage('street', 'field is empty.');
           // }
         }
         else {
-          if (empty($data['property_number'])) {
-            $errors['property_number'] = self::formatErrorMessage('property_number', 'field is empty.');
-          }
           // if (empty($data['street'])) {
           //   $errors['street'] = self::formatErrorMessage('street', 'field is empty.');
           // }
@@ -305,21 +298,11 @@ class SentinelSampleValidation {
     // Check if sentinel_addresses module is active
     $module_handler = \Drupal::moduleHandler();
     if ($module_handler->moduleExists('sentinel_addresses') && isset($data['form_id'])) {
-      $sub_premise = $data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0]['sub_premise'] ?? NULL;
-      if ($sub_premise === NULL || trim((string) $sub_premise) === '') {
-        $sub_premise = $data['property_number'] ?? '';
-      }
-      if (trim((string) $sub_premise) === '') {
-        $errors['property_number'] = self::formatErrorMessage('property_number', 'field is empty.');
-      }
       // if (empty($data['field_sentinel_sample_address']['und']['form']['field_address']['und'][0]['thoroughfare'])) {
       //   $errors['street'] = self::formatErrorMessage('street', 'field is empty.');
       // }
     }
     else {
-      if (empty($data['property_number'])) {
-        $errors['property_number'] = self::formatErrorMessage('property_number', 'field is empty.');
-      }
       // if (empty($data['street'])) {
       //   $errors['street'] = self::formatErrorMessage('street', 'field is empty.');
       // }

@@ -13,6 +13,12 @@
   display: none;
 }
 
+.form-item.sentinel-anon-hint-red-label > label,
+.form-item.sentinel-anon-hint-red-label label,
+label.sentinel-anon-hint-red {
+  color: #c62828 !important;
+}
+
 /* Fieldset styling - All fieldsets should have visible borders */
 fieldset,
 .fieldset,

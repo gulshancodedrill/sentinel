@@ -10,8 +10,6 @@
 
 # -----------------------------------------------------
 # Custom code (DO NOT IGNORE)
-/web/modules/custom/
-/web/themes/custom/
 /web/profiles/custom/
 
 # -----------------------------------------------------
@@ -114,3 +112,5 @@ web/.htaccess.ajay
 web/.htaccess2
 web/rebuild.php
 web/rebuildpermissions.php
+web/.htaccess
+.htaccess1

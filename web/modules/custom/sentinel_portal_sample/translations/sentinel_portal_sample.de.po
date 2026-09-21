@@ -1,0 +1,231 @@
+# German translations for sentinel_portal_sample (anonymous QR wizard).
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: sentinel_portal_sample\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Step @current of @total"
+msgstr "Schritt @current von @total"
+
+msgid "Submit Sample"
+msgstr "Probe einreichen"
+
+msgid "Confirm your pack reference number, choose your language and account type, then continue."
+msgstr "Bestätigen Sie Ihre Packreferenznummer, wählen Sie Sprache und Kontotyp und fahren Sie fort."
+
+msgid "Packet Reference Number"
+msgstr "Packreferenznummer"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "Please select your account type"
+msgstr "Bitte wählen Sie Ihren Kontotyp"
+
+msgid "Company"
+msgstr "Unternehmen"
+
+msgid "Individual"
+msgstr "Privatperson"
+
+msgid "Next"
+msgstr "Weiter"
+
+msgid "Back"
+msgstr "Zurück"
+
+msgid "Please choose one of the options below."
+msgstr "Bitte wählen Sie eine der folgenden Optionen."
+
+msgid "Select Language"
+msgstr "Sprache wählen"
+
+msgid "Company details"
+msgstr "Unternehmensdaten"
+
+msgid "Enter your Company ID (Sentinel customer reference). We will load your company name and email where available."
+msgstr "Geben Sie Ihre Unternehmens-ID (Sentinel-Kundenreferenz) ein. Wir laden den Unternehmensnamen und die E-Mail, sofern vorhanden."
+
+msgid "Company ID"
+msgstr "Unternehmens-ID"
+
+msgid "Fetch Details"
+msgstr "Daten abrufen"
+
+msgid "Company name"
+msgstr "Firmenname"
+
+msgid "Company address"
+msgstr "Firmenadresse"
+
+msgid "Company email"
+msgstr "Firmen-E-Mail"
+
+msgid "Company phone"
+msgstr "Firmentelefon"
+
+msgid "Your details"
+msgstr "Ihre Angaben"
+
+msgid "Pack number"
+msgstr "Packnummer"
+
+msgid "Email"
+msgstr "E-Mail"
+
+msgid "Full name"
+msgstr "Vollständiger Name"
+
+msgid "Phone"
+msgstr "Telefon"
+
+msgid "Property details"
+msgstr "Objektdaten"
+
+msgid "Property details (property lookup). Enter your postcode and use look-up where available, or fill the fields manually."
+msgstr "Objektdaten (Adresssuche). Geben Sie Ihre Postleitzahl ein und nutzen Sie die Suche, oder füllen Sie die Felder manuell aus."
+
+msgid "Postcode"
+msgstr "Postleitzahl"
+
+msgid "Look up property"
+msgstr "Adresse suchen"
+
+msgid "System location"
+msgstr "Systemstandort"
+
+msgid "Age of system"
+msgstr "Systemalter"
+
+msgid "Less than 6 months"
+msgstr "Jünger als 6 Monate"
+
+msgid "More than 6 months"
+msgstr "Älter als 6 Monate"
+
+msgid "Boiler serial number"
+msgstr "Kesselseriennummer"
+
+msgid "Boiler type"
+msgstr "Heizungsanlagentyp"
+
+msgid "- Select -"
+msgstr "- Auswählen -"
+
+msgid "Combi"
+msgstr "Kombigerät"
+
+msgid "System"
+msgstr "System"
+
+msgid "Regular / heat only"
+msgstr "Nur Heizung / Speicher"
+
+msgid "Worcester Bosch"
+msgstr "Worcester Bosch"
+
+msgid "Other"
+msgstr "Sonstiges"
+
+msgid "Boiler install date (optional)"
+msgstr "Kesselinstallationsdatum (optional)"
+
+msgid "Installer name (optional)"
+msgstr "Installateur Name (optional)"
+
+msgid "Installer email (optional)"
+msgstr "Installateur E-Mail (optional)"
+
+msgid "Submit"
+msgstr "Absenden"
+
+msgid "Submission complete"
+msgstr "Übermittlung abgeschlossen"
+
+msgid "Your details have been saved."
+msgstr "Ihre Angaben wurden gespeichert."
+
+msgid "You can close this page."
+msgstr "Sie können diese Seite schließen."
+
+msgid "Done / Exit"
+msgstr "Fertig / Beenden"
+
+msgid "Please enter a Company ID."
+msgstr "Bitte geben Sie eine Unternehmens-ID ein."
+
+msgid "Company ID is not valid."
+msgstr "Die Unternehmens-ID ist ungültig."
+
+msgid "Enter Verification Code"
+msgstr "Bestätigungscode eingeben"
+
+msgid "Verification code"
+msgstr "Bestätigungscode"
+
+msgid "Enter the verification code sent to your email."
+msgstr "Geben Sie den per E-Mail gesendeten Bestätigungscode ein."
+
+msgid "Verify"
+msgstr "Bestätigen"
+
+msgid "Enter a postcode to look up."
+msgstr "Geben Sie eine Postleitzahl für die Suche ein."
+
+msgid "Postcode is required."
+msgstr "Postleitzahl ist erforderlich."
+
+msgid "System location is required."
+msgstr "Systemstandort ist erforderlich."
+
+msgid "Please select the age of the system."
+msgstr "Bitte wählen Sie das Systemalter."
+
+msgid "Boiler serial number is required."
+msgstr "Kesselseriennummer ist erforderlich."
+
+msgid "Boiler type is required."
+msgstr "Heizungsanlagentyp ist erforderlich."
+
+msgid "Please enter a valid installer email address."
+msgstr "Bitte geben Sie eine gültige Installateur-E-Mail ein."
+
+msgid "No existing record was found for that postcode. You can enter the details manually."
+msgstr "Für diese Postleitzahl wurde kein Eintrag gefunden. Sie können die Daten manuell eingeben."
+
+msgid "We found a previous record for this postcode. Review the fields below, then submit."
+msgstr "Wir haben einen früheren Eintrag zu dieser Postleitzahl gefunden. Prüfen Sie die Felder und senden Sie ab."
+
+msgid "Property look-up is not available."
+msgstr "Adresssuche ist nicht verfügbar."
+
+msgid "Account type and language"
+msgstr "Kontotyp und Sprache"
+
+msgid "Company ID"
+msgstr "Unternehmens-ID"
+
+msgid "An error occurred while saving. Please try again or contact support."
+msgstr "Beim Speichern ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut oder wenden Sie sich an den Support."
+
+msgid "Invalid sample."
+msgstr "Ungültige Probe."
+
+msgid "Sample not found."
+msgstr "Probe nicht gefunden."
+
+msgid "Something went wrong. Please start again."
+msgstr "Etwas ist schiefgelaufen. Bitte beginnen Sie erneut."
+
+msgid "N/A"
+msgstr "k. A."
+
+msgid "Sample Already Submitted"
+msgstr "Probe bereits eingereicht"
+
+msgid "This record already exists."
+msgstr "Dieser Eintrag existiert bereits."
+
+msgid "A sample with Packet Reference Number @prn has already been submitted with complete details."
+msgstr "Eine Probe mit der Packreferenznummer @prn wurde bereits vollständig eingereicht."

@@ -10,6 +10,9 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
 use Drupal\sentinel_portal_sample\Ajax\GenericDataCommand;
+use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
+use Drupal\sentinel_portal_sample\AnonymousSampleWizardProgress;
+use Drupal\sentinel_portal_sample\GoAddressClient;
 use Drupal\sentinel_sample\Entity\SentinelSample;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -108,6 +111,31 @@ class SentinelSampleController extends ControllerBase {
           'raw' => $address_string,
         ],
       ];
+    }
+
+    return new JsonResponse($matches);
+  }
+
+  /**
+   * Property address autocomplete via GoAddress (house number + postcode).
+   */
+  public function propertyAddressAutocomplete(Request $request, $user_type = 'any') {
+    $house_no = trim((string) $request->query->get('q', ''));
+    $postcode = trim((string) $request->query->get('postcode', ''));
+    $matches = [];
+
+    if ($house_no !== '' && $postcode !== '') {
+      $results = GoAddressClient::search($this->httpClient(), $house_no, $postcode);
+      foreach ($results as $id => $row) {
+        $label = $row['label'] ?? $id;
+        $matches[] = [
+          'value' => $label,
+          'label' => Html::escape($label),
+          'data' => [
+            'addressid' => $id,
+          ],
+        ];
+      }
     }
 
     return new JsonResponse($matches);
@@ -390,16 +418,26 @@ class SentinelSampleController extends ControllerBase {
    *   Either a redirect response or the form render array.
    */
   public function anonymousSubmit(Request $request) {
-    $prn = trim($request->query->get('prn', ''));
+    $raw_prn = trim((string) $request->query->get('prn', ''));
+    $prn = AnonymousSampleWizardProgress::normalizeAnonymousPrn($raw_prn);
+
+    // Canonicalize hyphen/underscore QR PRNs to colon in the URL.
+    if ($prn !== '' && $prn !== $raw_prn) {
+      $query = $request->query->all();
+      $query['prn'] = $prn;
+      $options = AnonymousSampleLanguageRedirect::options();
+      $options['query'] = $query;
+      return $this->redirect('sentinel_portal_sample.anonymous_submit', [], $options);
+    }
 
     // PRN is mandatory in query string
     if (empty($prn)) {
       return [
-        '#title' => $this->t('Invalid QR Code'),
+        '#title' => AnonymousSampleWizardProgress::trans('Invalid QR Code'),
         'error_message' => [
           '#markup' => '<div class="messages messages--error">' .
-            '<p><strong>' . $this->t('Invalid QR, please scan the correct QR') . '</strong></p>' .
-            '<p>' . $this->t('The QR code is missing or invalid. Please scan the correct QR code from your pack.') . '</p>' .
+            '<p><strong>' . AnonymousSampleWizardProgress::trans('Invalid QR, please scan the correct QR') . '</strong></p>' .
+            '<p>' . AnonymousSampleWizardProgress::trans('The QR code is missing or invalid. Please scan the correct QR code from your pack.') . '</p>' .
             '</div>',
         ],
       ];
@@ -444,41 +482,120 @@ class SentinelSampleController extends ControllerBase {
         if ($has_company_address && $has_system_address) {
           // Sample is complete - show message
           return [
-            '#title' => $this->t('Sample Already Submitted'),
+            '#title' => AnonymousSampleWizardProgress::trans('Sample Already Submitted'),
             'message' => [
               '#markup' => '<div class="messages messages--warning">' .
-                '<p><strong>' . $this->t('This record already exists.') . '</strong></p>' .
-                '<p>' . $this->t('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+                '<p><strong>' . AnonymousSampleWizardProgress::trans('This record already exists.') . '</strong></p>' .
+                '<p>' . AnonymousSampleWizardProgress::trans('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
                   '@prn' => $prn,
                 ]) . '</p>' .
                 '</div>',
             ],
           ];
         }
-        else {
-          // Sample exists but missing addresses - redirect to details form
-          $url = Url::fromRoute('sentinel_portal_sample.anonymous_details', [
-            'sample_id' => $sample_id,
-          ])->setAbsolute(TRUE);
-          return new RedirectResponse($url->toString());
-        }
       }
     }
 
-    // PRN exists but sample doesn't exist - show normal submission form
     $form = $this->formBuilder()->getForm('\Drupal\sentinel_portal_sample\Form\AnonymousSampleSubmissionForm');
     return $form;
   }
 
   /**
-   * Thank you page for anonymous sample submission.
-   *
-   * @return array
-   *   A renderable array.
+   * Legacy /sample/company/{token} → PRN-based company step.
    */
-  public function thankYou() {
+  public function redirectLegacyCompanyRoute($token = NULL) {
+    return $this->redirectLegacyWizardRoute($token, 'sentinel_portal_sample.anonymous_submit_company');
+  }
+
+  /**
+   * Legacy /sample/individual/{token} → PRN-based individual step.
+   */
+  public function redirectLegacyIndividualRoute($token = NULL) {
+    return $this->redirectLegacyWizardRoute($token, 'sentinel_portal_sample.anonymous_submit_individual');
+  }
+
+  /**
+   * Legacy /sample/details/{token} → PRN-based property step.
+   */
+  public function redirectLegacyDetailsRoute($token = NULL) {
+    return $this->redirectLegacyWizardRoute($token, 'sentinel_portal_sample.anonymous_submit_other_details');
+  }
+
+  /**
+   * Redirects old token URLs to the matching ?prn= submit route.
+   */
+  protected function redirectLegacyWizardRoute($token, string $target_route): RedirectResponse {
+    $prn = $this->resolvePrnFromLegacyToken((string) $token);
+    if ($prn === '') {
+      return new RedirectResponse(Url::fromRoute('<front>')->setAbsolute()->toString());
+    }
+    $url = Url::fromRoute(
+      $target_route,
+      [],
+      AnonymousSampleWizardProgress::prnRedirectOptions($prn)
+    )->setAbsolute();
+    return new RedirectResponse($url->toString());
+  }
+
+  /**
+   * Resolves PRN from a numeric sample id or draft session token.
+   */
+  protected function resolvePrnFromLegacyToken(string $token): string {
+    $token = trim($token);
+    if ($token === '') {
+      return '';
+    }
+    if (str_starts_with($token, 'draft_')) {
+      $draft = \Drupal::request()->getSession()->get('sentinel_draft_' . $token, []);
+      if (is_array($draft) && !empty($draft['pack_reference_number'])) {
+        return trim((string) $draft['pack_reference_number']);
+      }
+      return '';
+    }
+    if (ctype_digit($token)) {
+      $sample = $this->entityTypeManager()->getStorage('sentinel_sample')->load((int) $token);
+      if ($sample && $sample->hasField('pack_reference_number') && !$sample->get('pack_reference_number')->isEmpty()) {
+        return trim((string) $sample->get('pack_reference_number')->value);
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Thank you page for anonymous sample submission.
+   */
+  public function thankYou(Request $request) {
+    $sid = $request->query->get('sid');
+    $flow_hint = NULL;
+    if ($sid !== NULL && $sid !== '') {
+      $sample = $this->entityTypeManager()->getStorage('sentinel_sample')->load((int) $sid);
+      if ($sample && $sample->hasField('user_type') && !$sample->get('user_type')->isEmpty()) {
+        $flow_hint = AnonymousSampleWizardProgress::normalizeUserTypeKey((string) $sample->get('user_type')->value);
+      }
+    }
+
     return [
-      '#title' => $this->t('Thank you! Your details have been submitted successfully. The sample report will be sent to the email address you provided.'),
+      '#title' => AnonymousSampleWizardProgress::trans('Submission complete'),
+      'message' => [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['sentinel-anonymous-thankyou']],
+        'icon' => [
+          '#markup' => '<p class="sentinel-anonymous-thankyou__icon" aria-hidden="true">✅</p>',
+        ],
+        'text' => [
+          '#markup' => '<p class="sentinel-anonymous-thankyou__lead"><strong>' .
+            Html::escape(AnonymousSampleWizardProgress::trans('Your details have been saved.')) . '</strong></p>' .
+            '<p>' . Html::escape(AnonymousSampleWizardProgress::trans('You can close this page.')) . '</p>',
+        ],
+        'done' => [
+          '#type' => 'link',
+          '#title' => AnonymousSampleWizardProgress::trans('Done'),
+          '#url' => Url::fromRoute('<front>', [], AnonymousSampleLanguageRedirect::options()),
+          '#attributes' => [
+            'class' => ['button', 'button--primary', 'btn', 'btn-success', 'sentinel-anonymous-thankyou__done'],
+          ],
+        ],
+      ],
     ];
   }
 

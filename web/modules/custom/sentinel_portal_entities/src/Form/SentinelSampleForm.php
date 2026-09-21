@@ -312,340 +312,74 @@ class SentinelSampleForm extends ContentEntityForm {
     }
 
 
-    // Pack ID (vid) - The sample revision
-    if ($entity->hasField('vid')) {
-      $form['vid'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Pack ID'),
-        '#default_value' => $entity->get('vid')->value ?: '',
-        '#description' => $this->t('The sample revision'),
-        '#weight' => -100,
-        '#disabled' => TRUE,
-      ];
+    // Hide parent ContentEntityForm widgets we rebuild below (preserve entity values on save).
+    $hide_parent_fields = [
+      'pack_reference_number', 'company_email', 'company_tel', 'customer_id', 'company_name',
+      'company_address1', 'company_address2', 'company_town', 'company_county', 'company_postcode',
+      'field_company_address', 'field_sentinel_sample_address', 'system_6_months', 'system_age',
+      'engineers_code', 'service_call_id', 'installer_name', 'installer_email', 'installer_company',
+      'boiler_manufacturer', 'boiler_type', 'project_id', 'uprn', 'boiler_id', 'system_location',
+      'landlord', 'property_number', 'street', 'property_name', 'town_city', 'postcode', 'county',
+    ];
+    foreach ($hide_parent_fields as $field_name) {
+      if (isset($form[$field_name])) {
+        $form[$field_name]['#access'] = FALSE;
+      }
     }
 
-    // The pack reference number
+    // --- Layout aligned with /portal/sample/submit (SentinelSampleSubmissionForm) ---
+
+    $form['help_text'] = [
+      '#markup' => '<p>' . $this->t('Enter details below and click \'Save\' to submit the pack information. Mandatory fields are marked with a red asterisk (*). Please note that some fields may only be relevant for specific projects/contracts.') . '</p>',
+      '#weight' => -110,
+    ];
+
+    // Pack ID / created / updated / hold state — not on /portal/sample/submit.
+    // // if ($entity->hasField('vid')) {
+    // //   $form['vid'] = [
+    // //     '#type' => 'textfield',
+    // //     '#title' => $this->t('Pack ID'),
+    // //     '#default_value' => $entity->get('vid')->value ?: '',
+    // //     '#description' => $this->t('The sample revision'),
+    // //     '#weight' => -105,
+    // //     '#disabled' => TRUE,
+    // //   ];
+    // // }
+
     $form['pack_reference_number'] = [
       '#type' => 'textfield',
       '#title' => $this->t('The pack reference number'),
       '#default_value' => $entity->get('pack_reference_number')->value ?: '',
       '#maxlength' => 30,
       '#required' => TRUE,
-      '#weight' => -99,
-      '#description' => $this->t('The pack reference number. This can be found at the top of the insert provided with your pack.'),
+      '#weight' => -100,
+      '#attributes' => ['readonly' => 'readonly'],
+      '#description' => $this->t('This pack reference number. This can be found at the top of the main pack/certificate with your pack.'),
     ];
 
-    // Get Company Email value
-    $email_value = '';
-    if ($entity->hasField('company_email') && !$entity->get('company_email')->isEmpty()) {
-      $email_value = $entity->get('company_email')->value ?? '';
+    // // Created / Updated (admin metadata) — not on /portal/sample/submit.
+    // if ($entity->hasField('created')) { ... }
+    // if ($entity->hasField('updated')) { ... }
+    if (isset($form['created'])) {
+      $form['created']['#access'] = FALSE;
+    }
+    if (isset($form['updated'])) {
+      $form['updated']['#access'] = FALSE;
+    }
+    if (isset($form['vid'])) {
+      $form['vid']['#access'] = FALSE;
     }
 
-    // Fieldset: Company Details (start)
-    $form['company_details'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Company Details'),
-      '#weight' => -98,
-      '#after_build' => [[$this, 'reorderCompanyDetailsFields']],
-      // Add Company Email directly to the fieldset
-      'company_email' => [
-        '#type' => 'email',
-        '#title' => $this->t('Company Email'),
-        '#default_value' => $email_value,
-        '#maxlength' => 200,
-        '#required' => FALSE,
-        '#weight' => 1,
-        '#description' => $this->t('Email address of the company managing installation/maintenance. A copy of the SystemCheck report will be made available to this email address.'),
-        '#access' => $entity->hasField('company_email'),
-      ],
-    ];
-
-    // Company Telephone - weight 2 (second)
-    if ($entity->hasField('company_tel')) {
-      if (!isset($form['company_tel'])) {
-        $tel_value = '';
-        if (!$entity->get('company_tel')->isEmpty()) {
-          $tel_value = $entity->get('company_tel')->value ?? '';
-        }
-        $form['company_tel'] = [
-          '#type' => 'textfield',
-          '#title' => $this->t('Company Telephone'),
-          '#default_value' => $tel_value,
-          '#maxlength' => 200,
-          '#required' => FALSE,
-        ];
-      }
-      $form['company_tel']['#group'] = 'company_details';
-      $form['company_tel']['#weight'] = 2;
-      $form['company_tel']['#title'] = $this->t('Company Telephone');
-      $form['company_tel']['#description'] = $this->t('Telephone number of the company managing installation/maintenance for the system.');
-      $form['company_tel']['#access'] = TRUE;
-      unset($form['company_tel']['#access_callback']);
-    }
-
-    // Sentinel Customer ID - weight 3 (third)
-    if ($entity->hasField('customer_id')) {
-      if (!isset($form['customer_id'])) {
-        $customer_id_value = '';
-        if (!$entity->get('customer_id')->isEmpty()) {
-          $customer_id_value = $entity->get('customer_id')->value ?? '';
-        }
-        $form['customer_id'] = [
-          '#type' => 'textfield',
-          '#title' => $this->t('Sentinel Customer ID'),
-          '#default_value' => $customer_id_value,
-          '#maxlength' => 200,
-          '#required' => FALSE,
-        ];
-      }
-      $form['customer_id']['#group'] = 'company_details';
-      $form['customer_id']['#weight'] = 3;
-      $form['customer_id']['#title'] = $this->t('Sentinel Customer ID');
-      $form['customer_id']['#description'] = $this->t('Your Sentinel Unique Customer Reference number (UCR). This can be found in your account settings.');
-      $form['customer_id']['#access'] = TRUE;
-      unset($form['customer_id']['#access_callback']);
-    }
-
-    // Country - Get from entity reference field or database
-    $company_country_value = 'GB'; // Default to GB
-    if ($entity->hasField('field_company_address') && !$entity->get('field_company_address')->isEmpty()) {
-      $address_entity = $entity->get('field_company_address')->entity;
-      if ($address_entity && $address_entity->hasField('field_address')) {
-        $address_item = $address_entity->get('field_address')->first();
-        if ($address_item && !empty($address_item->country_code)) {
-          $company_country_value = $address_item->country_code;
-        }
-      }
-    }
-    // If not found, try database
-    if ($company_country_value === 'GB' && !$entity->isNew()) {
-      $database = \Drupal::database();
-      $pid = $entity->id();
-      try {
-        // Try to get from address entity via field_company_address
-        $result = $database->select('sentinel_sample__field_company_address', 'sca')
-          ->fields('sca', ['field_company_address_target_id'])
-          ->condition('sca.entity_id', $pid)
-          ->execute()
-          ->fetchField();
-        if ($result) {
-          $address_result = $database->select('address__field_address', 'a')
-            ->fields('a', ['field_address_country_code'])
-            ->condition('a.entity_id', $result)
-            ->execute()
-            ->fetchField();
-          if ($address_result) {
-            $company_country_value = $address_result;
-          }
-        }
-      } catch (\Exception $e) {
-        // Database query failed, use default
-      }
-    }
-
-    // Fieldset: Company Address (nested in Company Details)
-    $form['company_address'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Company Address'),
-      '#description' => $this->t('Please provide the name and address of the company managing installation/maintenance on this system.'),
-      '#weight' => 4,
-      '#group' => 'company_details',
-      '#after_build' => [[$this, 'reorderCompanyAddressFields']],
-      // Add country field directly to the fieldset
-      'company_country' => [
-        '#type' => 'select',
-        '#title' => $this->t('Company Address Country'),
-        '#options' => $this->getCountryOptions(),
-        '#default_value' => $company_country_value,
-        '#weight' => 0,
-        '#required' => FALSE,
-      ],
-    ];
-
-    // Create direct input fields for company address based on entity definition
-    // Company Name
-    if ($entity->hasField('company_name')) {
-      $company_name_value = '';
-      if (!$entity->get('company_name')->isEmpty()) {
-        $company_name_value = $entity->get('company_name')->value ?? '';
-      }
-      $form['company_name'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Company'),
-        '#default_value' => $company_name_value,
-        '#maxlength' => 255,
-        '#required' => FALSE,
-        '#group' => 'company_address',
-        '#weight' => 2,
-      ];
-    }
-
-    // Company Address 1
-    if ($entity->hasField('company_address1')) {
-      $address1_value = '';
-      if (!$entity->get('company_address1')->isEmpty()) {
-        $address1_value = $entity->get('company_address1')->value ?? '';
-      }
-      $form['company_address1'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Address 1'),
-        '#default_value' => $address1_value,
-        '#maxlength' => 255,
-        '#required' => FALSE,
-        '#group' => 'company_address',
-        '#weight' => 3,
-      ];
-    }
-
-    // Company Address 2 (Property name)
-    if ($entity->hasField('company_address2')) {
-      $address2_value = '';
-      if (!$entity->get('company_address2')->isEmpty()) {
-        $address2_value = $entity->get('company_address2')->value ?? '';
-      }
-      $form['company_address2'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Property name'),
-        '#default_value' => $address2_value,
-        '#maxlength' => 255,
-        '#required' => FALSE,
-        '#group' => 'company_address',
-        '#weight' => 4,
-      ];
-    }
-
-    // Company Town/City
-    if ($entity->hasField('company_town')) {
-      $town_value = '';
-      if (!$entity->get('company_town')->isEmpty()) {
-        $town_value = $entity->get('company_town')->value ?? '';
-      }
-      $form['company_town'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Town/City'),
-        '#default_value' => $town_value,
-        '#maxlength' => 255,
-        '#required' => FALSE,
-        '#group' => 'company_address',
-        '#weight' => 5,
-      ];
-    }
-
-    // Company County
-    if ($entity->hasField('company_county')) {
-      $county_value = '';
-      if (!$entity->get('company_county')->isEmpty()) {
-        $county_value = $entity->get('company_county')->value ?? '';
-      }
-      $form['company_county'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('County'),
-        '#default_value' => $county_value,
-        '#maxlength' => 255,
-        '#required' => FALSE,
-        '#group' => 'company_address',
-        '#weight' => 6,
-      ];
-    }
-
-    // Company Postcode
-    if ($entity->hasField('company_postcode')) {
-      $postcode_value = '';
-      if (!$entity->get('company_postcode')->isEmpty()) {
-        $postcode_value = $entity->get('company_postcode')->value ?? '';
-      }
-      $form['company_postcode'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Postcode'),
-        '#default_value' => $postcode_value,
-        '#maxlength' => 255,
-        '#required' => FALSE,
-        '#group' => 'company_address',
-        '#weight' => 7,
-      ];
-    }
-
-    // Also handle entity reference field if it exists (for backward compatibility)
-    if ($entity->hasField('field_company_address') && isset($form['field_company_address'])) {
-      $form['field_company_address']['#group'] = 'company_address';
-      $form['field_company_address']['#weight'] = 7;
-      $form['field_company_address']['#access'] = TRUE;
-      unset($form['field_company_address']['#access_callback']);
-    }
-
-    // Created field
-    if ($entity->hasField('created')) {
-      // Remove existing field structure completely
-      unset($form['created']);
-      
-      // Get value from entity or database
-      $date_value = NULL;
-      if (!$entity->get('created')->isEmpty()) {
-        $date_value = $entity->get('created')->value;
-      }
-      if (!$date_value && !$entity->isNew()) {
-        $date_value = $this->getDateValueFromDatabase('created', $entity->id());
-      }
-      $formatted_date = $this->formatDateValue($date_value);
-
-      // Create simple date input
-      $form['created'] = [
-        '#type' => 'date',
-        '#title' => $this->t('Created'),
-        '#description' => $this->t('E.g., 16-11-2025 When this record was created.'),
-        '#default_value' => $formatted_date,
-        '#weight' => -97,
-        '#disabled' => TRUE,
-      ];
-    }
-
-    // Updated field
-    if ($entity->hasField('updated')) {
-      // Remove existing field structure completely
-      unset($form['updated']);
-      
-      // Get value from entity or database
-      $date_value = NULL;
-      if (!$entity->get('updated')->isEmpty()) {
-        $date_value = $entity->get('updated')->value;
-      }
-      if (!$date_value && !$entity->isNew()) {
-        $date_value = $this->getDateValueFromDatabase('updated', $entity->id());
-      }
-      $formatted_date = $this->formatDateValue($date_value);
-
-      // Create simple date input
-      $form['updated'] = [
-        '#type' => 'date',
-        '#title' => $this->t('Updated'),
-        '#description' => $this->t('E.g., 16-11-2025 When this record was last updated.'),
-        '#default_value' => $formatted_date,
-        '#weight' => -96,
-        '#disabled' => TRUE,
-      ];
-    }
-
-    // The UCR - directly placed between updated and sample hold state
-    if ($entity->hasField('ucr')) {
-      $form['ucr']['#title'] = $this->t('The UCR');
-      $form['ucr']['#description'] = $this->t('The unique customer record.');
-    }
-    // The UCR - directly placed between updated and sample hold state
     if (isset($form['ucr'])) {
       $form['ucr']['#access'] = FALSE;
     }
-    // Sample hold state
-    $form['sentinel_sample_hold_state_target_id'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Sample hold state'),
-      '#options' => $this->getHoldStateOptions(),
-      '#empty_option' => $this->t('- None -'),
-      '#default_value' => $entity->get('sentinel_sample_hold_state_target_id')->value ?: NULL,
-      '#weight' => -94,
-    ];
 
-    // Hide Old Pack Reference Number field (not pack_reference_number)
-    // Use #access => FALSE instead of unset to avoid widget errors
+    // // Sample hold state — not on /portal/sample/submit.
+    // $form['sentinel_sample_hold_state_target_id'] = [ ... ];
+    if (isset($form['sentinel_sample_hold_state_target_id'])) {
+      $form['sentinel_sample_hold_state_target_id']['#access'] = FALSE;
+    }
+
     $old_pack_field_names = [
       'old_pack_reference_number',
       'field_old_pack_reference_number',
@@ -658,257 +392,187 @@ class SentinelSampleForm extends ContentEntityForm {
       }
     }
 
-    // Get values for fields that will be added directly to job_details fieldset
-    // Installer Email value
-    $installer_email_value = '';
-    if ($entity->hasField('installer_email') && !$entity->get('installer_email')->isEmpty()) {
-      $installer_email_value = $entity->get('installer_email')->value ?? '';
+    // Company fields (flat — same order as portal submit form)
+    $customer_id_value = '';
+    if ($entity->hasField('customer_id') && !$entity->get('customer_id')->isEmpty()) {
+      $customer_id_value = $entity->get('customer_id')->value ?? '';
     }
-    
-    // Date Sent value
-    $date_sent_value = NULL;
-    $date_sent_formatted = NULL;
-    if ($entity->hasField('date_sent')) {
-      if (!$entity->get('date_sent')->isEmpty()) {
-        $date_sent_value = $entity->get('date_sent')->value;
-      }
-      if (!$date_sent_value && !$entity->isNew()) {
-        $date_sent_value = $this->getDateValueFromDatabase('date_sent', $entity->id());
-      }
-      $date_sent_formatted = $this->formatDateValue($date_sent_value);
-    }
-    
-    // Date Installed value
-    $date_installed_value = NULL;
-    $date_installed_formatted = NULL;
-    if ($entity->hasField('date_installed')) {
-      if (!$entity->get('date_installed')->isEmpty()) {
-        $date_installed_value = $entity->get('date_installed')->value;
-      }
-      if (!$date_installed_value && !$entity->isNew()) {
-        $date_installed_value = $this->getDateValueFromDatabase('date_installed', $entity->id());
-      }
-      $date_installed_formatted = $this->formatDateValue($date_installed_value);
-    }
-
-    // Fieldset: Job Details (start)
-    $form['job_details'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Job Details'),
+    $form['sentinel_customer_id'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Sentinel Company ID'),
+      '#default_value' => $customer_id_value,
+      '#description' => $this->t('Enter your Sentinel UCR number (Unique Customer Reference Number). This number is provided by Sentinel'),
       '#weight' => -90,
-      // Add Installer Email directly to the fieldset
-      'installer_email' => [
-        '#type' => 'email',
-        '#title' => $this->t('Installer Email'),
-        '#default_value' => $installer_email_value,
-        '#maxlength' => 255,
-        '#required' => FALSE,
-        '#weight' => 5,
-        '#description' => $this->t('The email address of the installer who conducted the work and subsequent SystemCheck.'),
-        '#access' => $entity->hasField('installer_email'),
-      ],
-      // Add Date Sent directly to the fieldset
-      'date_sent' => [
-        '#type' => 'date',
-        '#title' => $this->t('Date Sent'),
-        '#description' => $this->t('E.g., 16-11-2025 Date that the water sample was sent to Sentinel.'),
-        '#default_value' => $date_sent_formatted,
-        '#weight' => 11,
-        '#access' => $entity->hasField('date_sent'),
-      ],
-      // Add Date Installed directly to the fieldset
-      'date_installed' => [
-        '#type' => 'date',
-        '#title' => $this->t('Date Installed'),
-        '#description' => $this->t('E.g., 16-11-2025 Date that the boiler was installed.'),
-        '#default_value' => $date_installed_formatted,
-        '#weight' => 14,
-        '#access' => $entity->hasField('date_installed'),
-      ],
+      '#access' => $entity->hasField('customer_id'),
     ];
 
-    // System > 6 Months Old?
-    if ($entity->hasField('system_6_months')) {
-      $form['system_6_months']['#group'] = 'job_details';
-      $form['system_6_months']['#weight'] = 1;
-      $form['system_6_months']['#title'] = $this->t('System > 6 Months Old?');
-      $form['system_6_months']['#description'] = $this->t('Is the system older than 6 months?');
+    $company_name_value = '';
+    if ($entity->hasField('company_name') && !$entity->get('company_name')->isEmpty()) {
+      $company_name_value = $entity->get('company_name')->value ?? '';
     }
-
-    // Engineers Code
-    if ($entity->hasField('engineers_code')) {
-      $form['engineers_code']['#group'] = 'job_details';
-      $form['engineers_code']['#weight'] = 2;
-      $form['engineers_code']['#title'] = $this->t('Engineers Code');
-      $form['engineers_code']['#description'] = $this->t('The engineers code of the boiler.');
-    }
-
-    // Service Call ID
-    if ($entity->hasField('service_call_id')) {
-      $form['service_call_id']['#group'] = 'job_details';
-      $form['service_call_id']['#weight'] = 3;
-      $form['service_call_id']['#title'] = $this->t('Service Call ID');
-      $form['service_call_id']['#description'] = $this->t('The service call ID of the boiler.');
-    }
-
-    // Installer Name
-    if ($entity->hasField('installer_name')) {
-      if (!isset($form['installer_name'])) {
-        $installer_name_value = '';
-        if (!$entity->get('installer_name')->isEmpty()) {
-          $installer_name_value = $entity->get('installer_name')->value ?? '';
-        }
-        $form['installer_name'] = [
-          '#type' => 'textfield',
-          '#title' => $this->t('Installer Name'),
-          '#default_value' => $installer_name_value,
-          '#maxlength' => 255,
-          '#required' => FALSE,
-        ];
-      }
-      $form['installer_name']['#group'] = 'job_details';
-      $form['installer_name']['#weight'] = 4;
-      $form['installer_name']['#title'] = $this->t('Installer Name');
-      $form['installer_name']['#description'] = $this->t('Name of the individual engineer who conducted the work and subsequent SystemCheck.');
-      $form['installer_name']['#access'] = TRUE;
-      unset($form['installer_name']['#access_callback']);
-    }
-
-
-    // Installer Company
-    if ($entity->hasField('installer_company')) {
-      if (!isset($form['installer_company'])) {
-        $installer_company_value = '';
-        if (!$entity->get('installer_company')->isEmpty()) {
-          $installer_company_value = $entity->get('installer_company')->value ?? '';
-        }
-        $form['installer_company'] = [
-          '#type' => 'textfield',
-          '#title' => $this->t('Installer Company'),
-          '#default_value' => $installer_company_value,
-          '#maxlength' => 255,
-          '#required' => FALSE,
-        ];
-      }
-      $form['installer_company']['#group'] = 'job_details';
-      $form['installer_company']['#weight'] = 6;
-      $form['installer_company']['#title'] = $this->t('Installer Company');
-      $form['installer_company']['#description'] = $this->t('Please provide the name of the company managing installation/maintenance on this system.');
-      $form['installer_company']['#access'] = TRUE;
-      unset($form['installer_company']['#access_callback']);
-    }
-
-    // Boiler Manufacturer
-    if ($entity->hasField('boiler_manufacturer')) {
-      $form['boiler_manufacturer']['#group'] = 'job_details';
-      $form['boiler_manufacturer']['#weight'] = 7;
-      $form['boiler_manufacturer']['#title'] = $this->t('Boiler Manufacturer');
-      $form['boiler_manufacturer']['#description'] = $this->t('Manufacturer of the boiler.');
-    }
-
-    // System Age
-    if ($entity->hasField('system_age')) {
-      $form['system_age']['#group'] = 'job_details';
-      $form['system_age']['#weight'] = 8;
-      $form['system_age']['#title'] = $this->t('System Age');
-      $form['system_age']['#description'] = $this->t('The age of the system in months.');
-    }
-
-    // Boiler Type
-    if ($entity->hasField('boiler_type')) {
-      $form['boiler_type']['#group'] = 'job_details';
-      $form['boiler_type']['#weight'] = 9;
-      $form['boiler_type']['#title'] = $this->t('Boiler Type');
-      $form['boiler_type']['#description'] = $this->t('The type of boiler fitted (ie. combi, system)');
-    }
-
-    // Project ID
-    if ($entity->hasField('project_id')) {
-      if (!isset($form['project_id'])) {
-        $project_id_value = '';
-        if (!$entity->get('project_id')->isEmpty()) {
-          $project_id_value = $entity->get('project_id')->value ?? '';
-        }
-        $form['project_id'] = [
-          '#type' => 'textfield',
-          '#title' => $this->t('Project ID'),
-          '#default_value' => $project_id_value,
-          '#maxlength' => 255,
-          '#required' => FALSE,
-        ];
-      }
-      $form['project_id']['#group'] = 'job_details';
-      $form['project_id']['#weight'] = 10;
-      $form['project_id']['#title'] = $this->t('Project ID');
-      $form['project_id']['#description'] = $this->t('The project ID. Required for claiming boiler manufacturer contract support.');
-      $form['project_id']['#access'] = TRUE;
-      unset($form['project_id']['#access_callback']);
-    }
-
-
-    // UPRN
-    if ($entity->hasField('uprn')) {
-      $form['uprn']['#group'] = 'job_details';
-      $form['uprn']['#weight'] = 12;
-      $form['uprn']['#title'] = $this->t('UPRN');
-      $form['uprn']['#description'] = $this->t('Unique Property Reference Number for the system location. Required for claiming contract support and asset register compatibility.');
-    }
-
-    // Boiler ID
-    if ($entity->hasField('boiler_id')) {
-      $form['boiler_id']['#group'] = 'job_details';
-      $form['boiler_id']['#weight'] = 13;
-      $form['boiler_id']['#title'] = $this->t('Boiler ID');
-      $form['boiler_id']['#description'] = $this->t('Boiler ID number as provided by the boiler manufacturer.');
-    }
-
-
-    // Fieldset: System Details (start)
-    $form['system_details'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('System Details'),
-      '#weight' => -80,
+    $form['company'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Company Name'),
+      '#default_value' => $company_name_value,
+      '#maxlength' => 255,
+      '#weight' => -89,
+      '#access' => $entity->hasField('company_name'),
     ];
 
-    // System Location
-    if ($entity->hasField('system_location')) {
-      $form['system_location']['#group'] = 'system_details';
-      $form['system_location']['#weight'] = 1;
-      $form['system_location']['#title'] = $this->t('System Location');
-      $form['system_location']['#description'] = $this->t('A string showing the address, used by some pack types.');
+    $email_value = '';
+    if ($entity->hasField('company_email') && !$entity->get('company_email')->isEmpty()) {
+      $email_value = $entity->get('company_email')->value ?? '';
+    }
+    $form['company_email'] = [
+      '#type' => 'email',
+      '#title' => $this->t('Company Email'),
+      '#default_value' => $email_value,
+      '#maxlength' => 200,
+      '#required' => FALSE,
+      '#description' => $this->t('Email address of the company managing installation/maintenance. A copy of the Sentinel Pack report will be made available to this email address.'),
+      '#weight' => -88,
+      '#access' => $entity->hasField('company_email'),
+    ];
+
+    $tel_value = '';
+    if ($entity->hasField('company_tel') && !$entity->get('company_tel')->isEmpty()) {
+      $tel_value = $entity->get('company_tel')->value ?? '';
+    }
+    $form['company_telephone'] = [
+      '#type' => 'tel',
+      '#title' => $this->t('Company Telephone'),
+      '#default_value' => $tel_value,
+      '#maxlength' => 200,
+      '#description' => $this->t('Telephone number of the company managing installation/maintenance for this system.'),
+      '#weight' => -87,
+      '#access' => $entity->hasField('company_tel'),
+    ];
+
+    $company_country_value = 'GB';
+    if ($entity->hasField('field_company_address') && !$entity->get('field_company_address')->isEmpty()) {
+      $address_entity = $entity->get('field_company_address')->entity;
+      if ($address_entity && $address_entity->hasField('field_address')) {
+        $address_item = $address_entity->get('field_address')->first();
+        if ($address_item && !empty($address_item->country_code)) {
+          $company_country_value = $address_item->country_code;
+        }
+      }
+    }
+    if ($company_country_value === 'GB' && !$entity->isNew()) {
+      $database = \Drupal::database();
+      try {
+        $result = $database->select('sentinel_sample__field_company_address', 'sca')
+          ->fields('sca', ['field_company_address_target_id'])
+          ->condition('sca.entity_id', $entity->id())
+          ->execute()
+          ->fetchField();
+        if ($result) {
+          $address_result = $database->select('address__field_address', 'a')
+            ->fields('a', ['field_address_country_code'])
+            ->condition('a.entity_id', $result)
+            ->execute()
+            ->fetchField();
+          if ($address_result) {
+            $company_country_value = $address_result;
+          }
+        }
+      }
+      catch (\Exception $e) {
+        // Keep default.
+      }
     }
 
-    // Landlord
-    if ($entity->hasField('landlord')) {
-      $form['landlord']['#group'] = 'system_details';
-      $form['landlord']['#weight'] = 2;
-      $form['landlord']['#title'] = $this->t('Landlord');
-      $form['landlord']['#description'] = $this->t('Name of the landlord/owner of the property. This may be an organisation or an individual.');
-    }
+    $form['company_country'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Country'),
+      '#options' => $this->getCountryOptions(),
+      '#default_value' => $company_country_value,
+      '#weight' => -86,
+    ];
 
-    // Order: Country (0), Property number (2), Address 1 (3), Property name (4), Town/City (5), Postcode (6)
-    // Note: These may use entity reference fields - for now using simple fields
-    
-    // Country - Get from entity reference field or database
-    $address_country_value = 'GB'; // Default to GB
+    $address1_value = '';
+    if ($entity->hasField('company_address1') && !$entity->get('company_address1')->isEmpty()) {
+      $address1_value = $entity->get('company_address1')->value ?? '';
+    }
+    $form['company_address_1'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Address 1'),
+      '#default_value' => $address1_value,
+      '#maxlength' => 255,
+      '#weight' => -85,
+      '#access' => $entity->hasField('company_address1'),
+    ];
+
+    // Commented out like SentinelSampleSubmissionForm.
+    // $form['company_property_name'] = [ ... ];
+    // $form['company_property_number'] = [ ... ];
+
+    $town_value = '';
+    if ($entity->hasField('company_town') && !$entity->get('company_town')->isEmpty()) {
+      $town_value = $entity->get('company_town')->value ?? '';
+    }
+    $form['company_town_city'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Town/City'),
+      '#default_value' => $town_value,
+      '#maxlength' => 255,
+      '#weight' => -84,
+      '#access' => $entity->hasField('company_town'),
+    ];
+
+    $postcode_value = '';
+    if ($entity->hasField('company_postcode') && !$entity->get('company_postcode')->isEmpty()) {
+      $postcode_value = $entity->get('company_postcode')->value ?? '';
+    }
+    $form['company_postcode'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Postcode'),
+      '#default_value' => $postcode_value,
+      '#maxlength' => 255,
+      '#weight' => -83,
+      '#access' => $entity->hasField('company_postcode'),
+    ];
+
+    // Property address defaults from entity / address reference.
+    $address_country_value = 'GB';
+    $street_value = '';
+    $town_city_value = '';
+    $sample_postcode_value = '';
+    if ($entity->hasField('street') && !$entity->get('street')->isEmpty()) {
+      $street_value = $entity->get('street')->value ?? '';
+    }
+    if ($entity->hasField('town_city') && !$entity->get('town_city')->isEmpty()) {
+      $town_city_value = $entity->get('town_city')->value ?? '';
+    }
+    if ($entity->hasField('postcode') && !$entity->get('postcode')->isEmpty()) {
+      $sample_postcode_value = $entity->get('postcode')->value ?? '';
+    }
     if ($entity->hasField('field_sentinel_sample_address') && !$entity->get('field_sentinel_sample_address')->isEmpty()) {
       $address_entity = $entity->get('field_sentinel_sample_address')->entity;
       if ($address_entity && $address_entity->hasField('field_address')) {
         $address_item = $address_entity->get('field_address')->first();
-        if ($address_item && !empty($address_item->country_code)) {
-          $address_country_value = $address_item->country_code;
+        if ($address_item) {
+          if (!empty($address_item->country_code)) {
+            $address_country_value = $address_item->country_code;
+          }
+          if ($street_value === '' && !empty($address_item->address_line1)) {
+            $street_value = $address_item->address_line1;
+          }
+          if ($town_city_value === '' && !empty($address_item->locality)) {
+            $town_city_value = $address_item->locality;
+          }
+          if ($sample_postcode_value === '' && !empty($address_item->postal_code)) {
+            $sample_postcode_value = $address_item->postal_code;
+          }
         }
       }
     }
-    // If not found, try database
     if ($address_country_value === 'GB' && !$entity->isNew()) {
       $database = \Drupal::database();
-      $pid = $entity->id();
       try {
-        // Try to get from address entity via field_sentinel_sample_address
         $result = $database->select('sentinel_sample__field_sentinel_sample_address', 'ssa')
           ->fields('ssa', ['field_sentinel_sample_address_target_id'])
-          ->condition('ssa.entity_id', $pid)
+          ->condition('ssa.entity_id', $entity->id())
           ->execute()
           ->fetchField();
         if ($result) {
@@ -921,80 +585,255 @@ class SentinelSampleForm extends ContentEntityForm {
             $address_country_value = $address_result;
           }
         }
-      } catch (\Exception $e) {
-        // Database query failed, use default
+      }
+      catch (\Exception $e) {
+        // Keep default.
       }
     }
 
-    // Fieldset: Address (nested in System Details)
-    $form['address'] = [
+    $date_sent_formatted = NULL;
+    if ($entity->hasField('date_sent')) {
+      $date_sent_value = !$entity->get('date_sent')->isEmpty() ? $entity->get('date_sent')->value : NULL;
+      if (!$date_sent_value && !$entity->isNew()) {
+        $date_sent_value = $this->getDateValueFromDatabase('date_sent', $entity->id());
+      }
+      $date_sent_formatted = $this->formatDateValue($date_sent_value);
+    }
+    $date_installed_formatted = NULL;
+    if ($entity->hasField('date_installed')) {
+      $date_installed_value = !$entity->get('date_installed')->isEmpty() ? $entity->get('date_installed')->value : NULL;
+      if (!$date_installed_value && !$entity->isNew()) {
+        $date_installed_value = $this->getDateValueFromDatabase('date_installed', $entity->id());
+      }
+      $date_installed_formatted = $this->formatDateValue($date_installed_value);
+    }
+
+    $system_age_default = 'LESS6';
+    if ($entity->hasField('system_6_months') && !$entity->get('system_6_months')->isEmpty()) {
+      $raw_age = trim((string) $entity->get('system_6_months')->value);
+      if (in_array($raw_age, ['LESS6', 'MORE6'], TRUE)) {
+        $system_age_default = $raw_age;
+      }
+    }
+
+    $installer_email_value = '';
+    if ($entity->hasField('installer_email') && !$entity->get('installer_email')->isEmpty()) {
+      $installer_email_value = $entity->get('installer_email')->value ?? '';
+    }
+    $installer_name_value = '';
+    if ($entity->hasField('installer_name') && !$entity->get('installer_name')->isEmpty()) {
+      $installer_name_value = $entity->get('installer_name')->value ?? '';
+    }
+    $installer_company_value = '';
+    if ($entity->hasField('installer_company') && !$entity->get('installer_company')->isEmpty()) {
+      $installer_company_value = $entity->get('installer_company')->value ?? '';
+    }
+    $boiler_id_value = '';
+    if ($entity->hasField('boiler_id') && !$entity->get('boiler_id')->isEmpty()) {
+      $boiler_id_value = $entity->get('boiler_id')->value ?? '';
+    }
+    $boiler_manufacturer_value = '';
+    if ($entity->hasField('boiler_manufacturer') && !$entity->get('boiler_manufacturer')->isEmpty()) {
+      $boiler_manufacturer_value = $entity->get('boiler_manufacturer')->value ?? '';
+    }
+    $project_id_value = '';
+    if ($entity->hasField('project_id') && !$entity->get('project_id')->isEmpty()) {
+      $project_id_value = $entity->get('project_id')->value ?? '';
+    }
+
+    // Property Details (same structure/labels as portal submit form)
+    $form['job_details'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('Address'),
-      '#description' => $this->t('The full address of where the system is located.'),
-      '#weight' => 3,
-      '#group' => 'system_details',
-      '#after_build' => [[$this, 'reorderAddressFields']],
-      // Add country field directly to the fieldset
-      'address_country' => [
-        '#type' => 'select',
-        '#title' => $this->t('Address Country'),
-        '#options' => $this->getCountryOptions(),
-        '#default_value' => $address_country_value,
-        '#weight' => 0,
-        '#required' => FALSE,
+      '#title' => $this->t('Property Details'),
+      '#weight' => -70,
+    ];
+
+    $form['job_details']['sample_address_add'] = [
+      '#type' => 'button',
+      '#value' => $this->t('Enter address'),
+      '#attributes' => [
+        'class' => ['sample-address-add-button'],
+        'style' => 'display: none;',
+      ],
+      '#weight' => 1,
+    ];
+
+    $form['job_details']['address_fields'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'portal-sample-address-fields',
+        'class' => ['sample-address-fields'],
+        'style' => 'display: block;',
+      ],
+      '#weight' => 2,
+    ];
+
+    $form['job_details']['address_fields']['country'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Country'),
+      '#options' => $this->getCountryOptions(),
+      '#default_value' => $address_country_value,
+    ];
+    $form['job_details']['address_fields']['address_1'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Address 1'),
+      '#default_value' => $street_value,
+      '#maxlength' => 255,
+      '#access' => $entity->hasField('street'),
+    ];
+    // Commented out like SentinelSampleSubmissionForm.
+    // $form['job_details']['address_fields']['property_name'] = [ ... ];
+    // $form['job_details']['address_fields']['property_number'] = [ ... ];
+    $form['job_details']['address_fields']['town_city'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Town/City'),
+      '#default_value' => $town_city_value,
+      '#maxlength' => 255,
+      '#access' => $entity->hasField('town_city'),
+    ];
+    $form['job_details']['address_fields']['postcode'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Postcode'),
+      '#default_value' => $sample_postcode_value,
+      '#maxlength' => 255,
+      '#access' => $entity->hasField('postcode'),
+    ];
+    $form['job_details']['address_fields']['sample_address_close'] = [
+      '#type' => 'button',
+      '#value' => $this->t('Close address'),
+      '#attributes' => [
+        'class' => ['sample-address-close-button'],
       ],
     ];
 
-    // Also handle entity reference field if it exists (for backward compatibility)
-    if ($entity->hasField('field_sentinel_sample_address') && isset($form['field_sentinel_sample_address'])) {
-      $form['field_sentinel_sample_address']['#group'] = 'address';
-      $form['field_sentinel_sample_address']['#weight'] = 1;
-    }
-    
-    // County field (if exists, keep it separate from country)
-    if ($entity->hasField('county')) {
-      $form['county']['#group'] = 'address';
-      $form['county']['#weight'] = 7;
-      $form['county']['#title'] = $this->t('County');
+    $form['job_details']['system_age'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('Age of system'),
+      '#options' => [
+        'LESS6' => $this->t('Less than 6 months'),
+        'MORE6' => $this->t('More than 6 months'),
+      ],
+      '#default_value' => $system_age_default,
+      '#weight' => 3,
+      '#access' => $entity->hasField('system_6_months'),
+    ];
+
+    $form['job_details']['boiler_id'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Boiler Serial Number'),
+      '#description' => $this->t('Boiler serial number as provided by the boiler manufacturer.'),
+      '#default_value' => $boiler_id_value,
+      '#maxlength' => 255,
+      '#weight' => 4,
+      '#access' => $entity->hasField('boiler_id'),
+    ];
+
+    $form['job_details']['boiler_manufacturer'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Boiler Manufacturer'),
+      '#description' => $this->t('Manufacturer of the boiler.'),
+      '#default_value' => $boiler_manufacturer_value,
+      '#maxlength' => 255,
+      '#weight' => 5,
+      '#access' => $entity->hasField('boiler_manufacturer'),
+    ];
+
+    $form['job_details']['project_id'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Project ID'),
+      '#description' => $this->t('The project ID. Required for claiming boiler manufacturer support.'),
+      '#default_value' => $project_id_value,
+      '#maxlength' => 255,
+      '#weight' => 7,
+      '#access' => $entity->hasField('project_id'),
+    ];
+
+    $form['job_details']['date_sent'] = [
+      '#type' => 'date',
+      '#title' => $this->t('Date Sent'),
+      '#description' => $this->t('Date the boiler sample was sent to Sentinel.'),
+      '#default_value' => $date_sent_formatted,
+      '#weight' => 8,
+      '#access' => $entity->hasField('date_sent'),
+    ];
+
+    $form['job_details']['date_installed'] = [
+      '#type' => 'date',
+      '#title' => $this->t('Boiler Install Date'),
+      '#description' => $this->t('Date the boiler was installed.'),
+      '#default_value' => $date_installed_formatted,
+      '#weight' => 9,
+      '#access' => $entity->hasField('date_installed'),
+    ];
+
+    $form['job_details']['installer_name'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Installer Name'),
+      '#description' => $this->t('Name of the accredited installer who carried out the work and commissioned the pack.'),
+      '#default_value' => $installer_name_value,
+      '#maxlength' => 255,
+      '#required' => FALSE,
+      '#weight' => 10,
+      '#access' => $entity->hasField('installer_name'),
+    ];
+
+    $form['job_details']['installer_email'] = [
+      '#type' => 'email',
+      '#title' => $this->t('Installer Email'),
+      '#description' => $this->t('Email address of the accredited installer who carried out the work and commissioned the pack.'),
+      '#default_value' => $installer_email_value,
+      '#maxlength' => 255,
+      '#weight' => 11,
+      '#access' => $entity->hasField('installer_email'),
+    ];
+
+    $form['job_details']['installer_company'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Installer Company'),
+      '#description' => $this->t('Please provide the name of the company managing installation/maintenance on this system.'),
+      '#default_value' => $installer_company_value,
+      '#maxlength' => 255,
+      '#weight' => 12,
+      '#access' => $entity->hasField('installer_company'),
+    ];
+
+    // Extra fields (engineers_code, uprn, property_name, landlord, etc.) — commented
+    // out like SentinelSampleSubmissionForm (not shown on /portal/sample/submit).
+    // $form['additional_details'] = [ ... ];
+
+    // Match submit form styling / address toggle JS.
+    $form['#attached']['library'][] = 'core/drupal.date';
+    if (\Drupal::moduleHandler()->moduleExists('sentinel_portal_sample')) {
+      $form['#attached']['library'][] = 'sentinel_portal_sample/sample-form';
     }
 
-    // Property number - weight 2
-    if ($entity->hasField('property_number')) {
-      $form['property_number']['#group'] = 'address';
-      $form['property_number']['#weight'] = 2;
-      $form['property_number']['#title'] = $this->t('Property number');
+    // Hide any remaining entity widgets not present on /portal/sample/submit.
+    $allowed_keys = [
+      'help_text',
+      'pack_reference_number',
+      'sentinel_customer_id',
+      'company',
+      'company_email',
+      'company_telephone',
+      'company_country',
+      'company_address_1',
+      'company_town_city',
+      'company_postcode',
+      'job_details',
+      'actions',
+      'form_build_id',
+      'form_token',
+      'form_id',
+    ];
+    foreach (\Drupal\Core\Render\Element::children($form) as $key) {
+      if (!in_array($key, $allowed_keys, TRUE)) {
+        $form[$key]['#access'] = FALSE;
+      }
     }
 
-    // Address 1 - weight 3
-    if ($entity->hasField('street')) {
-      $form['street']['#group'] = 'address';
-      $form['street']['#weight'] = 3;
-      $form['street']['#title'] = $this->t('Address 1');
-    }
-
-    // Property name - weight 4
-    // Note: Property name might not exist as a separate field, may need to check address entity
-    // For now, checking if there's a field for this
-    if ($entity->hasField('property_name')) {
-      $form['property_name']['#group'] = 'address';
-      $form['property_name']['#weight'] = 4;
-      $form['property_name']['#title'] = $this->t('Property name');
-    }
-
-    // Town/City - weight 5
-    if ($entity->hasField('town_city')) {
-      $form['town_city']['#group'] = 'address';
-      $form['town_city']['#weight'] = 5;
-      $form['town_city']['#title'] = $this->t('Town/City');
-    }
-
-    // Postcode - weight 6
-    if ($entity->hasField('postcode')) {
-      $form['postcode']['#group'] = 'address';
-      $form['postcode']['#weight'] = 6;
-      $form['postcode']['#title'] = $this->t('Postcode');
-    }
-
+    // Result Details (lab results, etc.) — commented out to match /portal/sample/submit.
+    // Uncomment the block below to restore Result Details on the admin edit form.
+    if (FALSE) {
     // Get values for fields that will be added directly to result_details fieldset
     // Date Booked In value
     $date_booked_value = NULL;
@@ -1714,6 +1553,7 @@ class SentinelSampleForm extends ContentEntityForm {
       $form['api_created_by']['#description'] = $this->t('API user who created this sample.');
       $form['api_created_by']['#disabled'] = TRUE;
     }
+    } // end if (FALSE) — Result Details disabled to match submit form.
 
     return $form;
   }
@@ -1771,64 +1611,66 @@ class SentinelSampleForm extends ContentEntityForm {
       $this->entity->set('pack_reference_number', (string) $pack_ref);
     }
 
-    // Update Company Email (now nested in company_details fieldset)
+    // Flat company fields (same keys as /portal/sample/submit).
     if ($this->entity->hasField('company_email')) {
-      $company_details_values = $form_state->getValue('company_details');
-      $company_email = isset($company_details_values['company_email']) ? $company_details_values['company_email'] : NULL;
+      $company_email = $form_state->getValue('company_email');
       if ($company_email !== NULL) {
         $this->entity->set('company_email', (string) $company_email);
       }
     }
 
-    // Update Company Telephone
     if ($this->entity->hasField('company_tel')) {
-      $company_tel = $form_state->getValue('company_tel');
+      $company_tel = $form_state->getValue('company_telephone');
+      if ($company_tel === NULL) {
+        $company_tel = $form_state->getValue('company_tel');
+      }
       if ($company_tel !== NULL) {
         $this->entity->set('company_tel', (string) $company_tel);
       }
     }
 
-    // Update Customer ID
     if ($this->entity->hasField('customer_id')) {
-      $customer_id = $form_state->getValue('customer_id');
-      if (!empty($customer_id[0]['value'])) {
-        $this->entity->set('customer_id', $customer_id[0]['value']);
+      $customer_id = $form_state->getValue('sentinel_customer_id');
+      if ($customer_id === NULL) {
+        $customer_id = $form_state->getValue('customer_id');
+        if (is_array($customer_id) && !empty($customer_id[0]['value'])) {
+          $customer_id = $customer_id[0]['value'];
+        }
+      }
+      if ($customer_id !== NULL) {
+        $this->entity->set('customer_id', (string) $customer_id);
       }
     }
 
-    // Update Company Address fields
     if ($this->entity->hasField('company_name')) {
-      $company_name = $form_state->getValue('company_name');
+      $company_name = $form_state->getValue('company');
+      if ($company_name === NULL) {
+        $company_name = $form_state->getValue('company_name');
+      }
       if ($company_name !== NULL) {
         $this->entity->set('company_name', (string) $company_name);
       }
     }
 
     if ($this->entity->hasField('company_address1')) {
-      $company_address1 = $form_state->getValue('company_address1');
+      $company_address1 = $form_state->getValue('company_address_1');
+      if ($company_address1 === NULL) {
+        $company_address1 = $form_state->getValue('company_address1');
+      }
       if ($company_address1 !== NULL) {
         $this->entity->set('company_address1', (string) $company_address1);
       }
     }
 
-    if ($this->entity->hasField('company_address2')) {
-      $company_address2 = $form_state->getValue('company_address2');
-      if ($company_address2 !== NULL) {
-        $this->entity->set('company_address2', (string) $company_address2);
-      }
-    }
+    // company_address2 / company_county — not on /portal/sample/submit (left unchanged).
 
     if ($this->entity->hasField('company_town')) {
-      $company_town = $form_state->getValue('company_town');
+      $company_town = $form_state->getValue('company_town_city');
+      if ($company_town === NULL) {
+        $company_town = $form_state->getValue('company_town');
+      }
       if ($company_town !== NULL) {
         $this->entity->set('company_town', (string) $company_town);
-      }
-    }
-
-    if ($this->entity->hasField('company_county')) {
-      $company_county = $form_state->getValue('company_county');
-      if ($company_county !== NULL) {
-        $this->entity->set('company_county', (string) $company_county);
       }
     }
 
@@ -1839,44 +1681,53 @@ class SentinelSampleForm extends ContentEntityForm {
       }
     }
 
-    // Update Installer Name
-    if ($this->entity->hasField('installer_name')) {
-      $installer_name = $form_state->getValue('installer_name');
-      if ($installer_name !== NULL) {
-        $this->entity->set('installer_name', (string) $installer_name);
-      }
+    $job_details_values = $form_state->getValue('job_details');
+    if (!is_array($job_details_values)) {
+      $job_details_values = [];
+    }
+    $address_fields = isset($job_details_values['address_fields']) && is_array($job_details_values['address_fields'])
+      ? $job_details_values['address_fields']
+      : [];
+
+    // Property address fields (street / town / postcode).
+    if ($this->entity->hasField('street') && array_key_exists('address_1', $address_fields)) {
+      $this->entity->set('street', (string) $address_fields['address_1']);
+    }
+    if ($this->entity->hasField('town_city') && array_key_exists('town_city', $address_fields)) {
+      $this->entity->set('town_city', (string) $address_fields['town_city']);
+    }
+    if ($this->entity->hasField('postcode') && array_key_exists('postcode', $address_fields)) {
+      $this->entity->set('postcode', (string) $address_fields['postcode']);
     }
 
-    // Update Installer Email (now nested in job_details fieldset)
-    if ($this->entity->hasField('installer_email')) {
-      $job_details_values = $form_state->getValue('job_details');
-      $installer_email = isset($job_details_values['installer_email']) ? $job_details_values['installer_email'] : NULL;
-      if ($installer_email !== NULL) {
-        $this->entity->set('installer_email', (string) $installer_email);
-      }
+    // Age of system → system_6_months
+    if ($this->entity->hasField('system_6_months') && array_key_exists('system_age', $job_details_values)) {
+      $this->entity->set('system_6_months', (string) $job_details_values['system_age']);
     }
 
-    // Update Installer Company
-    if ($this->entity->hasField('installer_company')) {
-      $installer_company = $form_state->getValue('installer_company');
-      if ($installer_company !== NULL) {
-        $this->entity->set('installer_company', (string) $installer_company);
-      }
+    if ($this->entity->hasField('boiler_id') && array_key_exists('boiler_id', $job_details_values)) {
+      $this->entity->set('boiler_id', (string) $job_details_values['boiler_id']);
+    }
+    if ($this->entity->hasField('boiler_manufacturer') && array_key_exists('boiler_manufacturer', $job_details_values)) {
+      $this->entity->set('boiler_manufacturer', (string) $job_details_values['boiler_manufacturer']);
+    }
+    if ($this->entity->hasField('project_id') && array_key_exists('project_id', $job_details_values)) {
+      $this->entity->set('project_id', (string) $job_details_values['project_id']);
     }
 
-    // Update Project ID
-    if ($this->entity->hasField('project_id')) {
-      $project_id = $form_state->getValue('project_id');
-      if ($project_id !== NULL) {
-        $this->entity->set('project_id', (string) $project_id);
-      }
+    if ($this->entity->hasField('installer_name') && array_key_exists('installer_name', $job_details_values)) {
+      $this->entity->set('installer_name', (string) $job_details_values['installer_name']);
+    }
+    if ($this->entity->hasField('installer_email') && array_key_exists('installer_email', $job_details_values)) {
+      $this->entity->set('installer_email', (string) $job_details_values['installer_email']);
+    }
+    if ($this->entity->hasField('installer_company') && array_key_exists('installer_company', $job_details_values)) {
+      $this->entity->set('installer_company', (string) $job_details_values['installer_company']);
     }
 
-    // Update Company Country (now nested in company_address fieldset)
-    $company_address_values = $form_state->getValue('company_address');
-    $company_country = isset($company_address_values['company_country']) ? $company_address_values['company_country'] : NULL;
+    // Company country (flat field, same as submit form).
+    $company_country = $form_state->getValue('company_country');
     if ($company_country !== NULL && $company_country !== '') {
-      // Update the address entity reference if it exists
       if ($this->entity->hasField('field_company_address') && !$this->entity->get('field_company_address')->isEmpty()) {
         $address_entity = $this->entity->get('field_company_address')->entity;
         if ($address_entity && $address_entity->hasField('field_address')) {
@@ -1889,11 +1740,9 @@ class SentinelSampleForm extends ContentEntityForm {
       }
     }
 
-    // Update Address Country (now nested in address fieldset)
-    $address_values = $form_state->getValue('address');
-    $address_country = isset($address_values['address_country']) ? $address_values['address_country'] : NULL;
+    // Property country from address_fields.
+    $address_country = $address_fields['country'] ?? NULL;
     if ($address_country !== NULL && $address_country !== '') {
-      // Update the address entity reference if it exists
       if ($this->entity->hasField('field_sentinel_sample_address') && !$this->entity->get('field_sentinel_sample_address')->isEmpty()) {
         $address_entity = $this->entity->get('field_sentinel_sample_address')->entity;
         if ($address_entity && $address_entity->hasField('field_address')) {
@@ -1906,32 +1755,31 @@ class SentinelSampleForm extends ContentEntityForm {
       }
     }
 
-    // Update date fields - convert Y-m-d to datetime format (now nested in job_details fieldset)
-    $job_details_values = $form_state->getValue('job_details');
+    // Update date fields - convert Y-m-d to datetime format (nested in job_details).
     $date_fields = ['date_sent', 'date_installed'];
     foreach ($date_fields as $field_name) {
       if ($this->entity->hasField($field_name)) {
-        $date_value = isset($job_details_values[$field_name]) ? $job_details_values[$field_name] : NULL;
+        $date_value = $job_details_values[$field_name] ?? NULL;
         if ($date_value !== NULL && $date_value !== '') {
-          // Convert Y-m-d to datetime format
           try {
             $date = new \Drupal\Core\Datetime\DrupalDateTime($date_value . ' 00:00:00', 'UTC');
             $this->entity->set($field_name, $date->format('Y-m-d H:i:s'));
           } catch (\Exception $e) {
-            // If conversion fails, set as is
             $this->entity->set($field_name, $date_value);
           }
         }
       }
     }
 
-    // Update hold state
-    $hold_state = $form_state->getValue('sentinel_sample_hold_state_target_id');
-    if ($hold_state === '' || $hold_state === NULL) {
-      $this->entity->set('sentinel_sample_hold_state_target_id', NULL);
-    }
-    else {
-      $this->entity->set('sentinel_sample_hold_state_target_id', (int) $hold_state);
+    // Hold state only when present on the form (currently hidden to match submit).
+    if ($form_state->hasValue('sentinel_sample_hold_state_target_id')) {
+      $hold_state = $form_state->getValue('sentinel_sample_hold_state_target_id');
+      if ($hold_state === '' || $hold_state === NULL) {
+        $this->entity->set('sentinel_sample_hold_state_target_id', NULL);
+      }
+      else {
+        $this->entity->set('sentinel_sample_hold_state_target_id', (int) $hold_state);
+      }
     }
 
     // Find or create client by email and update UCR, client_id, and client_name
@@ -1947,9 +1795,12 @@ class SentinelSampleForm extends ContentEntityForm {
       $company_email = $this->entity->get('company_email')->value ?? '';
     }
     
-    // Get installer_name and company_name from form state
-    $installer_name = $form_state->getValue('installer_name') ?? '';
-    $company_name = $form_state->getValue('company_name') ?? '';
+    // Get installer_name and company_name from form state (submit-form keys).
+    $installer_name = $job_details_values['installer_name'] ?? ($form_state->getValue('installer_name') ?? '');
+    $company_name = $form_state->getValue('company');
+    if ($company_name === NULL || $company_name === '') {
+      $company_name = $form_state->getValue('company_name') ?? '';
+    }
     
     // Get fallback client (current user's client)
     $fallback_client = NULL;

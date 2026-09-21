@@ -4,7 +4,9 @@ namespace Drupal\sentinel_portal_sample\Form;
 
 use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\Element;
 use Drupal\sentinel_portal_entities\Entity\SentinelSample;
+use Drupal\sentinel_portal_sample\AnonymousSampleLanguageRedirect;
 use Drupal\sentinel_portal_entities\Service\SentinelSampleValidation;
 use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
 
@@ -17,6 +19,8 @@ use Drupal\sentinel_portal_entities\Utility\PackTypeFilter;
  * - Updates the sample instead of creating new one
  */
 class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
+
+  use AnonymousSampleEmailValidationTrait;
 
   /**
    * The sample entity being updated.
@@ -142,6 +146,52 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
     // Build the form using parent method
     $form = parent::buildForm($form, $form_state);
 
+    $user_type = '';
+
+if (
+  $this->sample->hasField('user_type')
+  && !$this->sample->get('user_type')->isEmpty()
+) {
+
+  $user_type = $this->sample
+    ->get('user_type')
+    ->value;
+}
+
+if ($user_type == 'individual') {
+
+  unset($form['company_details']);
+
+  $form['individual_details'] = [
+    '#type' => 'fieldset',
+    '#title' => $this->t('Your Details'),
+    '#weight' => -20,
+  ];
+  
+  $form['individual_details']['full_name'] = [
+    '#type' => 'textfield',
+    '#title' => $this->t('Full Name'),
+    '#required' => TRUE,
+  ];
+  
+  $form['individual_details']['email'] = [
+    '#type' => 'email',
+    '#title' => $this->t('Email'),
+    '#required' => TRUE,
+  ];
+  
+  $form['individual_details']['phone'] = [
+    '#type' => 'textfield',
+    '#title' => $this->t('Phone'),
+  ];
+
+}
+
+    $session = $this->getRequest()->getSession();
+    if ($session->get('sentinel_anonymous_company_locked_' . $sample_id) && isset($form['company_details'])) {
+      $this->disableCompanyDetailsSubtree($form['company_details']);
+    }
+
     // Remove pack reference confirm field for anonymous details.
     unset($form['pack_reference_number_confirm']);
 
@@ -238,6 +288,8 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
       return;
     }
 
+    $this->validateAnonymousDetailsFormEmails($form, $form_state);
+
     // Skip client check for anonymous users - they don't have a client
     // Skip PRN validation since it already exists in the sample
     
@@ -259,7 +311,7 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
     }
 
     // Flatten fieldset values to match D7 structure
-    foreach (['company_details', 'system_details', 'job_details'] as $fieldset) {
+    foreach (['company_details', 'system_details', 'job_details', 'individual_details'] as $fieldset) {
       if (isset($form_values[$fieldset]) && is_array($form_values[$fieldset])) {
         foreach ($form_values[$fieldset] as $key => $val) {
           if ($key !== '#type' && $key !== '#title' && $key !== '#weight') {
@@ -272,6 +324,17 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
           }
         }
       }
+    }
+
+    // Map individual contact fields into validation shape expected by company/installer rules.
+    if (!empty($validation_data['full_name'])) {
+      $validation_data['installer_name'] = $validation_data['full_name'];
+    }
+    if (!empty($validation_data['email'])) {
+      $validation_data['installer_email'] = $validation_data['email'];
+    }
+    if (isset($validation_data['phone'])) {
+      $validation_data['company_tel'] = trim((string) $validation_data['phone']);
     }
 
     // Map top-level fields that are already flattened
@@ -417,6 +480,10 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
     // Validate using the validation service (static method)
     $errors = SentinelSampleValidation::validateSample($validation_data);
 
+    foreach (['boiler_manufacturer', 'boiler_id', 'date_installed'] as $optional_field) {
+      unset($errors[$optional_field]);
+    }
+
     // Display validation errors
     foreach ($errors as $field => $message) {
       // Map field names to form element paths if needed
@@ -433,6 +500,30 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
       else {
         $form_state->setErrorByName($form_field, $message);
       }
+    }
+  }
+
+  /**
+   * Validates email fields on the anonymous details form.
+   */
+  protected function validateAnonymousDetailsFormEmails(array &$form, FormStateInterface $form_state): void {
+    $checks = [
+      ['company_details', 'company_email', 'company_details][company_email', TRUE],
+      ['individual_details', 'email', 'individual_details][email', TRUE],
+      ['job_details', 'installer_email', 'job_details][installer_email', FALSE],
+    ];
+    foreach ($checks as [$fieldset, $field, $error_name, $required]) {
+      if (!isset($form[$fieldset][$field]) || !empty($form[$fieldset][$field]['#disabled'])) {
+        continue;
+      }
+      $this->validateEmailFormValue(
+        $form_state,
+        $error_name,
+        $form_state->getValue([$fieldset, $field]),
+        $required,
+        (string) $this->t('Please enter a valid email address.'),
+        (string) $this->t('Email is required.')
+      );
     }
   }
 
@@ -535,9 +626,6 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
     }
     if ($this->sample->hasField('system_age') && !$this->sample->get('system_age')->isEmpty()) {
       $form['job_details']['system_age']['#default_value'] = $this->sample->get('system_age')->value;
-    }
-    if ($this->sample->hasField('boiler_type') && !$this->sample->get('boiler_type')->isEmpty()) {
-      $form['job_details']['boiler_type']['#default_value'] = $this->sample->get('boiler_type')->value;
     }
     if ($this->sample->hasField('project_id') && !$this->sample->get('project_id')->isEmpty()) {
       $form['job_details']['project_id']['#default_value'] = $this->sample->get('project_id')->value;
@@ -653,6 +741,36 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
         $form['system_details']['address']['address_fields']['postcode']['#default_value'] = $this->sample->get('postcode')->value;
       }
     }
+
+    if ($this->sample->hasField('user_type') && !$this->sample->get('user_type')->isEmpty()
+      && $this->sample->get('user_type')->value === 'individual'
+      && isset($form['individual_details'])) {
+      if (isset($form['individual_details']['full_name']) && $this->sample->hasField('installer_name') && !$this->sample->get('installer_name')->isEmpty()) {
+        $form['individual_details']['full_name']['#default_value'] = $this->sample->get('installer_name')->value;
+      }
+      if (isset($form['individual_details']['email']) && $this->sample->hasField('installer_email') && !$this->sample->get('installer_email')->isEmpty()) {
+        $form['individual_details']['email']['#default_value'] = $this->sample->get('installer_email')->value;
+      }
+      if (isset($form['individual_details']['phone']) && $this->sample->hasField('company_tel') && !$this->sample->get('company_tel')->isEmpty()) {
+        $form['individual_details']['phone']['#default_value'] = $this->sample->get('company_tel')->value;
+      }
+    }
+  }
+
+  /**
+   * Disables company fields after they were populated from the company wizard.
+   */
+  protected function disableCompanyDetailsSubtree(array &$element): void {
+    foreach (Element::children($element) as $key) {
+      if (!isset($element[$key]) || !is_array($element[$key])) {
+        continue;
+      }
+      $child = &$element[$key];
+      if (isset($child['#type']) && !in_array($child['#type'], ['fieldset', 'container', 'vertical_tabs', 'details'], TRUE)) {
+        $child['#disabled'] = TRUE;
+      }
+      $this->disableCompanyDetailsSubtree($child);
+    }
   }
 
   /**
@@ -673,7 +791,7 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
     }
 
     // Flatten fieldset values
-    foreach (['company_details', 'system_details', 'job_details', 'result_details'] as $fieldset) {
+    foreach (['company_details', 'system_details', 'job_details', 'result_details', 'individual_details'] as $fieldset) {
       if (isset($values[$fieldset]) && is_array($values[$fieldset])) {
         foreach ($values[$fieldset] as $key => $val) {
           if ($key !== '#type' && $key !== '#title' && $key !== '#weight') {
@@ -681,6 +799,25 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
           }
         }
       }
+    }
+
+    $full_name = trim((string) ($values['full_name'] ?? ''));
+    $ind_email = trim((string) ($values['email'] ?? ''));
+    $ind_phone = trim((string) ($values['phone'] ?? ''));
+    if ($full_name !== '' && $this->sample->hasField('installer_name')) {
+      $this->sample->set('installer_name', $full_name);
+    }
+    if ($ind_email !== '' && $this->sample->hasField('installer_email')) {
+      $this->sample->set('installer_email', $ind_email);
+    }
+    if ($ind_phone !== '' && $this->sample->hasField('company_tel')) {
+      $this->sample->set('company_tel', $ind_phone);
+    }
+    if ($full_name !== '' && $this->sample->hasField('company_name')) {
+      $this->sample->set('company_name', $full_name);
+    }
+    if ($ind_email !== '' && $this->sample->hasField('company_email')) {
+      $this->sample->set('company_email', $ind_email);
     }
 
     // Override flattened date values with normalized strings
@@ -841,10 +978,12 @@ class AnonymousSampleDetailsForm extends SentinelSampleSubmissionForm {
       // Save the updated sample
       $this->sample->save();
 
+      $this->getRequest()->getSession()->remove('sentinel_anonymous_company_locked_' . $this->sample->id());
+
       $this->messenger()->addMessage($this->t('Sample details have been updated successfully.'));
       
       // Redirect to thank you page
-      $form_state->setRedirect('sentinel_portal_sample.anonymous_thank_you');
+      $form_state->setRedirect('sentinel_portal_sample.anonymous_thank_you', [], AnonymousSampleLanguageRedirect::options());
 
     }
     catch (\Exception $e) {
