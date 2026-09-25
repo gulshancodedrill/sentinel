@@ -13,8 +13,12 @@ final class PortalSampleCountryOptions {
    * @return array<string, string>
    */
   public static function isoLabels(): array {
-    /** @var array<string, string> $labels */
-    $labels = require __DIR__ . '/../resources/portal_country_iso_labels.php';
+    static $labels = NULL;
+    if ($labels === NULL) {
+      /** @var array<string, string> $loaded */
+      $loaded = require __DIR__ . '/../resources/portal_country_iso_labels.php';
+      $labels = $loaded;
+    }
     return $labels;
   }
 
@@ -32,6 +36,27 @@ final class PortalSampleCountryOptions {
       $out[$code] = $translate($label);
     }
     return $out;
+  }
+
+  /**
+   * Country options translated once per language for the anonymous flow.
+   *
+   * Labels are plain strings so Form API does not look each country up in
+   * the locale tables again while rendering the select.
+   *
+   * @return array<string, string>
+   */
+  public static function anonymousOptions(?string $langcode = NULL): array {
+    $lang = AnonymousSampleFormTranslations::normalizeLangcode(
+      $langcode ?? AnonymousSampleWizardProgress::flowLanguageCode()
+    );
+    static $cache = [];
+    if (!isset($cache[$lang])) {
+      $cache[$lang] = static::options(static function (string $label) use ($lang): string {
+        return AnonymousSampleFormTranslations::translate($label, [], $lang);
+      });
+    }
+    return $cache[$lang];
   }
 
 }

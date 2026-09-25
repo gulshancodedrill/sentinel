@@ -18,38 +18,34 @@ final class AnonymousSampleLanguageRedirect {
     // If language is not explicitly passed,
     // use the language selected in the anonymous flow.
     if (!$language) {
+      static $resolved = FALSE;
+      static $resolved_language = NULL;
+      if ($resolved) {
+        $language = $resolved_language;
+      }
+      else {
+        $session_langcode = \Drupal::request()
+          ->getSession()
+          ->get('sentinel_anonymous_language');
 
-      $session_langcode = \Drupal::request()
-        ->getSession()
-        ->get('sentinel_anonymous_language');
-
-      if (!$session_langcode) {
-        $prn = AnonymousSampleWizardProgress::normalizeAnonymousPrn(
-          (string) \Drupal::request()->query->get('prn', '')
-        );
-        if ($prn !== '') {
-          $sample = \Drupal::entityTypeManager()
-            ->getStorage('sentinel_sample')
-            ->getQuery()
-            ->condition('pack_reference_number', $prn)
-            ->accessCheck(FALSE)
-            ->range(0, 1)
-            ->execute();
-          if (!empty($sample)) {
-            $loaded = \Drupal::entityTypeManager()
-              ->getStorage('sentinel_sample')
-              ->load((int) reset($sample));
+        if (!$session_langcode) {
+          $prn = AnonymousSampleWizardProgress::normalizeAnonymousPrn(
+            (string) \Drupal::request()->query->get('prn', '')
+          );
+          if ($prn !== '') {
+            $loaded = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
             if ($loaded && $loaded->hasField('language') && !$loaded->get('language')->isEmpty()) {
               $session_langcode = (string) $loaded->get('language')->value;
             }
           }
         }
-      }
 
-      if ($session_langcode) {
-
-        $language = \Drupal::languageManager()
-          ->getLanguage($session_langcode);
+        if ($session_langcode) {
+          $language = \Drupal::languageManager()
+            ->getLanguage($session_langcode);
+        }
+        $resolved_language = $language;
+        $resolved = TRUE;
       }
     }
 

@@ -2533,4 +2533,76 @@ function sentinel_portal_entities_update_8022() {
   return !empty($message) ? implode(' ', $message) : t('No fields were updated.');
 }
 
+/**
+ * Index columns used by anonymous sample form lookups.
+ *
+ * /sample/submit?prn and the later wizard steps query sentinel_sample by
+ * pack reference (and company steps by client/UCR and address name). Those
+ * columns had no index, so each page load scanned the full tables.
+ */
+function sentinel_portal_entities_update_9010() {
+  $schema = \Drupal::database()->schema();
+  $added = [];
+
+  $string_index = [
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => FALSE,
+  ];
+  $int_index = [
+    'type' => 'int',
+    'not null' => FALSE,
+  ];
+
+  foreach (['sentinel_sample', 'sentinel_sample_field_data'] as $table) {
+    if (_sentinel_portal_entities_add_index($schema, $table, 'pack_reference_number', 'pack_reference_number', $string_index)) {
+      $added[] = "$table.pack_reference_number";
+    }
+    if (_sentinel_portal_entities_add_index($schema, $table, 'client_id', 'client_id', $int_index)) {
+      $added[] = "$table.client_id";
+    }
+    if (_sentinel_portal_entities_add_index($schema, $table, 'ucr', 'ucr', $string_index)) {
+      $added[] = "$table.ucr";
+    }
+  }
+
+  if (_sentinel_portal_entities_add_index($schema, 'address__field_address', 'field_address_organization', 'field_address_organization', $string_index)) {
+    $added[] = 'address__field_address.field_address_organization';
+  }
+
+  if (_sentinel_portal_entities_add_index($schema, 'sentinel_sample__field_company_address', 'entity_id', 'entity_id', $int_index)) {
+    $added[] = 'sentinel_sample__field_company_address.entity_id';
+  }
+
+  if ($added === []) {
+    return t('Anonymous sample lookup indexes already exist.');
+  }
+  return t('Added indexes: @indexes', ['@indexes' => implode(', ', $added)]);
+}
+
+/**
+ * Adds an index when the table, column, and index are not already present.
+ */
+function _sentinel_portal_entities_add_index($schema, string $table, string $index_name, string $column, array $field_spec): bool {
+  if (!$schema->tableExists($table) || !$schema->fieldExists($table, $column) || $schema->indexExists($table, $index_name)) {
+    return FALSE;
+  }
+  try {
+    $schema->addIndex($table, $index_name, [$column], [
+      'fields' => [
+        $column => $field_spec,
+      ],
+    ]);
+    return TRUE;
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('sentinel_portal_entities')->warning('Could not add index @index on @table: @msg', [
+      '@index' => $index_name,
+      '@table' => $table,
+      '@msg' => $e->getMessage(),
+    ]);
+    return FALSE;
+  }
+}
+
 

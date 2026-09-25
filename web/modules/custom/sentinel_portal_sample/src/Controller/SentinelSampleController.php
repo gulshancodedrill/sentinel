@@ -443,20 +443,10 @@ class SentinelSampleController extends ControllerBase {
       ];
     }
 
-    // Check if sample with this PRN already exists
-    $storage = $this->entityTypeManager()->getStorage('sentinel_sample');
-    $query = $storage->getQuery()
-      ->condition('pack_reference_number', $prn)
-      ->accessCheck(FALSE)
-      ->range(0, 1);
-    $existing_ids = $query->execute();
+    // Check if sample with this PRN already exists.
+    $sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
 
-    if (!empty($existing_ids)) {
-      // Sample exists - load it and check addresses
-      $sample_id = reset($existing_ids);
-      $sample = $storage->load($sample_id);
-
-      if ($sample) {
+    if ($sample) {
         // Check if sample has both company address and system address
         // Check new entity reference fields first
         $has_company_address = FALSE;
@@ -493,7 +483,6 @@ class SentinelSampleController extends ControllerBase {
             ],
           ];
         }
-      }
     }
 
     $form = $this->formBuilder()->getForm('\Drupal\sentinel_portal_sample\Form\AnonymousSampleSubmissionForm');

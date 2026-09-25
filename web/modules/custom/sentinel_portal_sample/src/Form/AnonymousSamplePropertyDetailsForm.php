@@ -202,9 +202,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $form['property_ajax_root']['property_wrapper']['address_fields']['country'] = [
       '#type' => 'select',
       '#title' => $this->tFlow('Country'),
-      '#options' => PortalSampleCountryOptions::options(function ($label) {
-        return $this->tFlow($label);
-      }),
+      '#options' => PortalSampleCountryOptions::anonymousOptions(),
       '#default_value' => $prefill['country'] ?? $af['country'] ?? 'GB',
       '#weight' => 1,
     ];
