@@ -160,6 +160,14 @@ final class AnonymousSampleWizardProgress {
     if ($prn === '') {
       return NULL;
     }
+
+    // Every anonymous step looks the sample up again (controller, form, language).
+    // Keep one load per request so a large sentinel_sample table is scanned once.
+    static $cache = [];
+    if (array_key_exists($prn, $cache)) {
+      return $cache[$prn];
+    }
+
     $storage = \Drupal::entityTypeManager()->getStorage('sentinel_sample');
     $ids = $storage->getQuery()
       ->condition('pack_reference_number', $prn)
@@ -167,9 +175,11 @@ final class AnonymousSampleWizardProgress {
       ->range(0, 1)
       ->execute();
     if (empty($ids)) {
+      $cache[$prn] = NULL;
       return NULL;
     }
-    return $storage->load((int) reset($ids));
+    $cache[$prn] = $storage->load((int) reset($ids));
+    return $cache[$prn];
   }
 
   /**

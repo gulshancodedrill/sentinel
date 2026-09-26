@@ -2228,26 +2228,58 @@ $form['job_details']['installer_name'] = [
    * Company address entity id from the client's most recently saved sample.
    */
   protected function getLatestCompanyAddressIdFromClientSamples(SentinelClient $client): ?int {
-    $storage = $this->entityTypeManager->getStorage('sentinel_sample');
-    $query = $storage->getQuery()->accessCheck(FALSE)->sort('pid', 'DESC')->range(0, 100);
-    $or = $query->orConditionGroup();
-    $or->condition('client_id', (int) $client->id());
-    if ($client->hasField('ucr') && !$client->get('ucr')->isEmpty()) {
-      $or->condition('ucr', $client->get('ucr')->value);
-    }
-    $query->condition($or);
+    $connection = \Drupal::database();
+    $client_id = (int) $client->id();
+    $ucr = ($client->hasField('ucr') && !$client->get('ucr')->isEmpty())
+      ? (string) $client->get('ucr')->value
+      : '';
 
-    foreach ($query->execute() as $sample_id) {
-      $sample = $storage->load($sample_id);
-      if (!$sample) {
-        continue;
+    try {
+      $query = $connection->select('sentinel_sample', 's');
+      $query->join('sentinel_sample__field_company_address', 'a', 'a.entity_id = s.pid');
+      $query->addField('a', 'field_company_address_target_id', 'address_id');
+      $or = $query->orConditionGroup()
+        ->condition('s.client_id', $client_id);
+      if ($ucr !== '') {
+        $or->condition('s.ucr', $ucr);
       }
-      if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
-        return (int) $sample->get('field_company_address')->first()->target_id;
+      $address_id = $query
+        ->condition($or)
+        ->isNotNull('a.field_company_address_target_id')
+        ->condition('a.field_company_address_target_id', 0, '<>')
+        ->orderBy('s.pid', 'DESC')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+      if ($address_id) {
+        return (int) $address_id;
       }
-      if ($sample->hasField('sentinel_company_address_target_id') && !$sample->get('sentinel_company_address_target_id')->isEmpty()) {
-        return (int) $sample->get('sentinel_company_address_target_id')->value;
+    }
+    catch (\Exception $e) {
+      // Dedicated address table may be absent on older databases.
+    }
+
+    try {
+      $query = $connection->select('sentinel_sample', 's');
+      $query->addField('s', 'sentinel_company_address_target_id', 'address_id');
+      $or = $query->orConditionGroup()
+        ->condition('s.client_id', $client_id);
+      if ($ucr !== '') {
+        $or->condition('s.ucr', $ucr);
       }
+      $address_id = $query
+        ->condition($or)
+        ->condition('s.sentinel_company_address_target_id', 0, '>')
+        ->orderBy('s.pid', 'DESC')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+      if ($address_id) {
+        return (int) $address_id;
+      }
+    }
+    catch (\Exception $e) {
+      return NULL;
     }
 
     return NULL;
