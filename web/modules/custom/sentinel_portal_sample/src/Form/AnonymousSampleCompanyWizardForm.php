@@ -152,6 +152,14 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       '#weight' => -10,
     ];
 
+    $form['company_wizard_ajax_root']['company_wizard_wrapper']['ucr_cs_help'] = [
+      '#markup' => '<p>' . $this->tFlow('If you do not have a Client UCR number, please contact Customer Service on <a href=":phone_url">@phone</a> to obtain one.', [
+        ':phone_url' => 'tel:+441928704330',
+        '@phone' => '01928 704330',
+      ]) . '</p>',
+      '#weight' => -9,
+    ];
+
     $company_id_alert = $form_state->get('company_id_alert');
     if (is_string($company_id_alert) && $company_id_alert !== '') {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_id_alert'] = [
