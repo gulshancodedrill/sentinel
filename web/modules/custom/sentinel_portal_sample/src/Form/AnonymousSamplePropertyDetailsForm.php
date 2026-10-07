@@ -254,14 +254,67 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => 4,
     ];
 
-    $val_boiler_manufacturer = $form_state->getValue('boiler_manufacturer')
-      ?? $this->getSampleScalar('boiler_manufacturer');
+    $known_manufacturers = [
+      'Vaillant' => 'Vaillant',
+      'Worcester' => 'Worcester',
+      'Ideal' => 'Ideal',
+      'baxi' => 'baxi',
+    ];
+
+    $stored_manufacturer = trim((string) ($form_state->getValue('boiler_manufacturer')
+      ?? $this->getSampleScalar('boiler_manufacturer')));
+    $manufacturer_other_default = trim((string) ($form_state->getValue('boiler_manufacturer_other') ?? ''));
+    $manufacturer_select_default = '';
+
+    if ($form_state->hasValue('boiler_manufacturer')) {
+      $manufacturer_select_default = (string) $form_state->getValue('boiler_manufacturer');
+    }
+    elseif ($stored_manufacturer !== '' && strcasecmp($stored_manufacturer, 'Not specified') !== 0) {
+      if (isset($known_manufacturers[$stored_manufacturer])) {
+        $manufacturer_select_default = $stored_manufacturer;
+      }
+      else {
+        $matched = FALSE;
+        foreach (array_keys($known_manufacturers) as $known) {
+          if (strcasecmp($known, $stored_manufacturer) === 0) {
+            $manufacturer_select_default = $known;
+            $matched = TRUE;
+            break;
+          }
+        }
+        if (!$matched) {
+          $manufacturer_select_default = 'Other';
+          if ($manufacturer_other_default === '') {
+            $manufacturer_other_default = $stored_manufacturer;
+          }
+        }
+      }
+    }
 
     $form['boiler_manufacturer'] = [
-      '#type' => 'textfield',
+      '#type' => 'select',
       '#title' => $this->tFlow('Boiler manufacturer'),
-      '#default_value' => $val_boiler_manufacturer,
+      '#options' => $known_manufacturers + [
+        'Other' => $this->tFlow('Other'),
+      ],
+      '#empty_option' => $this->tFlow('- Select -'),
+      '#default_value' => $manufacturer_select_default,
       '#weight' => 5,
+    ];
+
+    $form['boiler_manufacturer_other'] = [
+      '#type' => 'textfield',
+      '#title' => $this->tFlow('Please specify boiler manufacturer'),
+      '#default_value' => $manufacturer_other_default,
+      '#weight' => 5.1,
+      '#states' => [
+        'visible' => [
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Other'],
+        ],
+        'required' => [
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Other'],
+        ],
+      ],
     ];
 
     $date_installed_default = NULL;
@@ -452,7 +505,12 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     if ($age === NULL || $age === '') {
       $form_state->setErrorByName('system_6_months', $this->tFlow('Please select the age of the system.'));
     }
-    
+
+    if ((string) $form_state->getValue('boiler_manufacturer') === 'Other'
+      && trim((string) $form_state->getValue('boiler_manufacturer_other')) === '') {
+      $form_state->setErrorByName('boiler_manufacturer_other', $this->tFlow('Please specify the boiler manufacturer.'));
+    }
+
     $resolved = $this->anonymousResolvePropertyAddressFields($form_state);
     $has_goaddress = $this->anonymousGoAddressHasSelection($form_state);
 
@@ -635,6 +693,9 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $engineers_code = trim((string) $form_state->getValue('engineers_code'));
     $service_call_id = trim((string) $form_state->getValue('service_call_id'));
     $boiler_manufacturer = trim((string) $form_state->getValue('boiler_manufacturer'));
+    if ($boiler_manufacturer === 'Other') {
+      $boiler_manufacturer = trim((string) $form_state->getValue('boiler_manufacturer_other'));
+    }
     if ($boiler_manufacturer === '') {
       $boiler_manufacturer = 'Not specified';
     }
