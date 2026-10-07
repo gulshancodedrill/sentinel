@@ -202,6 +202,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $form['property_ajax_root']['property_wrapper']['address_fields']['country'] = [
       '#type' => 'select',
       '#title' => $this->tFlow('Country'),
+      '#required' => TRUE,
       '#options' => PortalSampleCountryOptions::anonymousOptions(),
       '#default_value' => $prefill['country'] ?? $af['country'] ?? 'GB',
       '#weight' => 1,
@@ -209,18 +210,21 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $form['property_ajax_root']['property_wrapper']['address_fields']['address_1'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Address'),
+      '#required' => TRUE,
       '#default_value' => $prefill['address_1'] ?? $af['address_1'] ?? $this->getSampleScalar('street'),
       '#weight' => 2,
     ];
     $form['property_ajax_root']['property_wrapper']['address_fields']['town_city'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Town/City'),
+      '#required' => TRUE,
       '#default_value' => $prefill['town_city'] ?? $af['town_city'] ?? $this->getSampleScalar('town_city'),
       '#weight' => 3,
     ];
     $form['property_ajax_root']['property_wrapper']['address_fields']['postcode'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Postcode'),
+      '#required' => TRUE,
       '#default_value' => $prefill['postcode'] ?? $af['postcode'] ?? $this->getSampleScalar('postcode') ?: $this->getSampleScalar('company_postcode'),
       '#weight' => 4,
     ];
