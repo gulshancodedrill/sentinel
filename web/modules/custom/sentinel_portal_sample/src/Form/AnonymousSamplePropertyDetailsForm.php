@@ -174,7 +174,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form['property_ajax_root']['enter_address_btn'] = [
       '#type' => 'button',
-      '#value' => $this->tFlow('Enter address'),
+      '#value' => $this->tFlow('Enter address manually'),
       '#attributes' => ['class' => ['button', 'button--small', 'sample-address-add-button']],
     ];
     if ($show_property_address_fields) {
@@ -352,6 +352,11 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
        '#default_value' => $form_state->getValue('customer_id')
          ?? $this->getSampleScalar('customer_id'),
        '#weight' => 7,
+       '#states' => [
+        'visible' => [
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Vaillant'],
+        ],
+      ],
        '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
        //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
      ];
@@ -363,16 +368,26 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
        '#default_value' => $form_state->getValue('project_id')
          ?? $this->getSampleScalar('project_id'),
        '#weight' => 8,
+       '#states' => [
+        'visible' => [
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Vaillant'],
+        ],
+      ],
        '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
        //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
      ];
 
     $form['engineers_code'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow("Engineer's code (Worcester Service Only)"),
+      '#title' => $this->tFlow("Engineer's code"),
       '#default_value' => $form_state->getValue('engineers_code')
         ?? $this->getSampleScalar('engineers_code'),
       '#weight' => 9,
+      '#states' => [
+        'visible' => [
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester'],
+        ],
+      ],
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
       //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
     ];
@@ -383,6 +398,11 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#default_value' => $form_state->getValue('service_call_id')
         ?? $this->getSampleScalar('service_call_id'),
       '#weight' => 10,
+      '#states' => [
+        'visible' => [
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester'],
+        ],
+      ],
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
       //'#label_attributes' => ['class' => ['sentinel-anon-hint-red']],
     ];
