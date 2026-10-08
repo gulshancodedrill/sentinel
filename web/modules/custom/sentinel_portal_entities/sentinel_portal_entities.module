@@ -123,7 +123,7 @@ function _sentinel_portal_entities_create_notice($user, string $title, string $m
  * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|false
  *   Sentinel client entity or FALSE if none found.
  */
-function sentinel_portal_entities_get_client_by_user($account = NULL, bool $reset = FALSE) {
+function sentinel_portal_entities_get_client_by_user($account = NULL) {
   if ($account === NULL) {
     $account = \Drupal::currentUser();
   }
@@ -148,19 +148,12 @@ function sentinel_portal_entities_get_client_by_user($account = NULL, bool $rese
     return FALSE;
   }
 
-  $cache = &drupal_static(__FUNCTION__, []);
-  if ($reset) {
-    unset($cache[$uid]);
-  }
-  elseif (isset($cache[$uid])) {
+  static $cache = [];
+  if (isset($cache[$uid])) {
     return $cache[$uid];
   }
 
   $storage = _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_client');
-  // Avoid stale entity static-cache right after client create/UCR assign.
-  if ($reset) {
-    $storage->resetCache();
-  }
 
   $ids = \Drupal::entityQuery('sentinel_client')
     ->condition('uid', $uid)
@@ -186,49 +179,6 @@ function sentinel_portal_entities_get_client_by_user($account = NULL, bool $rese
   $cache[$uid] = $client ?: FALSE;
 
   return $cache[$uid];
-}
-
-/**
- * Read the stored client UCR for a user (DB value, no Luhn digit).
- *
- * Safe for use during mail token replacement — no entity writes.
- */
-function sentinel_portal_entities_get_stored_ucr_for_user(UserInterface $account): ?int {
-  $uid = (int) $account->id();
-  if ($uid <= 0) {
-    return NULL;
-  }
-
-  $connection = _sentinel_portal_entities_database();
-
-  $ucr = $connection->select('sentinel_client', 'sc')
-    ->fields('sc', ['ucr'])
-    ->condition('uid', $uid)
-    ->isNotNull('ucr')
-    ->condition('ucr', 0, '>')
-    ->range(0, 1)
-    ->execute()
-    ->fetchField();
-
-  if ($ucr === FALSE || $ucr === NULL || $ucr === '') {
-    $email = $account->getEmail();
-    if ($email) {
-      $ucr = $connection->select('sentinel_client', 'sc')
-        ->fields('sc', ['ucr'])
-        ->condition('email', $email)
-        ->isNotNull('ucr')
-        ->condition('ucr', 0, '>')
-        ->range(0, 1)
-        ->execute()
-        ->fetchField();
-    }
-  }
-
-  if ($ucr === FALSE || $ucr === NULL || $ucr === '') {
-    return NULL;
-  }
-
-  return (int) $ucr;
 }
 
 /**
@@ -459,9 +409,6 @@ function sentinel_portal_entities_sync_client_from_user(UserInterface $user): ?S
     if (method_exists($client, 'ensureRealUcr')) {
       $client->ensureRealUcr();
     }
-
-    // Keep the per-request lookup cache in sync for registration emails.
-    sentinel_portal_entities_get_client_by_user($user, TRUE);
   }
 
   return $client;
@@ -486,6 +433,62 @@ function sentinel_portal_entities_entity_update(EntityInterface $entity) {
 }
 
 /**
+ * Load the stored (non-Luhn) client UCR for a user via direct DB lookup.
+ *
+ * Avoids entity loads / sync side-effects during mail token replacement.
+ *
+ * @param \Drupal\user\UserInterface|\Drupal\Core\Session\AccountInterface $account
+ *   The account.
+ *
+ * @return int|null
+ *   Stored UCR, or NULL if none.
+ */
+function sentinel_portal_entities_get_ucr_for_account($account): ?int {
+  try {
+    $connection = _sentinel_portal_entities_database();
+    $uid = (int) $account->id();
+
+    if ($uid > 0) {
+      $ucr = $connection->select('sentinel_client', 'sc')
+        ->fields('sc', ['ucr'])
+        ->condition('uid', $uid)
+        ->isNotNull('ucr')
+        ->condition('ucr', 0, '>')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+      if ($ucr !== FALSE && $ucr !== NULL && $ucr !== '') {
+        return (int) $ucr;
+      }
+    }
+
+    $email = method_exists($account, 'getEmail') ? $account->getEmail() : NULL;
+    if (!empty($email)) {
+      $ucr = $connection->select('sentinel_client', 'sc')
+        ->fields('sc', ['ucr'])
+        ->condition('email', $email)
+        ->isNotNull('ucr')
+        ->condition('ucr', 0, '>')
+        ->orderBy('ucr', 'DESC')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+      if ($ucr !== FALSE && $ucr !== NULL && $ucr !== '') {
+        return (int) $ucr;
+      }
+    }
+  }
+  catch (\Throwable $exception) {
+    \Drupal::logger('sentinel_portal_entities')->error('Failed to load UCR for account @uid: @message', [
+      '@uid' => $account->id(),
+      '@message' => $exception->getMessage(),
+    ]);
+  }
+
+  return NULL;
+}
+
+/**
  * Implements hook_token_info().
  *
  * Adds [user:ucr] for use in admin/config/people/accounts email templates.
@@ -495,59 +498,80 @@ function sentinel_portal_entities_token_info() {
     'name' => t('Client UCR'),
     'description' => t('The stored Sentinel client UCR for this user (same value as in the database).'),
   ];
-  $info['tokens']['user']['ucr-real'] = [
-    'name' => t('Client UCR (stored)'),
-    'description' => t('Alias of [user:ucr] — the stored Sentinel client UCR.'),
-  ];
   return $info;
 }
 
 /**
  * Implements hook_tokens().
- *
- * Read-only: never create/update clients here (that can break mail sending).
  */
 function sentinel_portal_entities_tokens($type, $tokens, array $data, array $options, $bubbleable_metadata) {
   $replacements = [];
 
-  if ($type !== 'user' || empty($data['user']) || !($data['user'] instanceof UserInterface)) {
+  if ($type !== 'user' || empty($data['user'])) {
     return $replacements;
   }
 
-  /** @var \Drupal\user\UserInterface $account */
+  if (!isset($tokens['ucr'])) {
+    return $replacements;
+  }
+
   $account = $data['user'];
-  $needs_ucr = isset($tokens['ucr']) || isset($tokens['ucr-real']);
-  if (!$needs_ucr) {
-    return $replacements;
-  }
-
-  $ucr_string = '';
-  try {
-    // Prefer a fresh DB read so registration mail sees the UCR just assigned
-    // in hook_entity_insert / sync_client_from_user.
-    $real = sentinel_portal_entities_get_stored_ucr_for_user($account);
-    if ($real === NULL) {
-      $client = sentinel_portal_entities_get_client_by_user($account, TRUE);
-      if ($client instanceof SentinelClient && method_exists($client, 'getRealUcr')) {
-        $real = $client->getRealUcr();
-      }
-    }
-    $ucr_string = $real !== NULL ? (string) $real : '';
-  }
-  catch (\Throwable $exception) {
-    \Drupal::logger('sentinel_portal_entities')->error('Failed to resolve [user:ucr] for uid @uid: @message', [
-      '@uid' => $account->id(),
-      '@message' => $exception->getMessage(),
-    ]);
-  }
-
-  foreach ($tokens as $name => $original) {
-    if ($name === 'ucr' || $name === 'ucr-real') {
-      $replacements[$original] = $ucr_string;
-    }
-  }
+  $ucr = sentinel_portal_entities_get_ucr_for_account($account);
+  $replacements[$tokens['ucr']] = $ucr !== NULL ? (string) $ucr : '';
 
   return $replacements;
+}
+
+/**
+ * Implements hook_mail_alter().
+ *
+ * user.mail uses clear=TRUE, so an empty [user:ucr] is wiped before send.
+ * Re-inject the stored DB UCR into account emails after token replacement.
+ */
+function sentinel_portal_entities_mail_alter(array &$message) {
+  if (($message['module'] ?? '') !== 'user') {
+    return;
+  }
+
+  $account_keys = [
+    'register_admin_created',
+    'register_no_approval_required',
+    'register_pending_approval',
+    'status_activated',
+  ];
+  if (!in_array($message['key'] ?? '', $account_keys, TRUE)) {
+    return;
+  }
+
+  $account = $message['params']['account'] ?? NULL;
+  if (!$account) {
+    return;
+  }
+
+  $ucr = sentinel_portal_entities_get_ucr_for_account($account);
+  if ($ucr === NULL) {
+    return;
+  }
+  $ucr_string = (string) $ucr;
+
+  if (empty($message['body']) || !is_array($message['body'])) {
+    return;
+  }
+
+  foreach ($message['body'] as &$part) {
+    if (!is_string($part)) {
+      continue;
+    }
+    // If the token survived replacement, swap it.
+    $part = str_replace(['[user:ucr]', '[user:ucr-real]'], $ucr_string, $part);
+    // If clear=TRUE removed the token, fill a bare "Your Client UCR:" line.
+    $part = preg_replace(
+      '/(Your Client UCR:\s*)(\r?\n|$)/i',
+      '$1' . $ucr_string . '$2',
+      $part
+    );
+  }
+  unset($part);
 }
 
 /**
