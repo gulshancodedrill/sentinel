@@ -6,7 +6,30 @@
  */
 
 use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
+
+/**
+ * Implements hook_form_FORM_ID_alter() for user_form.
+ *
+ * When an admin creates a user at People → Add user, notify them by default
+ * so the Welcome (admin-created) email from admin/config/people/accounts is sent.
+ */
+function sentinel_portal_user_map_form_user_form_alter(array &$form, FormStateInterface $form_state, $form_id) {
+  if (!isset($form['account']['notify'])) {
+    return;
+  }
+
+  $form_object = $form_state->getFormObject();
+  if (!method_exists($form_object, 'getEntity')) {
+    return;
+  }
+
+  $entity = $form_object->getEntity();
+  if ($entity && $entity->isNew()) {
+    $form['account']['notify']['#default_value'] = TRUE;
+  }
+}
 
 /**
  * Check whether or not the user has cohorts.

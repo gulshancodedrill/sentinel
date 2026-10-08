@@ -140,10 +140,14 @@ class AddUserForm extends FormBase {
       $client->save();
     }
 
-    // Send an email.
-    // @todo : add this back in.
-    // _user_mail_notify('register_no_approval_required', $account);
-    $this->messenger()->addWarning($this->t('Email not sent. Reminder that this needs to be turned back on.'));
+    // Send the admin-created account email (template from admin/config/people/accounts).
+    $mail_sent = _user_mail_notify('register_admin_created', $account);
+    if ($mail_sent) {
+      $this->messenger()->addStatus($this->t('A welcome email has been sent to @email.', ['@email' => $email]));
+    }
+    else {
+      $this->messenger()->addWarning($this->t('User created, but the welcome email could not be sent to @email.', ['@email' => $email]));
+    }
 
     $this->messenger()->addStatus($this->t('User @email created.', ['@email' => $email]));
 

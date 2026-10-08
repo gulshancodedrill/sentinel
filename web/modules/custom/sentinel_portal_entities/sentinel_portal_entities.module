@@ -440,11 +440,11 @@ function sentinel_portal_entities_entity_update(EntityInterface $entity) {
 function sentinel_portal_entities_token_info() {
   $info['tokens']['user']['ucr'] = [
     'name' => t('Client UCR'),
-    'description' => t('The Sentinel client UCR number for this user (with check digit).'),
+    'description' => t('The stored Sentinel client UCR for this user (same value as in the database).'),
   ];
   $info['tokens']['user']['ucr-real'] = [
     'name' => t('Client UCR (stored)'),
-    'description' => t('The stored Sentinel client UCR without the Luhn check digit.'),
+    'description' => t('Alias of [user:ucr] — the stored Sentinel client UCR.'),
   ];
   return $info;
 }
@@ -475,13 +475,8 @@ function sentinel_portal_entities_tokens($type, $tokens, array $data, array $opt
   foreach ($tokens as $name => $original) {
     switch ($name) {
       case 'ucr':
-        $ucr = ($client instanceof SentinelClient && method_exists($client, 'getUcr'))
-          ? $client->getUcr()
-          : NULL;
-        $replacements[$original] = $ucr !== NULL ? (string) $ucr : '';
-        break;
-
       case 'ucr-real':
+        // Email / templates use the stored DB UCR (no Luhn check digit).
         $real = ($client instanceof SentinelClient && method_exists($client, 'getRealUcr'))
           ? $client->getRealUcr()
           : NULL;
@@ -491,54 +486,6 @@ function sentinel_portal_entities_tokens($type, $tokens, array $data, array $opt
   }
 
   return $replacements;
-}
-
-/**
- * Implements hook_mail_alter().
- *
- * Ensures registration emails include the client UCR alongside the template
- * configured at admin/config/people/accounts.
- */
-function sentinel_portal_entities_mail_alter(array &$message) {
-  if (($message['module'] ?? '') !== 'user') {
-    return;
-  }
-
-  $registration_keys = [
-    'register_admin_created',
-    'register_no_approval_required',
-    'register_pending_approval',
-  ];
-  if (!in_array($message['key'] ?? '', $registration_keys, TRUE)) {
-    return;
-  }
-
-  $account = $message['params']['account'] ?? NULL;
-  if (!$account instanceof UserInterface) {
-    return;
-  }
-
-  $client = sentinel_portal_entities_get_client_by_user($account);
-  if (!$client instanceof SentinelClient) {
-    $client = sentinel_portal_entities_sync_client_from_user($account);
-  }
-  if (!$client instanceof SentinelClient) {
-    return;
-  }
-
-  $ucr = method_exists($client, 'getRealUcr') ? $client->getRealUcr() : NULL;
-  if ($ucr === NULL || $ucr === '') {
-    return;
-  }
-
-  $ucr_string = (string) $ucr;
-  $body_text = implode("\n", $message['body'] ?? []);
-  // Skip if the template already included the UCR (via [user:ucr] or plain text).
-  if (str_contains($body_text, $ucr_string) || str_contains($body_text, '[user:ucr]')) {
-    return;
-  }
-
-  $message['body'][] = "\n" . t('Your Client UCR: @ucr', ['@ucr' => $ucr_string]);
 }
 
 /**
