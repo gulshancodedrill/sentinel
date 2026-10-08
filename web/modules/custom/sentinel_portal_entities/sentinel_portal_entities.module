@@ -123,7 +123,7 @@ function _sentinel_portal_entities_create_notice($user, string $title, string $m
  * @return \Drupal\sentinel_portal_entities\Entity\SentinelClient|false
  *   Sentinel client entity or FALSE if none found.
  */
-function sentinel_portal_entities_get_client_by_user($account = NULL) {
+function sentinel_portal_entities_get_client_by_user($account = NULL, bool $reset = FALSE) {
   if ($account === NULL) {
     $account = \Drupal::currentUser();
   }
@@ -148,12 +148,19 @@ function sentinel_portal_entities_get_client_by_user($account = NULL) {
     return FALSE;
   }
 
-  static $cache = [];
-  if (isset($cache[$uid])) {
+  $cache = &drupal_static(__FUNCTION__, []);
+  if ($reset) {
+    unset($cache[$uid]);
+  }
+  elseif (isset($cache[$uid])) {
     return $cache[$uid];
   }
 
   $storage = _sentinel_portal_entities_entity_type_manager()->getStorage('sentinel_client');
+  // Avoid stale entity static-cache right after client create/UCR assign.
+  if ($reset) {
+    $storage->resetCache();
+  }
 
   $ids = \Drupal::entityQuery('sentinel_client')
     ->condition('uid', $uid)
@@ -179,6 +186,49 @@ function sentinel_portal_entities_get_client_by_user($account = NULL) {
   $cache[$uid] = $client ?: FALSE;
 
   return $cache[$uid];
+}
+
+/**
+ * Read the stored client UCR for a user (DB value, no Luhn digit).
+ *
+ * Safe for use during mail token replacement — no entity writes.
+ */
+function sentinel_portal_entities_get_stored_ucr_for_user(UserInterface $account): ?int {
+  $uid = (int) $account->id();
+  if ($uid <= 0) {
+    return NULL;
+  }
+
+  $connection = _sentinel_portal_entities_database();
+
+  $ucr = $connection->select('sentinel_client', 'sc')
+    ->fields('sc', ['ucr'])
+    ->condition('uid', $uid)
+    ->isNotNull('ucr')
+    ->condition('ucr', 0, '>')
+    ->range(0, 1)
+    ->execute()
+    ->fetchField();
+
+  if ($ucr === FALSE || $ucr === NULL || $ucr === '') {
+    $email = $account->getEmail();
+    if ($email) {
+      $ucr = $connection->select('sentinel_client', 'sc')
+        ->fields('sc', ['ucr'])
+        ->condition('email', $email)
+        ->isNotNull('ucr')
+        ->condition('ucr', 0, '>')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+    }
+  }
+
+  if ($ucr === FALSE || $ucr === NULL || $ucr === '') {
+    return NULL;
+  }
+
+  return (int) $ucr;
 }
 
 /**
@@ -409,6 +459,9 @@ function sentinel_portal_entities_sync_client_from_user(UserInterface $user): ?S
     if (method_exists($client, 'ensureRealUcr')) {
       $client->ensureRealUcr();
     }
+
+    // Keep the per-request lookup cache in sync for registration emails.
+    sentinel_portal_entities_get_client_by_user($user, TRUE);
   }
 
   return $client;
@@ -451,6 +504,8 @@ function sentinel_portal_entities_token_info() {
 
 /**
  * Implements hook_tokens().
+ *
+ * Read-only: never create/update clients here (that can break mail sending).
  */
 function sentinel_portal_entities_tokens($type, $tokens, array $data, array $options, $bubbleable_metadata) {
   $replacements = [];
@@ -466,22 +521,29 @@ function sentinel_portal_entities_tokens($type, $tokens, array $data, array $opt
     return $replacements;
   }
 
-  $client = sentinel_portal_entities_get_client_by_user($account);
-  if (!$client instanceof SentinelClient) {
-    // Registration mail can run just after insert; ensure client/UCR exist.
-    $client = sentinel_portal_entities_sync_client_from_user($account);
+  $ucr_string = '';
+  try {
+    // Prefer a fresh DB read so registration mail sees the UCR just assigned
+    // in hook_entity_insert / sync_client_from_user.
+    $real = sentinel_portal_entities_get_stored_ucr_for_user($account);
+    if ($real === NULL) {
+      $client = sentinel_portal_entities_get_client_by_user($account, TRUE);
+      if ($client instanceof SentinelClient && method_exists($client, 'getRealUcr')) {
+        $real = $client->getRealUcr();
+      }
+    }
+    $ucr_string = $real !== NULL ? (string) $real : '';
+  }
+  catch (\Throwable $exception) {
+    \Drupal::logger('sentinel_portal_entities')->error('Failed to resolve [user:ucr] for uid @uid: @message', [
+      '@uid' => $account->id(),
+      '@message' => $exception->getMessage(),
+    ]);
   }
 
   foreach ($tokens as $name => $original) {
-    switch ($name) {
-      case 'ucr':
-      case 'ucr-real':
-        // Email / templates use the stored DB UCR (no Luhn check digit).
-        $real = ($client instanceof SentinelClient && method_exists($client, 'getRealUcr'))
-          ? $client->getRealUcr()
-          : NULL;
-        $replacements[$original] = $real !== NULL ? (string) $real : '';
-        break;
+    if ($name === 'ucr' || $name === 'ucr-real') {
+      $replacements[$original] = $ucr_string;
     }
   }
 
