@@ -526,7 +526,7 @@ function sentinel_portal_entities_mail_alter(array &$message) {
     return;
   }
 
-  $ucr = method_exists($client, 'getUcr') ? $client->getUcr() : NULL;
+  $ucr = method_exists($client, 'getRealUcr') ? $client->getRealUcr() : NULL;
   if ($ucr === NULL || $ucr === '') {
     return;
   }
