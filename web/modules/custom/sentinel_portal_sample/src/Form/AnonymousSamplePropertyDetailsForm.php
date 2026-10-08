@@ -348,7 +348,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
    $form['customer_id'] = [
        '#type' => 'textfield',
-       '#title' => $this->tFlow('Customer ID (Vaillant Only)'),
+       '#title' => $this->tFlow('Customer ID'),
        '#default_value' => $form_state->getValue('customer_id')
          ?? $this->getSampleScalar('customer_id'),
        '#weight' => 7,
@@ -363,7 +363,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
    $form['project_id'] = [
        '#type' => 'textfield',
-       '#title' => $this->tFlow('Project ID (Vaillant Only)'),
+       '#title' => $this->tFlow('Project ID'),
       '#description' => $this->tFlow('The project ID. Required for claiming boiler manufacturer support.'),
        '#default_value' => $form_state->getValue('project_id')
          ?? $this->getSampleScalar('project_id'),
@@ -394,7 +394,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form['service_call_id'] = [
       '#type' => 'textfield',
-      '#title' => $this->tFlow('Service call ID (Worcester Service Only)'),
+      '#title' => $this->tFlow('Service call ID'),
       '#default_value' => $form_state->getValue('service_call_id')
         ?? $this->getSampleScalar('service_call_id'),
       '#weight' => 10,
