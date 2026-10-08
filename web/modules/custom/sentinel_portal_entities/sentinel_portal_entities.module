@@ -433,62 +433,6 @@ function sentinel_portal_entities_entity_update(EntityInterface $entity) {
 }
 
 /**
- * Load the stored (non-Luhn) client UCR for a user via direct DB lookup.
- *
- * Avoids entity loads / sync side-effects during mail token replacement.
- *
- * @param \Drupal\user\UserInterface|\Drupal\Core\Session\AccountInterface $account
- *   The account.
- *
- * @return int|null
- *   Stored UCR, or NULL if none.
- */
-function sentinel_portal_entities_get_ucr_for_account($account): ?int {
-  try {
-    $connection = _sentinel_portal_entities_database();
-    $uid = (int) $account->id();
-
-    if ($uid > 0) {
-      $ucr = $connection->select('sentinel_client', 'sc')
-        ->fields('sc', ['ucr'])
-        ->condition('uid', $uid)
-        ->isNotNull('ucr')
-        ->condition('ucr', 0, '>')
-        ->range(0, 1)
-        ->execute()
-        ->fetchField();
-      if ($ucr !== FALSE && $ucr !== NULL && $ucr !== '') {
-        return (int) $ucr;
-      }
-    }
-
-    $email = method_exists($account, 'getEmail') ? $account->getEmail() : NULL;
-    if (!empty($email)) {
-      $ucr = $connection->select('sentinel_client', 'sc')
-        ->fields('sc', ['ucr'])
-        ->condition('email', $email)
-        ->isNotNull('ucr')
-        ->condition('ucr', 0, '>')
-        ->orderBy('ucr', 'DESC')
-        ->range(0, 1)
-        ->execute()
-        ->fetchField();
-      if ($ucr !== FALSE && $ucr !== NULL && $ucr !== '') {
-        return (int) $ucr;
-      }
-    }
-  }
-  catch (\Throwable $exception) {
-    \Drupal::logger('sentinel_portal_entities')->error('Failed to load UCR for account @uid: @message', [
-      '@uid' => $account->id(),
-      '@message' => $exception->getMessage(),
-    ]);
-  }
-
-  return NULL;
-}
-
-/**
  * Implements hook_token_info().
  *
  * Adds [user:ucr] for use in admin/config/people/accounts email templates.
@@ -497,6 +441,10 @@ function sentinel_portal_entities_token_info() {
   $info['tokens']['user']['ucr'] = [
     'name' => t('Client UCR'),
     'description' => t('The stored Sentinel client UCR for this user (same value as in the database).'),
+  ];
+  $info['tokens']['user']['ucr-real'] = [
+    'name' => t('Client UCR (stored)'),
+    'description' => t('Alias of [user:ucr] — the stored Sentinel client UCR.'),
   ];
   return $info;
 }
@@ -507,17 +455,35 @@ function sentinel_portal_entities_token_info() {
 function sentinel_portal_entities_tokens($type, $tokens, array $data, array $options, $bubbleable_metadata) {
   $replacements = [];
 
-  if ($type !== 'user' || empty($data['user'])) {
+  if ($type !== 'user' || empty($data['user']) || !($data['user'] instanceof UserInterface)) {
     return $replacements;
   }
 
-  if (!isset($tokens['ucr'])) {
-    return $replacements;
-  }
-
+  /** @var \Drupal\user\UserInterface $account */
   $account = $data['user'];
-  $ucr = sentinel_portal_entities_get_ucr_for_account($account);
-  $replacements[$tokens['ucr']] = $ucr !== NULL ? (string) $ucr : '';
+  $needs_ucr = isset($tokens['ucr']) || isset($tokens['ucr-real']);
+  if (!$needs_ucr) {
+    return $replacements;
+  }
+
+  $client = sentinel_portal_entities_get_client_by_user($account);
+  if (!$client instanceof SentinelClient) {
+    // Registration mail can run just after insert; ensure client/UCR exist.
+    $client = sentinel_portal_entities_sync_client_from_user($account);
+  }
+
+  foreach ($tokens as $name => $original) {
+    switch ($name) {
+      case 'ucr':
+      case 'ucr-real':
+        // Email / templates use the stored DB UCR (no Luhn check digit).
+        $real = ($client instanceof SentinelClient && method_exists($client, 'getRealUcr'))
+          ? $client->getRealUcr()
+          : NULL;
+        $replacements[$original] = $real !== NULL ? (string) $real : '';
+        break;
+    }
+  }
 
   return $replacements;
 }
@@ -525,53 +491,53 @@ function sentinel_portal_entities_tokens($type, $tokens, array $data, array $opt
 /**
  * Implements hook_mail_alter().
  *
- * user.mail uses clear=TRUE, so an empty [user:ucr] is wiped before send.
- * Re-inject the stored DB UCR into account emails after token replacement.
+ * Appends the stored sentinel_client UCR to:
+ * - Welcome (new user created by administrator)
+ * - Welcome (no approval required)
+ *
+ * Does not alter the pending-approval email.
  */
 function sentinel_portal_entities_mail_alter(array &$message) {
   if (($message['module'] ?? '') !== 'user') {
     return;
   }
 
-  $account_keys = [
+  // Only these two welcome emails — not register_pending_approval.
+  $registration_keys = [
     'register_admin_created',
     'register_no_approval_required',
-    'register_pending_approval',
-    'status_activated',
   ];
-  if (!in_array($message['key'] ?? '', $account_keys, TRUE)) {
+  if (!in_array($message['key'] ?? '', $registration_keys, TRUE)) {
     return;
   }
 
   $account = $message['params']['account'] ?? NULL;
-  if (!$account) {
+  if (!$account instanceof UserInterface) {
     return;
   }
 
-  $ucr = sentinel_portal_entities_get_ucr_for_account($account);
-  if ($ucr === NULL) {
+  $client = sentinel_portal_entities_get_client_by_user($account);
+  if (!$client instanceof SentinelClient) {
+    $client = sentinel_portal_entities_sync_client_from_user($account);
+  }
+  if (!$client instanceof SentinelClient) {
     return;
   }
+
+  // Stored DB value (e.g. 6592), not Luhn display (65920).
+  $ucr = method_exists($client, 'getRealUcr') ? $client->getRealUcr() : NULL;
+  if ($ucr === NULL || $ucr === '') {
+    return;
+  }
+
   $ucr_string = (string) $ucr;
-
-  if (empty($message['body']) || !is_array($message['body'])) {
+  $body_text = implode("\n", $message['body'] ?? []);
+  // Skip if the template already included the UCR (via [user:ucr] or plain text).
+  if (str_contains($body_text, $ucr_string) || str_contains($body_text, '[user:ucr]')) {
     return;
   }
 
-  foreach ($message['body'] as &$part) {
-    if (!is_string($part)) {
-      continue;
-    }
-    // If the token survived replacement, swap it.
-    $part = str_replace(['[user:ucr]', '[user:ucr-real]'], $ucr_string, $part);
-    // If clear=TRUE removed the token, fill a bare "Your Client UCR:" line.
-    $part = preg_replace(
-      '/(Your Client UCR:\s*)(\r?\n|$)/i',
-      '$1' . $ucr_string . '$2',
-      $part
-    );
-  }
-  unset($part);
+  $message['body'][] = "\n" . t('Your Client UCR: @ucr', ['@ucr' => $ucr_string]);
 }
 
 /**
