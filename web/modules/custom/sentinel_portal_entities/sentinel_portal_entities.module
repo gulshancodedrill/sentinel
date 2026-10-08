@@ -170,7 +170,8 @@ function sentinel_portal_entities_get_client_by_user($account = NULL) {
   }
 
   if (!$ids) {
-    $cache[$uid] = FALSE;
+    // Do not cache misses: a client may be created later in the same request
+    // (e.g. during user insert sync before the registration email is sent).
     return FALSE;
   }
 
@@ -178,6 +179,156 @@ function sentinel_portal_entities_get_client_by_user($account = NULL) {
   $cache[$uid] = $client ?: FALSE;
 
   return $cache[$uid];
+}
+
+/**
+ * Extract the email domain in uppercase (e.g. DODDGROUP.COM).
+ *
+ * @param string|null $email
+ *   The email address.
+ *
+ * @return string|null
+ *   Uppercase domain, or NULL if not parseable.
+ */
+function sentinel_portal_entities_get_email_domain(?string $email): ?string {
+  if ($email === NULL || $email === '' || !str_contains($email, '@')) {
+    return NULL;
+  }
+
+  $domain = strtoupper(trim(substr(strrchr($email, '@'), 1)));
+  return $domain !== '' ? $domain : NULL;
+}
+
+/**
+ * Personal / free-mail domains that always get a new UCR per user.
+ *
+ * @return string[]
+ *   Uppercase domains.
+ */
+function sentinel_portal_entities_personal_email_domains(): array {
+  return [
+    'GMAIL.COM',
+    'YAHOO.COM',
+  ];
+}
+
+/**
+ * Load the company domain → preferred email/UCR map from JSON.
+ *
+ * @return array<string, array{email?: string, ucr?: int}>
+ *   Map keyed by uppercase domain.
+ */
+function sentinel_portal_entities_load_client_domain_map(): array {
+  static $map = NULL;
+  if ($map !== NULL) {
+    return $map;
+  }
+
+  $map = [];
+  $path = \Drupal::service('extension.list.module')
+    ->getPath('sentinel_portal_entities') . '/src/json/clint-domain.json';
+
+  if (!is_readable($path)) {
+    \Drupal::logger('sentinel_portal_entities')->warning('Client domain map not readable: @path', [
+      '@path' => $path,
+    ]);
+    return $map;
+  }
+
+  $decoded = json_decode((string) file_get_contents($path), TRUE);
+  if (!is_array($decoded)) {
+    \Drupal::logger('sentinel_portal_entities')->error('Client domain map JSON is invalid: @path', [
+      '@path' => $path,
+    ]);
+    return $map;
+  }
+
+  foreach ($decoded as $domain => $row) {
+    if (!is_string($domain) || !is_array($row)) {
+      continue;
+    }
+    $key = strtoupper(trim($domain));
+    if ($key === '') {
+      continue;
+    }
+    $map[$key] = $row;
+  }
+
+  return $map;
+}
+
+/**
+ * Find the most-used client email/UCR for a domain via sample volume.
+ *
+ * Uses the email domain LIKE '%DOMAIN%' on sentinel_client, joined to
+ * sentinel_sample on ucr, ordered by sample count.
+ *
+ * @param string $domain
+ *   Uppercase email domain (e.g. ACME.CO.UK).
+ *
+ * @return int|null
+ *   Existing company UCR, or NULL if none found.
+ */
+function sentinel_portal_entities_find_most_used_ucr_for_domain(string $domain): ?int {
+  $domain = strtoupper(trim($domain));
+  if ($domain === '') {
+    return NULL;
+  }
+
+  $connection = _sentinel_portal_entities_database();
+  $like = '%' . $connection->escapeLike($domain) . '%';
+
+  $query = $connection->select('sentinel_client', 'sc');
+  $query->addField('sc', 'email');
+  $query->addField('sc', 'ucr');
+  $query->addExpression('COUNT(ss.pid)', 'sample_count');
+  $query->leftJoin('sentinel_sample', 'ss', 'ss.ucr = sc.ucr');
+  $query->condition('sc.email', $like, 'LIKE');
+  $query->isNotNull('sc.ucr');
+  $query->condition('sc.ucr', 0, '>');
+  $query->groupBy('sc.email');
+  $query->groupBy('sc.ucr');
+  $query->orderBy('sample_count', 'DESC');
+  $query->range(0, 1);
+
+  $row = $query->execute()->fetchAssoc();
+  if (!$row || empty($row['ucr'])) {
+    return NULL;
+  }
+
+  return (int) $row['ucr'];
+}
+
+/**
+ * Resolve a shared company UCR for a registering user's email domain.
+ *
+ * Priority:
+ * - Personal domains (gmail.com, yahoo.com): never share; return NULL.
+ * - Domain listed in clint-domain.json: use mapped UCR.
+ * - Any other domain: look up most-used UCR for that domain; reuse if found.
+ *
+ * @param string|null $email
+ *   The user's email address.
+ *
+ * @return int|null
+ *   Company UCR to attach, or NULL to let a new UCR be generated.
+ */
+function sentinel_portal_entities_resolve_company_ucr_for_email(?string $email): ?int {
+  $domain = sentinel_portal_entities_get_email_domain($email);
+  if ($domain === NULL) {
+    return NULL;
+  }
+
+  if (in_array($domain, sentinel_portal_entities_personal_email_domains(), TRUE)) {
+    return NULL;
+  }
+
+  $map = sentinel_portal_entities_load_client_domain_map();
+  if (isset($map[$domain]['ucr']) && (int) $map[$domain]['ucr'] > 0) {
+    return (int) $map[$domain]['ucr'];
+  }
+
+  return sentinel_portal_entities_find_most_used_ucr_for_domain($domain);
 }
 
 /**
@@ -235,8 +386,29 @@ function sentinel_portal_entities_sync_client_from_user(UserInterface $user): ?S
     }
   }
 
-  if ($client instanceof SentinelClient && method_exists($client, 'ensureRealUcr')) {
-    $client->ensureRealUcr();
+  if ($client instanceof SentinelClient) {
+    // Prefer an existing company UCR (JSON map or most-used for domain)
+    // instead of minting a new one for company domains.
+    if (!$client->getRealUcr()) {
+      $company_ucr = sentinel_portal_entities_resolve_company_ucr_for_email($user->getEmail());
+      if ($company_ucr) {
+        $client->setRealUcr($company_ucr);
+        try {
+          $client->save();
+        }
+        catch (\Throwable $exception) {
+          \Drupal::logger('sentinel_portal_entities')->error('Failed to attach company UCR @ucr to client @id: @message', [
+            '@ucr' => $company_ucr,
+            '@id' => $client->id(),
+            '@message' => $exception->getMessage(),
+          ]);
+        }
+      }
+    }
+
+    if (method_exists($client, 'ensureRealUcr')) {
+      $client->ensureRealUcr();
+    }
   }
 
   return $client;
@@ -258,6 +430,115 @@ function sentinel_portal_entities_entity_update(EntityInterface $entity) {
   if ($entity instanceof UserInterface) {
     sentinel_portal_entities_sync_client_from_user($entity);
   }
+}
+
+/**
+ * Implements hook_token_info().
+ *
+ * Adds [user:ucr] for use in admin/config/people/accounts email templates.
+ */
+function sentinel_portal_entities_token_info() {
+  $info['tokens']['user']['ucr'] = [
+    'name' => t('Client UCR'),
+    'description' => t('The Sentinel client UCR number for this user (with check digit).'),
+  ];
+  $info['tokens']['user']['ucr-real'] = [
+    'name' => t('Client UCR (stored)'),
+    'description' => t('The stored Sentinel client UCR without the Luhn check digit.'),
+  ];
+  return $info;
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function sentinel_portal_entities_tokens($type, $tokens, array $data, array $options, $bubbleable_metadata) {
+  $replacements = [];
+
+  if ($type !== 'user' || empty($data['user']) || !($data['user'] instanceof UserInterface)) {
+    return $replacements;
+  }
+
+  /** @var \Drupal\user\UserInterface $account */
+  $account = $data['user'];
+  $needs_ucr = isset($tokens['ucr']) || isset($tokens['ucr-real']);
+  if (!$needs_ucr) {
+    return $replacements;
+  }
+
+  $client = sentinel_portal_entities_get_client_by_user($account);
+  if (!$client instanceof SentinelClient) {
+    // Registration mail can run just after insert; ensure client/UCR exist.
+    $client = sentinel_portal_entities_sync_client_from_user($account);
+  }
+
+  foreach ($tokens as $name => $original) {
+    switch ($name) {
+      case 'ucr':
+        $ucr = ($client instanceof SentinelClient && method_exists($client, 'getUcr'))
+          ? $client->getUcr()
+          : NULL;
+        $replacements[$original] = $ucr !== NULL ? (string) $ucr : '';
+        break;
+
+      case 'ucr-real':
+        $real = ($client instanceof SentinelClient && method_exists($client, 'getRealUcr'))
+          ? $client->getRealUcr()
+          : NULL;
+        $replacements[$original] = $real !== NULL ? (string) $real : '';
+        break;
+    }
+  }
+
+  return $replacements;
+}
+
+/**
+ * Implements hook_mail_alter().
+ *
+ * Ensures registration emails include the client UCR alongside the template
+ * configured at admin/config/people/accounts.
+ */
+function sentinel_portal_entities_mail_alter(array &$message) {
+  if (($message['module'] ?? '') !== 'user') {
+    return;
+  }
+
+  $registration_keys = [
+    'register_admin_created',
+    'register_no_approval_required',
+    'register_pending_approval',
+  ];
+  if (!in_array($message['key'] ?? '', $registration_keys, TRUE)) {
+    return;
+  }
+
+  $account = $message['params']['account'] ?? NULL;
+  if (!$account instanceof UserInterface) {
+    return;
+  }
+
+  $client = sentinel_portal_entities_get_client_by_user($account);
+  if (!$client instanceof SentinelClient) {
+    $client = sentinel_portal_entities_sync_client_from_user($account);
+  }
+  if (!$client instanceof SentinelClient) {
+    return;
+  }
+
+  $ucr = method_exists($client, 'getUcr') ? $client->getUcr() : NULL;
+  if ($ucr === NULL || $ucr === '') {
+    return;
+  }
+
+  $ucr_string = (string) $ucr;
+  $body_text = implode("\n", $message['body'] ?? []);
+  // Skip if the template already included the UCR (via [user:ucr] or plain text).
+  if (str_contains($body_text, $ucr_string) || str_contains($body_text, '[user:ucr]')) {
+    return;
+  }
+
+  $message['body'][] = "\n" . t('Your Client UCR: @ucr', ['@ucr' => $ucr_string]);
 }
 
 /**
