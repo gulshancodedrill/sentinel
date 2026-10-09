@@ -193,7 +193,7 @@ final class AnonymousSampleWizardProgress {
     $ids = $storage->getQuery()
       ->condition('pack_reference_number', $variants, 'IN')
       ->accessCheck(FALSE)
-      ->sort('id', 'DESC')
+      ->sort('pid', 'DESC')
       ->execute();
     if (empty($ids)) {
       $cache[$prn] = NULL;
