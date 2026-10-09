@@ -66,7 +66,7 @@ class AnonymousSampleSubmissionForm extends FormBase {
 
     $request->getSession()->set('sentinel_anonymous_entry', 'submit');
 
-    $existing_sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
+    // Cheap SQL gate before any entity load.
     if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
       $form['#title'] = $this->tFlow('Sample Already Submitted');
       $form['#cache']['max-age'] = 0;
@@ -80,6 +80,8 @@ class AnonymousSampleSubmissionForm extends FormBase {
       ];
       return $form;
     }
+
+    $existing_sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
 
     // PRN should be present (controller handles validation, but we need it for the form)
     $form['#title'] = $this->tFlow('Welcome to Sentinel. Please proceed by submitting a sample.');

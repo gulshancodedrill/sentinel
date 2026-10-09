@@ -50,6 +50,20 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form_state->set('property_prn', $prn);
 
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
+      $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['#cache']['max-age'] = 0;
+      $form['message'] = [
+        '#markup' => '<div class="messages messages--warning">' .
+          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
+          '<p>' . $this->tFlow('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+            '@prn' => $prn,
+          ]) . '</p></div>',
+        '#weight' => -10,
+      ];
+      return $form;
+    }
+
     $this->sample = $this->loadAnonymousSampleByPrn($prn);
     if (!$this->sample || !$this->sample->id()) {
       $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
@@ -83,23 +97,6 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     if ($this->anonymousSampleRequiresVerification((int) $this->sample->id())) {
       return $this->buildAnonymousVerificationForm((int) $this->sample->id(), $form, $form_state);
-    }
-
-    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($this->sample)) {
-      $prn = $this->sample->hasField('pack_reference_number') && !$this->sample->get('pack_reference_number')->isEmpty()
-        ? $this->sample->get('pack_reference_number')->value
-        : $this->tFlow('N/A');
-      $form['#title'] = $this->tFlow('Sample Already Submitted');
-      $form['message'] = [
-        '#markup' => '<div class="messages messages--warning">' .
-          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
-          '<p>' . $this->tFlow('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
-            '@prn' => $prn,
-          ]) . '</p>' .
-          '</div>',
-        '#weight' => -10,
-      ];
-      return $form;
     }
 
     AnonymousSampleWizardProgress::prependToForm($form, $form_state, 'anonymous_sample_property_details_form', $this->sample);

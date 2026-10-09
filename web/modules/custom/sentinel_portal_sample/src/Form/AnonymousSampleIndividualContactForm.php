@@ -71,15 +71,9 @@ class AnonymousSampleIndividualContactForm extends FormBase {
       return $form;
     }
 
-    $sample = $this->loadAnonymousSampleByPrn($prn);
-    if (!$sample || !$sample->id()) {
-      $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
-      $form['#redirect'] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
-      return $form;
-    }
-
-    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($sample)) {
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
       $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['#cache']['max-age'] = 0;
       $form['message'] = [
         '#markup' => '<div class="messages messages--warning">' .
           '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
@@ -88,6 +82,13 @@ class AnonymousSampleIndividualContactForm extends FormBase {
           ]) . '</p></div>',
         '#weight' => -10,
       ];
+      return $form;
+    }
+
+    $sample = $this->loadAnonymousSampleByPrn($prn);
+    if (!$sample || !$sample->id()) {
+      $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
+      $form['#redirect'] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
       return $form;
     }
 

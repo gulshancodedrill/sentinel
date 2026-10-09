@@ -33,10 +33,8 @@ final class AnonymousSampleLanguageRedirect {
             (string) \Drupal::request()->query->get('prn', '')
           );
           if ($prn !== '') {
-            $loaded = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
-            if ($loaded && $loaded->hasField('language') && !$loaded->get('language')->isEmpty()) {
-              $session_langcode = (string) $loaded->get('language')->value;
-            }
+            // Scalar SQL — avoid a full entity load just for language.
+            $session_langcode = AnonymousSampleWizardProgress::fetchSampleScalarByPrn($prn, 'language');
           }
         }
 
