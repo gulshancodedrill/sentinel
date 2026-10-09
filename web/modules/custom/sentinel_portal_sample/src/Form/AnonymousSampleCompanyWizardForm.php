@@ -238,13 +238,22 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         '#weight' => 11,
       ];
 
-      $options = [];
+      // Drop addresses with no street/town/postcode so the select has no blank rows.
+      $addresses = array_filter($addresses, function ($addr_data) {
+        return is_array($addr_data) && $this->formatCompanyAddressSelectLabel($addr_data) !== '';
+      });
+
+      $options = ['' => $this->tFlow('- Select an address or enter manually below -')];
       if (count($addresses) > 0) {
         foreach ($addresses as $entity_id => $addr_data) {
           $options[(string) $entity_id] = $this->formatCompanyAddressSelectLabel($addr_data);
         }
       }
       $selected_address = $this->getCompanyAddressSelectValue($form_state);
+      if ($selected_address !== NULL && !isset($addresses[$selected_address]) && !isset($addresses[(int) $selected_address])) {
+        $selected_address = NULL;
+        $form_state->set('company_address_selected_id', NULL);
+      }
       if ($selected_address === NULL && count($addresses) > 0) {
         $client = NULL;
         if (!empty($data['client_cid'])) {
@@ -260,38 +269,54 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       if ($selected_address !== NULL && empty($form_state->get('company_address_prefill'))) {
         $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
       }
-      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_select'] = [
+
+      // Smaller AJAX region so "Enter address manually" does not rebuild the whole wizard.
+      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_ajax'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'company-address-ajax'],
+        '#weight' => 11.5,
+      ];
+      $address_ajax = &$form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_ajax'];
+
+      $address_ajax['company_address_select'] = [
         '#type' => 'select',
         '#title' => $this->tFlow('Select company address From Dropdown'),
         '#options' => $options,
         '#default_value' => $selected_address !== NULL ? (string) $selected_address : NULL,
-        '#limit_validation_errors' => [],
+        '#limit_validation_errors' => [['company_address_select']],
         '#ajax' => [
           'callback' => '::ajaxCompanyAddressSelect',
-          'wrapper' => 'company-wizard-ajax-root',
+          'wrapper' => 'company-address-ajax',
           'event' => 'change',
+          'progress' => [
+            'type' => 'throbber',
+            'message' => NULL,
+          ],
         ],
-        '#weight' => 11.5,
+        '#weight' => 0,
       ];
 
-      $form['company_wizard_ajax_root']['company_wizard_wrapper']['manual_address_btn'] = [
+      $address_ajax['manual_address_btn'] = [
         '#type' => 'submit',
         '#value' => $manual_mode ? $this->tFlow('Cancel manual address') : $this->tFlow('Enter address manually'),
         '#submit' => ['::submitToggleManualAddress'],
         '#ajax' => [
-          'callback' => '::ajaxWizardRefresh',
-          'wrapper' => 'company-wizard-ajax-root',
-          'progress' => ['type' => 'none'],
+          'callback' => '::ajaxCompanyAddressRegion',
+          'wrapper' => 'company-address-ajax',
+          'progress' => [
+            'type' => 'throbber',
+            'message' => NULL,
+          ],
         ],
-        '#limit_validation_errors' => [],
-        '#weight' => 11.6,
+        '#limit_validation_errors' => [['company_address_select']],
+        '#weight' => 1,
         '#attributes' => ['class' => ['button', 'button--small']],
       ];
 
-      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper'] = [
+      $address_ajax['company_address_wrapper'] = [
         '#type' => 'container',
         '#attributes' => ['id' => 'company-address-wrapper'],
-        '#weight' => 12,
+        '#weight' => 2,
       ];
 
       if ($manual_mode) {
@@ -301,32 +326,32 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         }
         $company_name_default = $form_state->getValue('company_name') ?? ($data['name'] ?? '');
 
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_country'] = [
+        $address_ajax['company_address_wrapper']['company_country'] = [
           '#type' => 'select',
           '#title' => $this->tFlow('Country'),
           '#options' => PortalSampleCountryOptions::anonymousOptions(),
           '#default_value' => $prefill['company_country'] ?? $form_state->getValue('company_country') ?: 'GB',
           '#weight' => 0,
         ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_address_1'] = [
+        $address_ajax['company_address_wrapper']['company_address_1'] = [
           '#type' => 'textfield',
           '#title' => $this->tFlow('Address'),
           '#default_value' => $prefill['company_address_1'] ?? $form_state->getValue('company_address_1') ?? '',
           '#weight' => 1,
         ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_town_city'] = [
+        $address_ajax['company_address_wrapper']['company_town_city'] = [
           '#type' => 'textfield',
           '#title' => $this->tFlow('Town/City'),
           '#default_value' => $prefill['company_town_city'] ?? $form_state->getValue('company_town_city') ?? '',
           '#weight' => 2,
         ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_postcode'] = [
+        $address_ajax['company_address_wrapper']['company_postcode'] = [
           '#type' => 'textfield',
           '#title' => $this->tFlow('Postcode'),
           '#default_value' => $prefill['company_postcode'] ?? $form_state->getValue('company_postcode') ?? '',
           '#weight' => 3,
         ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company'] = [
+        $address_ajax['company_address_wrapper']['company'] = [
           '#type' => 'hidden',
           '#value' => $prefill['company'] ?? $form_state->getValue('company') ?? $company_name_default,
           '#weight' => 4,
@@ -373,6 +398,13 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
+   * AJAX callback: refresh only the company address select / manual fields.
+   */
+  public function ajaxCompanyAddressRegion(array &$form, FormStateInterface $form_state) {
+    return $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_ajax'];
+  }
+
+  /**
    * Fills manual address fields when an address is chosen from the dropdown.
    */
   public function ajaxCompanyAddressSelect(array &$form, FormStateInterface $form_state) {
@@ -382,7 +414,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
     $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
     $form_state->setRebuild(TRUE);
-    return $form['company_wizard_ajax_root'];
+    return $this->ajaxCompanyAddressRegion($form, $form_state);
   }
 
   /**
@@ -460,7 +492,9 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $input = $form_state->getUserInput();
     $paths = [
       ['company_address_select'],
+      ['company_wizard_ajax_root', 'company_wizard_wrapper', 'company_address_ajax', 'company_address_select'],
       ['company_wizard_ajax_root', 'company_wizard_wrapper', 'company_address_select'],
+      ['company_wizard_wrapper', 'company_address_ajax', 'company_address_select'],
       ['company_wizard_wrapper', 'company_address_select'],
     ];
     foreach ($paths as $path) {
@@ -861,7 +895,7 @@ if (method_exists($client, 'getUcr')) {
         ->execute();
 
       foreach ($address_query as $address_row) {
-        $addresses[$address_row->entity_id] = [
+        $row = [
           'organization' => $address_row->field_address_organization ?? '',
           'address1' => $address_row->field_address_address_line1 ?? '',
           'address2' => $address_row->field_address_address_line2 ?? '',
@@ -871,6 +905,11 @@ if (method_exists($client, 'getUcr')) {
           'postcode' => $address_row->field_address_postal_code ?? '',
           'country' => $address_row->field_address_country_code ?? '',
         ];
+        // Skip empty address rows (no street / town / postcode).
+        if ($this->formatCompanyAddressSelectLabel($row) === '') {
+          continue;
+        }
+        $addresses[$address_row->entity_id] = $row;
       }
     }
 
