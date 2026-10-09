@@ -184,8 +184,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
       '#type' => 'email',
       '#title' => $this->tFlow('Company email'),
-      // Required for Next; Fetch uses #limit_validation_errors => [] so either field works.
-      '#required' => TRUE,
+      // Not required here: Fetch accepts email OR UCR. Enforced on Next in submitCompanyReview.
+      '#required' => FALSE,
       '#default_value' => $form_state->getValue('company_email') ?? ($fetched['email'] ?? ''),
       '#weight' => 0,
       '#attributes' => $lookup_field_attributes,
@@ -212,8 +212,11 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           'message' => NULL,
         ],
       ],
-      // Validated in submitFetchCompany so either email or UCR can be used.
-      '#limit_validation_errors' => [],
+      // Must list both fields: empty [] prevents values from being submitted in Drupal.
+      '#limit_validation_errors' => [
+        ['company_email'],
+        ['company_id'],
+      ],
       '#weight' => 10,
     ];
 
@@ -571,8 +574,9 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
     $form_state->set('company_id_alert', NULL);
 
-    $company_id = trim((string) $form_state->getValue('company_id'));
-    $company_email = trim((string) $form_state->getValue('company_email'));
+    $input = $form_state->getUserInput();
+    $company_id = trim((string) ($form_state->getValue('company_id') ?? ($input['company_id'] ?? '')));
+    $company_email = trim((string) ($form_state->getValue('company_email') ?? ($input['company_email'] ?? '')));
     $resolved_from_email = FALSE;
 
     // Prefer Client UCR when provided (existing behaviour).
@@ -668,6 +672,11 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $data['phone'] = $form_state->getValue('company_phone');
     $data['name'] = $form_state->getValue('company_name');
     $data['address'] = $form_state->getValue('company_address');
+    if (trim((string) ($data['email'] ?? '')) === '') {
+      $this->messenger()->addError($this->tFlow('Company email is required.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
     $prn = $form_state->get('wizard_prn') ?: $this->getAnonymousPrn();
     $sample = $this->loadAnonymousSampleByPrn($prn);
     if (!$sample || !$sample->id()) {
