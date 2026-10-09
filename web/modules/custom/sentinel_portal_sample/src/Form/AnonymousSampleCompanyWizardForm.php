@@ -238,7 +238,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         '#weight' => 11,
       ];
 
-      $options = ['' => $this->tFlow('- Select an address or enter manually below -')];
+      $options = [];
       if (count($addresses) > 0) {
         foreach ($addresses as $entity_id => $addr_data) {
           $options[(string) $entity_id] = $this->formatCompanyAddressSelectLabel($addr_data);
