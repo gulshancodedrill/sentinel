@@ -659,6 +659,9 @@ class BulkUploadBatch {
   /**
    * Converts special/accented letters in an email to plain ASCII equivalents.
    *
+   * Handles real accents (É) and common CSV mojibake (Ã‰ from UTF-8 misread as
+   * Windows-1252), e.g. josÃ‰.prÃŠgent@pÃ‹gaz.fr → jose.pregent@pegaz.fr.
+   *
    * @param string $email
    *   Raw email from CSV.
    *
@@ -673,11 +676,14 @@ class BulkUploadBatch {
 
     // Ensure we work with UTF-8 (CSV exports sometimes arrive as Windows-1252).
     if (!mb_check_encoding($email, 'UTF-8')) {
-      $converted = @mb_convert_encoding($email, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+      $converted = @mb_convert_encoding($email, 'UTF-8', 'Windows-1252, ISO-8859-1, UTF-8');
       if (is_string($converted) && $converted !== '') {
         $email = $converted;
       }
     }
+
+    // Fix mojibake: UTF-8 bytes were shown/saved as Latin-1 (É → Ã‰, Ê → ÃŠ).
+    $email = self::repairUtf8Mojibake($email);
 
     if (\Drupal::hasService('transliteration')) {
       $email = \Drupal::transliteration()->transliterate($email, 'en');
@@ -692,7 +698,37 @@ class BulkUploadBatch {
     // Drop leftover non-email characters occasionally produced by transliteration.
     $email = preg_replace('/[^a-zA-Z0-9.@_+\\-]/', '', $email) ?? $email;
 
-    return trim($email);
+    // Emails are case-insensitive; lowercase keeps results consistent.
+    return strtolower(trim($email));
+  }
+
+  /**
+   * Repairs UTF-8 text that was mis-decoded as Windows-1252 / ISO-8859-1.
+   *
+   * Example: "josÃ‰" (mojibake) → "josÉ".
+   */
+  protected static function repairUtf8Mojibake(string $text): string {
+    // Typical markers when UTF-8 accented letters were read as Windows-1252.
+    if (strpos($text, 'Ã') === FALSE && strpos($text, 'Â') === FALSE) {
+      return $text;
+    }
+
+    foreach (['Windows-1252', 'ISO-8859-1'] as $encoding) {
+      $bytes = @mb_convert_encoding($text, $encoding, 'UTF-8');
+      if (!is_string($bytes) || $bytes === '') {
+        continue;
+      }
+      if (!mb_check_encoding($bytes, 'UTF-8')) {
+        continue;
+      }
+      // Prefer the repaired value when mojibake markers are reduced.
+      if (substr_count($bytes, 'Ã') < substr_count($text, 'Ã')
+        || substr_count($bytes, 'Â') < substr_count($text, 'Â')) {
+        return $bytes;
+      }
+    }
+
+    return $text;
   }
 
   /**
