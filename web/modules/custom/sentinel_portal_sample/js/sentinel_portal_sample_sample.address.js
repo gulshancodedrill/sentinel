@@ -59,6 +59,7 @@
                     e.preventDefault();
                     var $form = $(element).closest('form');
                     $form.find('.sample-address-fields').show();
+                    $form.find('.sample-address-manual-mode').val('1');
                     $(element).hide();
                     return false;
                 });
@@ -70,6 +71,7 @@
                     e.preventDefault();
                     var $form = $(element).closest('form');
                     $form.find('.sample-address-fields').hide();
+                    $form.find('.sample-address-manual-mode').val('0');
                     $form.find('.sample-address-add-button').show();
                     return false;
                 });

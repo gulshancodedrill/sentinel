@@ -228,7 +228,13 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     ];
     $addresses = $data['addresses'] ?? [];
     $has_fetched_company = !empty($fetched);
-    $manual_mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
+    $manual_mode_raw = $form_state->getValue('manual_address_mode');
+    if ($manual_mode_raw === NULL) {
+      $manual_mode_raw = $form_state->get('manual_address_mode') ?? '0';
+    }
+    $manual_mode = in_array((string) $manual_mode_raw, ['1', 'true'], TRUE)
+      || $manual_mode_raw === TRUE
+      || $manual_mode_raw === 1;
 
     {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_name'] = [
@@ -266,19 +272,17 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           $form_state->setValue('company_address_select', $selected_address);
         }
       }
-      if ($selected_address !== NULL && empty($form_state->get('company_address_prefill'))) {
-        $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
+      if ($selected_address !== NULL) {
+        $prev_selected = $form_state->get('company_address_selected_id');
+        $selection_changed = $prev_selected === NULL
+          || (string) $prev_selected !== (string) $selected_address;
+        // Sync prefill when dropdown changes, or when not editing manually.
+        if ($selection_changed || !$manual_mode) {
+          $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
+        }
       }
 
-      // Smaller AJAX region so "Enter address manually" does not rebuild the whole wizard.
-      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_ajax'] = [
-        '#type' => 'container',
-        '#attributes' => ['id' => 'company-address-ajax'],
-        '#weight' => 11.5,
-      ];
-      $address_ajax = &$form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_ajax'];
-
-      $address_ajax['company_address_select'] = [
+      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_select'] = [
         '#type' => 'select',
         '#title' => $this->tFlow('Select company address From Dropdown'),
         '#options' => $options,
@@ -286,77 +290,89 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         '#limit_validation_errors' => [['company_address_select']],
         '#ajax' => [
           'callback' => '::ajaxCompanyAddressSelect',
-          'wrapper' => 'company-address-ajax',
+          'wrapper' => 'company-address-wrapper',
           'event' => 'change',
           'progress' => [
             'type' => 'throbber',
             'message' => NULL,
           ],
         ],
+        '#weight' => 11.5,
+      ];
+
+      // Show/hide via js/sentinel_portal_sample_sample.address.js (no AJAX).
+      $form['company_wizard_ajax_root']['company_wizard_wrapper']['manual_address_mode'] = [
+        '#type' => 'hidden',
+        '#default_value' => $manual_mode ? '1' : '0',
+        '#attributes' => ['class' => ['sample-address-manual-mode']],
+        '#weight' => 11.55,
+      ];
+
+      $form['company_wizard_ajax_root']['company_wizard_wrapper']['enter_address_btn'] = [
+        '#type' => 'button',
+        '#value' => $this->tFlow('Enter address manually'),
+        '#attributes' => ['class' => ['button', 'button--small', 'sample-address-add-button']],
+        '#weight' => 11.6,
+      ];
+      if ($manual_mode) {
+        $form['company_wizard_ajax_root']['company_wizard_wrapper']['enter_address_btn']['#attributes']['style'] = 'display: none;';
+      }
+
+      $prefill = $form_state->get('company_address_prefill');
+      if (!is_array($prefill)) {
+        $prefill = [];
+      }
+      $company_name_default = $form_state->getValue('company_name') ?? ($data['name'] ?? '');
+
+      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'id' => 'company-address-wrapper',
+          'class' => ['sample-address-fields'],
+        ],
+        '#weight' => 12,
+      ];
+      if ($manual_mode) {
+        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['#attributes']['style'] = 'display: block;';
+      }
+
+      $address_fields = &$form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper'];
+      $address_fields['company_country'] = [
+        '#type' => 'select',
+        '#title' => $this->tFlow('Country'),
+        '#options' => PortalSampleCountryOptions::anonymousOptions(),
+        '#default_value' => $prefill['company_country'] ?? $form_state->getValue('company_country') ?: 'GB',
         '#weight' => 0,
       ];
-
-      $address_ajax['manual_address_btn'] = [
-        '#type' => 'submit',
-        '#value' => $manual_mode ? $this->tFlow('Cancel manual address') : $this->tFlow('Enter address manually'),
-        '#submit' => ['::submitToggleManualAddress'],
-        '#ajax' => [
-          'callback' => '::ajaxCompanyAddressRegion',
-          'wrapper' => 'company-address-ajax',
-          'progress' => [
-            'type' => 'throbber',
-            'message' => NULL,
-          ],
-        ],
-        '#limit_validation_errors' => [['company_address_select']],
+      $address_fields['company_address_1'] = [
+        '#type' => 'textfield',
+        '#title' => $this->tFlow('Address'),
+        '#default_value' => $prefill['company_address_1'] ?? $form_state->getValue('company_address_1') ?? '',
         '#weight' => 1,
-        '#attributes' => ['class' => ['button', 'button--small']],
       ];
-
-      $address_ajax['company_address_wrapper'] = [
-        '#type' => 'container',
-        '#attributes' => ['id' => 'company-address-wrapper'],
+      $address_fields['company_town_city'] = [
+        '#type' => 'textfield',
+        '#title' => $this->tFlow('Town/City'),
+        '#default_value' => $prefill['company_town_city'] ?? $form_state->getValue('company_town_city') ?? '',
         '#weight' => 2,
       ];
-
-      if ($manual_mode) {
-        $prefill = $form_state->get('company_address_prefill');
-        if (!is_array($prefill)) {
-          $prefill = [];
-        }
-        $company_name_default = $form_state->getValue('company_name') ?? ($data['name'] ?? '');
-
-        $address_ajax['company_address_wrapper']['company_country'] = [
-          '#type' => 'select',
-          '#title' => $this->tFlow('Country'),
-          '#options' => PortalSampleCountryOptions::anonymousOptions(),
-          '#default_value' => $prefill['company_country'] ?? $form_state->getValue('company_country') ?: 'GB',
-          '#weight' => 0,
-        ];
-        $address_ajax['company_address_wrapper']['company_address_1'] = [
-          '#type' => 'textfield',
-          '#title' => $this->tFlow('Address'),
-          '#default_value' => $prefill['company_address_1'] ?? $form_state->getValue('company_address_1') ?? '',
-          '#weight' => 1,
-        ];
-        $address_ajax['company_address_wrapper']['company_town_city'] = [
-          '#type' => 'textfield',
-          '#title' => $this->tFlow('Town/City'),
-          '#default_value' => $prefill['company_town_city'] ?? $form_state->getValue('company_town_city') ?? '',
-          '#weight' => 2,
-        ];
-        $address_ajax['company_address_wrapper']['company_postcode'] = [
-          '#type' => 'textfield',
-          '#title' => $this->tFlow('Postcode'),
-          '#default_value' => $prefill['company_postcode'] ?? $form_state->getValue('company_postcode') ?? '',
-          '#weight' => 3,
-        ];
-        $address_ajax['company_address_wrapper']['company'] = [
-          '#type' => 'hidden',
-          '#value' => $prefill['company'] ?? $form_state->getValue('company') ?? $company_name_default,
-          '#weight' => 4,
-        ];
-      }
+      $address_fields['company_postcode'] = [
+        '#type' => 'textfield',
+        '#title' => $this->tFlow('Postcode'),
+        '#default_value' => $prefill['company_postcode'] ?? $form_state->getValue('company_postcode') ?? '',
+        '#weight' => 3,
+      ];
+      $address_fields['company'] = [
+        '#type' => 'hidden',
+        '#default_value' => $prefill['company'] ?? $form_state->getValue('company') ?? $company_name_default,
+        '#weight' => 4,
+      ];
+      $address_fields['close_address_btn'] = [
+        '#type' => 'button',
+        '#value' => $this->tFlow('Close address'),
+        '#attributes' => ['class' => ['button', 'button--small', 'sample-address-close-button']],
+        '#weight' => 5,
+      ];
 
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_phone'] = [
         '#type' => 'textfield',
@@ -398,23 +414,22 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * AJAX callback: refresh only the company address select / manual fields.
+   * Whether the user opened manual company address fields (JS show/hide).
    */
-  public function ajaxCompanyAddressRegion(array &$form, FormStateInterface $form_state) {
-    return $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_ajax'];
+  protected function isManualCompanyAddressMode(FormStateInterface $form_state): bool {
+    $raw = $form_state->getValue('manual_address_mode');
+    if ($raw === NULL) {
+      $input = $form_state->getUserInput();
+      $raw = $input['manual_address_mode'] ?? $form_state->get('manual_address_mode') ?? '0';
+    }
+    return in_array((string) $raw, ['1', 'true'], TRUE) || $raw === TRUE || $raw === 1;
   }
 
   /**
-   * Fills manual address fields when an address is chosen from the dropdown.
+   * AJAX: refresh prefilled manual fields when the address dropdown changes.
    */
   public function ajaxCompanyAddressSelect(array &$form, FormStateInterface $form_state) {
-    $selected_id = $this->getCompanyAddressSelectValue($form_state);
-    if ($selected_id !== NULL) {
-      $form_state->setValue('company_address_select', $selected_id);
-    }
-    $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
-    $form_state->setRebuild(TRUE);
-    return $this->ajaxCompanyAddressRegion($form, $form_state);
+    return $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper'];
   }
 
   /**
@@ -467,22 +482,17 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $form_state->setValue($key, $value);
     }
 
+    // Prefill field values for JS show/hide (fields stay in the DOM).
+    $user_input = $form_state->getUserInput();
+    foreach ($values as $key => $value) {
+      $user_input[$key] = $value;
+    }
     if ($open_manual_fields) {
+      $user_input['manual_address_mode'] = '1';
+      $form_state->setValue('manual_address_mode', '1');
       $form_state->set('manual_address_mode', TRUE);
-      $user_input = $form_state->getUserInput();
-      foreach ($values as $key => $value) {
-        $user_input[$key] = $value;
-      }
-      $form_state->setUserInput($user_input);
     }
-    else {
-      $form_state->set('manual_address_mode', FALSE);
-      $user_input = $form_state->getUserInput();
-      foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
-        unset($user_input[$k]);
-      }
-      $form_state->setUserInput($user_input);
-    }
+    $form_state->setUserInput($user_input);
   }
 
   /**
@@ -492,9 +502,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $input = $form_state->getUserInput();
     $paths = [
       ['company_address_select'],
-      ['company_wizard_ajax_root', 'company_wizard_wrapper', 'company_address_ajax', 'company_address_select'],
       ['company_wizard_ajax_root', 'company_wizard_wrapper', 'company_address_select'],
-      ['company_wizard_wrapper', 'company_address_ajax', 'company_address_select'],
       ['company_wizard_wrapper', 'company_address_select'],
     ];
     foreach ($paths as $path) {
@@ -579,30 +587,6 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * Toggles the manual address entry mode.
-   */
-  public function submitToggleManualAddress(array &$form, FormStateInterface $form_state) {
-    $mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
-
-    if (!$mode) {
-      $form_state->set('manual_address_mode', TRUE);
-      $this->applyCompanyAddressSelectionToFormState($form_state, TRUE);
-    }
-    else {
-      // Closing manual fields: clear manual input only, keep address dropdown.
-      $form_state->set('manual_address_mode', FALSE);
-      $form_state->set('company_address_prefill', []);
-      $input = $form_state->getUserInput();
-      foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
-        unset($input[$k]);
-      }
-      $form_state->setUserInput($input);
-    }
-
-    $form_state->setRebuild(TRUE);
-  }
-
-  /**
    * Loads company data via Client UCR, or company email → UCR then the same flow.
    */
   public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
@@ -657,6 +641,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
     $form_state->set('fetched_company', $wizard_data);
     $form_state->set('manual_address_mode', FALSE);
+    $form_state->setValue('manual_address_mode', '0');
     $form_state->set('company_address_prefill', []);
 
     $addresses = $wizard_data['addresses'] ?? [];
@@ -668,9 +653,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $input = $form_state->getUserInput();
       $input['company_address_select'] = $selection;
       $form_state->setUserInput($input);
-      // Match portal submit behavior by showing the selected address prefilled
-      // in the editable company address fields right after company fetch.
-      $this->applyCompanyAddressSelectionToFormState($form_state, TRUE);
+      // Prefill manual fields (kept hidden; JS show/hide opens them).
+      $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
     }
     else {
       $form_state->set('company_address_selected_id', NULL);
@@ -683,8 +667,16 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     // Refresh email/UCR from wizard payload (email path keeps typed address).
     $input['company_id'] = $company_id;
     $input['company_email'] = $wizard_data['email'] ?? $company_email;
+    $input['manual_address_mode'] = '0';
     foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
       unset($input[$k]);
+    }
+    // Re-apply prefill into input after clearing keys.
+    $prefill = $form_state->get('company_address_prefill');
+    if (is_array($prefill)) {
+      foreach ($prefill as $key => $value) {
+        $input[$key] = $value;
+      }
     }
     $form_state->setUserInput($input);
     $form_state->setValue('company_email', $input['company_email']);
@@ -733,7 +725,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     $addresses = $data['addresses'] ?? [];
-    $manual_mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
+    $manual_mode = $this->isManualCompanyAddressMode($form_state);
+    $form_state->set('manual_address_mode', $manual_mode);
     $selected_id = $this->getCompanyAddressSelectValue($form_state);
 
     if ($selected_id !== NULL && !$manual_mode) {
@@ -1129,7 +1122,7 @@ if (method_exists($client, 'getUcr')) {
   ): ?int {
     $addresses = $data['addresses'] ?? [];
     $selected_id = $this->getCompanyAddressSelectValue($form_state);
-    $manual_mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
+    $manual_mode = $this->isManualCompanyAddressMode($form_state);
 
     // Dropdown selection: always reuse the existing address entity.
     if ($selected_id !== NULL && !$manual_mode) {
