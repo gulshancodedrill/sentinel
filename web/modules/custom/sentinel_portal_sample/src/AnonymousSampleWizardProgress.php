@@ -262,11 +262,19 @@ final class AnonymousSampleWizardProgress {
     if ($sample->hasField('sentinel_sample_address_target_id') && !empty($sample->get('sentinel_sample_address_target_id')->value)) {
       return TRUE;
     }
+    // Anonymous property form saves scalars (not always address entity refs).
+    $has_postcode = $sample->hasField('postcode')
+      && trim((string) $sample->get('postcode')->value) !== '';
+    $has_street = $sample->hasField('street')
+      && trim((string) $sample->get('street')->value) !== '';
+    if ($has_postcode && $has_street) {
+      return TRUE;
+    }
     return FALSE;
   }
 
   /**
-   * Whether the sample is fully submitted (company + system addresses).
+   * Whether the sample is fully submitted (property / system details saved).
    */
   public static function sampleIsFullySubmitted(EntityInterface $sample): bool {
     return static::sampleHasPropertyStepData($sample);
