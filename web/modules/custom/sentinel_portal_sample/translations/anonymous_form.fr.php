@@ -41,6 +41,7 @@ return [
   'Please enter a company email or Client UCR.' => 'Veuillez saisir un email d entreprise ou un UCR client.',
   'Please enter a valid company email.' => 'Veuillez saisir un email d entreprise valide.',
   'Company email is required.' => 'L email de l entreprise est obligatoire.',
+  'Client UCR is required.' => 'L UCR client est obligatoire.',
   'No record found.' => 'Aucun enregistrement trouve.',
   'Error message' => 'Message d erreur',
   'Status message' => 'Message d etat',

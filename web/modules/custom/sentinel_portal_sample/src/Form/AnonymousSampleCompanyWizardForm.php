@@ -420,6 +420,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['nav_step2']['next'] = [
         '#type' => 'submit',
         '#value' => $this->tFlow('Next'),
+        '#validate' => ['::validateCompanyReview'],
         '#submit' => ['::submitCompanyReview'],
         '#button_type' => 'primary',
       ];
@@ -750,6 +751,45 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
+   * Ensures company email and Client UCR are present before continuing.
+   */
+  public function validateCompanyReview(array &$form, FormStateInterface $form_state) {
+    $form_state->set('company_id_alert', NULL);
+
+    $input = $form_state->getUserInput();
+    $company_email = trim((string) ($form_state->getValue('company_email') ?? ($input['company_email'] ?? '')));
+    $company_id = trim((string) ($form_state->getValue('company_id') ?? ($input['company_id'] ?? '')));
+    $alerts = [];
+
+    if ($company_email === '') {
+      $msg = (string) $this->tFlow('Company email is required.');
+      $form_state->setErrorByName('company_email', $msg);
+      $alerts[] = $msg;
+    }
+    elseif (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
+      $msg = (string) $this->tFlow('Please enter a valid company email.');
+      $form_state->setErrorByName('company_email', $msg);
+      $alerts[] = $msg;
+    }
+
+    if ($company_id === '') {
+      $msg = (string) $this->tFlow('Client UCR is required.');
+      $form_state->setErrorByName('company_id', $msg);
+      $alerts[] = $msg;
+    }
+
+    if (empty($this->getFetchedCompanyData($form_state))) {
+      $msg = (string) $this->tFlow('Please fetch company details first.');
+      $form_state->setErrorByName('company_email', $msg);
+      $alerts[] = $msg;
+    }
+
+    if ($alerts !== []) {
+      $form_state->set('company_id_alert', implode(' ', array_unique($alerts)));
+    }
+  }
+
+  /**
    * Persists company data on the sample and continues to property details.
    */
   public function submitCompanyReview(array &$form, FormStateInterface $form_state) {
@@ -763,11 +803,6 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $data['phone'] = $form_state->getValue('company_phone');
     $data['name'] = $form_state->getValue('company_name');
     $data['address'] = $form_state->getValue('company_address');
-    if (trim((string) ($data['email'] ?? '')) === '') {
-      $this->messenger()->addError($this->tFlow('Company email is required.'));
-      $form_state->setRebuild(TRUE);
-      return;
-    }
     $prn = $form_state->get('wizard_prn') ?: $this->getAnonymousPrn();
     $sample = $this->loadAnonymousSampleByPrn($prn);
     if (!$sample || !$sample->id()) {
