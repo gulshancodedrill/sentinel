@@ -126,6 +126,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         ['property_ajax_root', 'property_house_no'],
         ['property_house_no'],
       ]),
+      '#required' => TRUE,
       '#size' => 12,
       '#weight' => -14,
     ];
@@ -133,6 +134,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#type' => 'textfield',
       '#title' => $this->tFlow('Postcode'),
       '#default_value' => $form_state->getValue('property_postcode') ?? '',
+      '#required' => TRUE,
       '#size' => 16,
       '#weight' => -13,
     ];
