@@ -443,12 +443,14 @@ class SentinelSampleController extends ControllerBase {
       ];
     }
 
-    // Check if sample with this PRN already exists and is fully submitted.
-    $sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
-
-    if ($sample && AnonymousSampleWizardProgress::sampleIsFullySubmitted($sample)) {
+    // Block re-entry when this PRN already has a completed submission.
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
       return [
         '#title' => AnonymousSampleWizardProgress::trans('Sample Already Submitted'),
+        '#cache' => [
+          'max-age' => 0,
+          'contexts' => ['url.query_args:prn', 'session'],
+        ],
         'message' => [
           '#markup' => '<div class="messages messages--warning">' .
             '<p><strong>' . AnonymousSampleWizardProgress::trans('This record already exists.') . '</strong></p>' .
@@ -461,6 +463,7 @@ class SentinelSampleController extends ControllerBase {
     }
 
     $form = $this->formBuilder()->getForm('\Drupal\sentinel_portal_sample\Form\AnonymousSampleSubmissionForm');
+    $form['#cache']['max-age'] = 0;
     return $form;
   }
 

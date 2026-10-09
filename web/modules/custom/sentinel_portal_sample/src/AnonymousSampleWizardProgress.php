@@ -153,7 +153,27 @@ final class AnonymousSampleWizardProgress {
   }
 
   /**
+   * PRN strings that may appear in pack_reference_number for the same pack.
+   *
+   * @return string[]
+   */
+  public static function prnLookupVariants(string $prn): array {
+    $canonical = static::normalizeAnonymousPrn($prn);
+    if ($canonical === '') {
+      return [];
+    }
+    $variants = [$canonical];
+    if (strpos($canonical, ':') !== FALSE) {
+      $variants[] = str_replace(':', '-', $canonical);
+      $variants[] = str_replace(':', '_', $canonical);
+    }
+    return array_values(array_unique($variants));
+  }
+
+  /**
    * Loads a sentinel_sample by pack reference number.
+   *
+   * Prefers a fully submitted row when duplicates exist for the same PRN.
    */
   public static function loadSampleByPrn(string $prn): ?EntityInterface {
     $prn = static::normalizeAnonymousPrn($prn);
@@ -168,18 +188,37 @@ final class AnonymousSampleWizardProgress {
       return $cache[$prn];
     }
 
+    $variants = static::prnLookupVariants($prn);
     $storage = \Drupal::entityTypeManager()->getStorage('sentinel_sample');
     $ids = $storage->getQuery()
-      ->condition('pack_reference_number', $prn)
+      ->condition('pack_reference_number', $variants, 'IN')
       ->accessCheck(FALSE)
-      ->range(0, 1)
+      ->sort('id', 'DESC')
       ->execute();
     if (empty($ids)) {
       $cache[$prn] = NULL;
       return NULL;
     }
+
+    $samples = $storage->loadMultiple($ids);
+    foreach ($samples as $sample) {
+      if ($sample && static::sampleIsFullySubmitted($sample)) {
+        $cache[$prn] = $sample;
+        return $cache[$prn];
+      }
+    }
+
+    // Newest in-progress / draft row.
     $cache[$prn] = $storage->load((int) reset($ids));
     return $cache[$prn];
+  }
+
+  /**
+   * Whether any sample for this PRN is already fully submitted.
+   */
+  public static function prnIsFullySubmitted(string $prn): bool {
+    $sample = static::loadSampleByPrn($prn);
+    return $sample && static::sampleIsFullySubmitted($sample);
   }
 
   /**
@@ -253,31 +292,85 @@ final class AnonymousSampleWizardProgress {
   }
 
   /**
-   * Whether property / system address step is complete.
+   * Safe trimmed string from a sample field.
    */
-  public static function sampleHasPropertyStepData(EntityInterface $sample): bool {
+  public static function sampleFieldString(EntityInterface $sample, string $field): string {
+    if (!$sample->hasField($field) || $sample->get($field)->isEmpty()) {
+      return '';
+    }
+    return trim((string) $sample->get($field)->value);
+  }
+
+  /**
+   * Whether the sample has a company address entity reference (new or legacy).
+   */
+  public static function sampleHasCompanyAddress(EntityInterface $sample): bool {
+    if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
+      return TRUE;
+    }
+    if ($sample->hasField('sentinel_company_address_target_id') && !$sample->get('sentinel_company_address_target_id')->isEmpty()) {
+      return !empty($sample->get('sentinel_company_address_target_id')->value);
+    }
+    return FALSE;
+  }
+
+  /**
+   * Whether the sample has a system / property address entity reference.
+   */
+  public static function sampleHasSystemAddress(EntityInterface $sample): bool {
     if ($sample->hasField('field_sentinel_sample_address') && !$sample->get('field_sentinel_sample_address')->isEmpty()) {
       return TRUE;
     }
-    if ($sample->hasField('sentinel_sample_address_target_id') && !empty($sample->get('sentinel_sample_address_target_id')->value)) {
+    if ($sample->hasField('sentinel_sample_address_target_id') && !$sample->get('sentinel_sample_address_target_id')->isEmpty()) {
+      return !empty($sample->get('sentinel_sample_address_target_id')->value);
+    }
+    return FALSE;
+  }
+
+  /**
+   * Whether property / system address step is complete.
+   */
+  public static function sampleHasPropertyStepData(EntityInterface $sample): bool {
+    // Anonymous final step always saves age-of-system (required radios).
+    $system_6 = static::sampleFieldString($sample, 'system_6_months');
+    if ($system_6 === 'LESS6' || $system_6 === 'MORE6') {
       return TRUE;
     }
+
+    if (static::sampleHasSystemAddress($sample)) {
+      return TRUE;
+    }
+
+    $postcode = static::sampleFieldString($sample, 'postcode');
+    $street = static::sampleFieldString($sample, 'street');
+    $town = static::sampleFieldString($sample, 'town_city');
+    $system_location = static::sampleFieldString($sample, 'system_location');
+
     // Anonymous property form saves scalars (not always address entity refs).
-    $has_postcode = $sample->hasField('postcode')
-      && trim((string) $sample->get('postcode')->value) !== '';
-    $has_street = $sample->hasField('street')
-      && trim((string) $sample->get('street')->value) !== '';
-    if ($has_postcode && $has_street) {
+    if ($postcode !== '' && ($street !== '' || $town !== '')) {
+      return TRUE;
+    }
+    if ($system_location !== '') {
+      return TRUE;
+    }
+    // Final step always writes landlord + boiler manufacturer with an address line.
+    if (static::sampleFieldString($sample, 'landlord') !== ''
+      && static::sampleFieldString($sample, 'boiler_manufacturer') !== ''
+      && ($postcode !== '' || $street !== '' || $town !== '')) {
       return TRUE;
     }
     return FALSE;
   }
 
   /**
-   * Whether the sample is fully submitted (property / system details saved).
+   * Whether the sample is fully submitted (wizard finished / all details saved).
    */
   public static function sampleIsFullySubmitted(EntityInterface $sample): bool {
-    return static::sampleHasPropertyStepData($sample);
+    if (static::sampleHasPropertyStepData($sample)) {
+      return TRUE;
+    }
+    // Legacy / portal rows: both address entities without scalar copies.
+    return static::sampleHasCompanyAddress($sample) && static::sampleHasSystemAddress($sample);
   }
 
   /**

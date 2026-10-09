@@ -67,8 +67,9 @@ class AnonymousSampleSubmissionForm extends FormBase {
     $request->getSession()->set('sentinel_anonymous_entry', 'submit');
 
     $existing_sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
-    if ($existing_sample && AnonymousSampleWizardProgress::sampleIsFullySubmitted($existing_sample)) {
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
       $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['#cache']['max-age'] = 0;
       $form['message'] = [
         '#markup' => '<div class="messages messages--warning">' .
           '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
