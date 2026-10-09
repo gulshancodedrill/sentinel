@@ -182,11 +182,15 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     ] : [];
 
     // Optional for Fetch: UCR alone can load details; email alone resolves UCR first.
+    $email_default = trim((string) ($form_state->getValue('company_email') ?? ''));
+    if ($email_default === '') {
+      $email_default = trim((string) ($fetched['email'] ?? ''));
+    }
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
-      '#type' => 'email',
+      '#type' => 'textfield',
       '#title' => $this->tFlow('Company email'),
       '#required' => FALSE,
-      '#default_value' => $form_state->getValue('company_email') ?? ($fetched['email'] ?? ''),
+      '#default_value' => $email_default,
       '#weight' => 0,
       '#attributes' => $alert_attrs,
     ];
@@ -635,12 +639,13 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $form_state->set('company_id_alert', NULL);
     $wizard_data = $this->clientToWizardData($client, $resolved_ucr);
 
-    // Prefer client email from UCR fetch; keep typed email if client has none.
-    $filled_email = trim((string) ($wizard_data['email'] ?? ''));
+    // Always pull email from sentinel_client after UCR fetch (do not keep a blank
+    // submitted value — that was blocking the client email from showing).
+    $filled_email = $this->getClientEmailFromSentinelClient($client);
     if ($filled_email === '' && $company_email !== '') {
       $filled_email = $company_email;
-      $wizard_data['email'] = $filled_email;
     }
+    $wizard_data['email'] = $filled_email;
     $wizard_data['company_id'] = $resolved_ucr;
 
     $form_state->setValue('company_id', $resolved_ucr);
@@ -669,11 +674,16 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     // Clear user-entered values so they are replaced by the new fetched data.
-    // Keep company_email / company_id so both fields stay populated after fetch.
     $input = $form_state->getUserInput();
     unset($input['company_name'], $input['company_address'], $input['company_phone']);
     $input['company_id'] = $resolved_ucr;
-    $input['company_email'] = $filled_email;
+    if ($filled_email !== '') {
+      $input['company_email'] = $filled_email;
+    }
+    else {
+      // Avoid locking an empty submitted email over the fetched default.
+      unset($input['company_email']);
+    }
     foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
       unset($input[$k]);
     }
@@ -831,9 +841,21 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     $n = (int) $digits;
-    $candidates = array_unique(array_filter([$n, (int) floor($n / 10)], static function ($v) {
+    $real = (int) floor($n / 10);
+    // Prefer stored (non-luhn) UCR when the pasted value is a valid luhn number
+    // (e.g. 116 → real UCR 11), matching how clients are stored in sentinel_client.
+    $candidates = [];
+    $probe = $this->entityTypeManager->getStorage('sentinel_client')->create([]);
+    if ($probe instanceof SentinelClient && $real > 0 && $probe->validateUcr($n)) {
+      $candidates[] = $real;
+    }
+    $candidates[] = $n;
+    if ($real > 0) {
+      $candidates[] = $real;
+    }
+    $candidates = array_values(array_unique(array_filter($candidates, static function ($v) {
       return $v > 0;
-    }));
+    })));
 
     $storage = $this->entityTypeManager->getStorage('sentinel_client');
     foreach ($candidates as $ucr) {
@@ -851,6 +873,50 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     return NULL;
+  }
+
+  /**
+   * Read company email from sentinel_client (entity, then DB fallback).
+   */
+  protected function getClientEmailFromSentinelClient(SentinelClient $client): string {
+    if ($client->hasField('email') && !$client->get('email')->isEmpty()) {
+      $email = trim((string) $client->get('email')->value);
+      if ($email !== '') {
+        return $email;
+      }
+    }
+
+    // Fresh load in case the in-memory entity is incomplete.
+    $cid = (int) $client->id();
+    if ($cid > 0) {
+      $reloaded = $this->entityTypeManager->getStorage('sentinel_client')->load($cid);
+      if ($reloaded instanceof SentinelClient
+        && $reloaded->hasField('email')
+        && !$reloaded->get('email')->isEmpty()) {
+        $email = trim((string) $reloaded->get('email')->value);
+        if ($email !== '') {
+          return $email;
+        }
+      }
+
+      try {
+        $db_email = \Drupal::database()
+          ->select('sentinel_client', 'sc')
+          ->fields('sc', ['email'])
+          ->condition('cid', $cid)
+          ->range(0, 1)
+          ->execute()
+          ->fetchField();
+        if (is_string($db_email) && trim($db_email) !== '') {
+          return trim($db_email);
+        }
+      }
+      catch (\Throwable $e) {
+        // Ignore and fall through.
+      }
+    }
+
+    return '';
   }
 
   /**
@@ -920,10 +986,7 @@ if (method_exists($client, 'getUcr')) {
       ]));
     }
 
-    $company_email = '';
-    if ($client->hasField('email') && !$client->get('email')->isEmpty()) {
-      $company_email = trim((string) $client->get('email')->value);
-    }
+    $company_email = $this->getClientEmailFromSentinelClient($client);
 
     $company_phone = '';
     if ($client->hasField('telephone') && !$client->get('telephone')->isEmpty()) {
