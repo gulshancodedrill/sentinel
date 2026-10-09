@@ -236,7 +236,14 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $options = ['' => $this->tFlow('- Select an address or enter manually below -')];
       if (count($addresses) > 0) {
         foreach ($addresses as $entity_id => $addr_data) {
-          $options[(string) $entity_id] = $this->formatCompanyAddressSelectLabel($addr_data);
+          if (!$this->companyAddressHasContent($addr_data)) {
+            continue;
+          }
+          $label = $this->formatCompanyAddressSelectLabel($addr_data);
+          if ($label === '') {
+            continue;
+          }
+          $options[(string) $entity_id] = $label;
         }
       }
       $selected_address = $this->getCompanyAddressSelectValue($form_state);
@@ -564,10 +571,10 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * Loads company data by company email and/or Client UCR.
+   * Loads company data by company email or Client UCR (either field).
    *
-   * Prefer Client UCR when provided; otherwise resolve UCR from company email
-   * via domain map / most-used domain lookup.
+   * - Client UCR → loads client and fills company email.
+   * - Company email → resolves UCR (domain map / most-used) and fills Client UCR.
    */
   public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
     $form_state->set('company_id_alert', NULL);
@@ -584,19 +591,15 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $client = NULL;
     $resolved_ucr = '';
 
+    // Path 1: Client UCR → company details + email.
     if ($company_id !== '') {
       $client = $this->lookupSentinelClientByCompanyId($company_id);
       if ($client) {
-        $resolved_ucr = $company_id;
-        if (method_exists($client, 'getRealUcr') && $client->getRealUcr()) {
-          $resolved_ucr = (string) (int) $client->getRealUcr();
-        }
-        elseif (method_exists($client, 'getUcr') && $client->getUcr() !== NULL) {
-          $resolved_ucr = (string) $client->getUcr();
-        }
+        $resolved_ucr = $this->formatClientUcrForForm($client, $company_id);
       }
     }
 
+    // Path 2: Company email → UCR (domain JSON / most-used) → company details.
     if (!$client && $company_email !== '') {
       if (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
         $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a valid company email.'));
@@ -619,6 +622,9 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         if (!$client) {
           $client = $this->lookupSentinelClientByCompanyId($resolved_ucr);
         }
+        if ($client) {
+          $resolved_ucr = $this->formatClientUcrForForm($client, $resolved_ucr);
+        }
       }
     }
 
@@ -629,20 +635,23 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     if ($resolved_ucr === '') {
-      $resolved_ucr = $company_id !== '' ? $company_id : '';
-      if ($resolved_ucr === '' && method_exists($client, 'getRealUcr') && $client->getRealUcr()) {
-        $resolved_ucr = (string) (int) $client->getRealUcr();
-      }
+      $resolved_ucr = $this->formatClientUcrForForm($client, $company_id);
     }
 
     $form_state->set('company_id_alert', NULL);
     $wizard_data = $this->clientToWizardData($client, $resolved_ucr);
-    // Keep the email the user typed when fetching by email.
-    if ($company_email !== '') {
-      $wizard_data['email'] = $company_email;
+
+    // Cross-fill: UCR fetch fills email; email fetch fills UCR.
+    // Prefer client email; keep typed email only when client has none.
+    $filled_email = trim((string) ($wizard_data['email'] ?? ''));
+    if ($filled_email === '' && $company_email !== '') {
+      $filled_email = $company_email;
+      $wizard_data['email'] = $filled_email;
     }
+    $wizard_data['company_id'] = $resolved_ucr;
+
     $form_state->setValue('company_id', $resolved_ucr);
-    $form_state->setValue('company_email', $wizard_data['email'] ?? $company_email);
+    $form_state->setValue('company_email', $filled_email);
     $form_state->set('fetched_company', $wizard_data);
     $this->persistFetchedCompanyToSession($form_state, $wizard_data);
     $form_state->set('manual_address_mode', FALSE);
@@ -667,17 +676,31 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     // Clear user-entered values so they are replaced by the new fetched data.
-    // Keep company_email / company_id so the lookup fields stay populated.
+    // Keep company_email / company_id so both lookup fields stay cross-filled.
     $input = $form_state->getUserInput();
     unset($input['company_name'], $input['company_address'], $input['company_phone']);
     $input['company_id'] = $resolved_ucr;
-    $input['company_email'] = $wizard_data['email'] ?? $company_email;
+    $input['company_email'] = $filled_email;
     foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
       unset($input[$k]);
     }
     $form_state->setUserInput($input);
 
     $form_state->setRebuild(TRUE);
+  }
+
+  /**
+   * Prefer real UCR digits for the Client UCR form field.
+   */
+  protected function formatClientUcrForForm(SentinelClient $client, string $fallback = ''): string {
+    if (method_exists($client, 'getRealUcr') && $client->getRealUcr()) {
+      return (string) (int) $client->getRealUcr();
+    }
+    if (method_exists($client, 'getUcr') && $client->getUcr() !== NULL) {
+      return (string) $client->getUcr();
+    }
+    $digits = preg_replace('/\D/', '', $fallback);
+    return $digits !== '' ? $digits : $fallback;
   }
 
   /**
@@ -878,7 +901,7 @@ if (method_exists($client, 'getUcr')) {
         ->execute();
 
       foreach ($address_query as $address_row) {
-        $addresses[$address_row->entity_id] = [
+        $row = [
           'organization' => $address_row->field_address_organization ?? '',
           'address1' => $address_row->field_address_address_line1 ?? '',
           'address2' => $address_row->field_address_address_line2 ?? '',
@@ -888,6 +911,11 @@ if (method_exists($client, 'getUcr')) {
           'postcode' => $address_row->field_address_postal_code ?? '',
           'country' => $address_row->field_address_country_code ?? '',
         ];
+        // Skip blank / empty address rows from the dropdown.
+        if (!$this->companyAddressHasContent($row)) {
+          continue;
+        }
+        $addresses[$address_row->entity_id] = $row;
       }
     }
 
@@ -1332,6 +1360,18 @@ if (method_exists($client, 'getUcr')) {
         AnonymousSampleWizardProgress::prnRedirectOptions($prn)
       );
     }
+  }
+
+  /**
+   * Whether an address row has any usable street/locality/postcode content.
+   */
+  protected function companyAddressHasContent(array $addr): bool {
+    foreach (['address1', 'address2', 'address3', 'locality', 'admin_area', 'postcode'] as $key) {
+      if (trim((string) ($addr[$key] ?? '')) !== '') {
+        return TRUE;
+      }
+    }
+    return FALSE;
   }
 
   /**
