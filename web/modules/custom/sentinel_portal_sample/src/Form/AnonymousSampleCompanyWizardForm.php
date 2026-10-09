@@ -148,7 +148,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     ];
 
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['help'] = [
-      '#markup' => '<p>' . $this->tFlow('Enter your Client UCR. We will load your company name and email where available.') . '</p>',
+      '#markup' => '<p>' . $this->tFlow('Enter your company email or Client UCR to fetch your company details. You can use either field.') . '</p>',
       '#weight' => -10,
     ];
 
@@ -176,18 +176,29 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       ];
     }
 
+    $alert_attrs = (is_string($company_id_alert) && $company_id_alert !== '') ? [
+      'aria-invalid' => 'true',
+      'aria-describedby' => 'company-id-alert',
+    ] : [];
+
+    $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
+      '#type' => 'email',
+      '#title' => $this->tFlow('Company email'),
+      '#required' => !empty($fetched),
+      '#default_value' => $form_state->getValue('company_email') ?? ($fetched['email'] ?? ''),
+      '#weight' => 0,
+      '#attributes' => $alert_attrs,
+    ];
+
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_id'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Client UCR'),
-      '#required' => TRUE,
+      '#required' => FALSE,
       '#default_value' => $form_state->getValue('company_id') ?? ($fetched['company_id'] ?? ''),
-      '#weight' => 0,
-      '#attributes' => (is_string($company_id_alert) && $company_id_alert !== '') ? [
-        'aria-invalid' => 'true',
-        'aria-describedby' => 'company-id-alert',
-      ] : [],
+      '#weight' => 1,
+      '#attributes' => $alert_attrs,
     ];
-  
+
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['fetch'] = [
       '#type' => 'submit',
       '#value' => $this->tFlow('Fetch Details'),
@@ -200,7 +211,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           'message' => NULL,
         ],
       ],
-      '#limit_validation_errors' => [['company_id']],
+      '#limit_validation_errors' => [['company_email'], ['company_id']],
       '#weight' => 10,
     ];
 
@@ -316,14 +327,6 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           '#weight' => 4,
         ];
       }
-
-      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
-        '#type' => 'email',
-        '#required' => TRUE,
-        '#title' => $this->tFlow('Company email'),
-        '#default_value' => $form_state->getValue('company_email') ?? ($data['email'] ?? ''),
-        '#weight' => 13,
-      ];
 
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_phone'] = [
         '#type' => 'textfield',
@@ -561,28 +564,87 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * Loads company data from the portal client table (UCR / Company ID).
+   * Loads company data by company email and/or Client UCR.
+   *
+   * Prefer Client UCR when provided; otherwise resolve UCR from company email
+   * via domain map / most-used domain lookup.
    */
   public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
     $form_state->set('company_id_alert', NULL);
 
+    $company_email = trim((string) $form_state->getValue('company_email'));
     $company_id = trim((string) $form_state->getValue('company_id'));
-    if ($company_id === '') {
-      $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a Company ID.'));
+
+    if ($company_email === '' && $company_id === '') {
+      $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a company email or Client UCR.'));
       $form_state->setRebuild(TRUE);
       return;
     }
 
-    $client = $this->lookupSentinelClientByCompanyId($company_id);
+    $client = NULL;
+    $resolved_ucr = '';
+
+    if ($company_id !== '') {
+      $client = $this->lookupSentinelClientByCompanyId($company_id);
+      if ($client) {
+        $resolved_ucr = $company_id;
+        if (method_exists($client, 'getRealUcr') && $client->getRealUcr()) {
+          $resolved_ucr = (string) (int) $client->getRealUcr();
+        }
+        elseif (method_exists($client, 'getUcr') && $client->getUcr() !== NULL) {
+          $resolved_ucr = (string) $client->getUcr();
+        }
+      }
+    }
+
+    if (!$client && $company_email !== '') {
+      if (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
+        $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a valid company email.'));
+        $form_state->setRebuild(TRUE);
+        return;
+      }
+
+      $ucr = function_exists('sentinel_portal_entities_resolve_company_ucr_for_email')
+        ? sentinel_portal_entities_resolve_company_ucr_for_email($company_email)
+        : NULL;
+
+      if ($ucr) {
+        $resolved_ucr = (string) (int) $ucr;
+        if (function_exists('sentinel_portal_entities_get_client_by_ucr')) {
+          $loaded = sentinel_portal_entities_get_client_by_ucr($ucr);
+          if ($loaded instanceof SentinelClient) {
+            $client = $loaded;
+          }
+        }
+        if (!$client) {
+          $client = $this->lookupSentinelClientByCompanyId($resolved_ucr);
+        }
+      }
+    }
+
     if (!$client) {
-      $form_state->set('company_id_alert', (string) $this->tFlow('Company ID is not valid.'));
+      $form_state->set('company_id_alert', (string) $this->tFlow('No record found.'));
       $form_state->setRebuild(TRUE);
       return;
+    }
+
+    if ($resolved_ucr === '') {
+      $resolved_ucr = $company_id !== '' ? $company_id : '';
+      if ($resolved_ucr === '' && method_exists($client, 'getRealUcr') && $client->getRealUcr()) {
+        $resolved_ucr = (string) (int) $client->getRealUcr();
+      }
     }
 
     $form_state->set('company_id_alert', NULL);
-    $wizard_data = $this->clientToWizardData($client, $company_id);
+    $wizard_data = $this->clientToWizardData($client, $resolved_ucr);
+    // Keep the email the user typed when fetching by email.
+    if ($company_email !== '') {
+      $wizard_data['email'] = $company_email;
+    }
+    $form_state->setValue('company_id', $resolved_ucr);
+    $form_state->setValue('company_email', $wizard_data['email'] ?? $company_email);
     $form_state->set('fetched_company', $wizard_data);
+    $this->persistFetchedCompanyToSession($form_state, $wizard_data);
     $form_state->set('manual_address_mode', FALSE);
     $form_state->set('company_address_prefill', []);
 
@@ -605,8 +667,11 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     // Clear user-entered values so they are replaced by the new fetched data.
+    // Keep company_email / company_id so the lookup fields stay populated.
     $input = $form_state->getUserInput();
-    unset($input['company_name'], $input['company_address'], $input['company_email'], $input['company_phone']);
+    unset($input['company_name'], $input['company_address'], $input['company_phone']);
+    $input['company_id'] = $resolved_ucr;
+    $input['company_email'] = $wizard_data['email'] ?? $company_email;
     foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
       unset($input[$k]);
     }
@@ -879,10 +944,19 @@ if (method_exists($client, 'getUcr')) {
       $entered_id = trim((string) $sample->get('ucr')->value);
     }
 
+    $sample_email = '';
+    if ($sample->hasField('company_email') && !$sample->get('company_email')->isEmpty()) {
+      $sample_email = trim((string) $sample->get('company_email')->value);
+    }
+
     if ($entered_id !== '') {
       $client = $this->lookupSentinelClientByCompanyId($entered_id);
       if ($client) {
-        return $this->clientToWizardData($client, $entered_id);
+        $data = $this->clientToWizardData($client, $entered_id);
+        if ($sample_email !== '') {
+          $data['email'] = $sample_email;
+        }
+        return $data;
       }
     }
 
@@ -893,7 +967,7 @@ if (method_exists($client, 'getUcr')) {
       'name' => '',
       'address' => '',
       'addresses' => [],
-      'email' => '',
+      'email' => $sample_email,
       'phone' => '',
     ];
   }
