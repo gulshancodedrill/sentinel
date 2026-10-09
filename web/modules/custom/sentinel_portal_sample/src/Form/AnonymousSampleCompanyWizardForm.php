@@ -184,7 +184,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
       '#type' => 'email',
       '#title' => $this->tFlow('Company email'),
-      '#required' => !empty($fetched),
+      // Not required for Fetch (UCR-only lookup). Required when continuing via Next.
+      '#required' => FALSE,
       '#default_value' => $form_state->getValue('company_email') ?? ($fetched['email'] ?? ''),
       '#weight' => 0,
       '#attributes' => $alert_attrs,
@@ -211,7 +212,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           'message' => NULL,
         ],
       ],
-      '#limit_validation_errors' => [['company_email'], ['company_id']],
+      // Do not validate company_email here — UCR-only fetch must be allowed.
+      '#limit_validation_errors' => [['company_id']],
       '#weight' => 10,
     ];
 
@@ -359,6 +361,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['nav_step2']['next'] = [
         '#type' => 'submit',
         '#value' => $this->tFlow('Next'),
+        '#validate' => ['::validateCompanyReview'],
         '#submit' => ['::submitCompanyReview'],
         '#button_type' => 'primary',
       ];
@@ -701,6 +704,20 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
     $digits = preg_replace('/\D/', '', $fallback);
     return $digits !== '' ? $digits : $fallback;
+  }
+
+  /**
+   * Requires company email before continuing to property details.
+   */
+  public function validateCompanyReview(array &$form, FormStateInterface $form_state) {
+    $email = trim((string) $form_state->getValue('company_email'));
+    if ($email === '') {
+      $form_state->setErrorByName('company_email', $this->tFlow('Company email field is required.'));
+      return;
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+      $form_state->setErrorByName('company_email', $this->tFlow('Please enter a valid company email.'));
+    }
   }
 
   /**
