@@ -181,10 +181,10 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       'aria-describedby' => 'company-id-alert',
     ] : [];
 
+    // Optional for Fetch: UCR alone can load details; email alone resolves UCR first.
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
       '#type' => 'email',
       '#title' => $this->tFlow('Company email'),
-      // Not required for Fetch (UCR-only lookup). Required when continuing via Next.
       '#required' => FALSE,
       '#default_value' => $form_state->getValue('company_email') ?? ($fetched['email'] ?? ''),
       '#weight' => 0,
@@ -212,8 +212,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           'message' => NULL,
         ],
       ],
-      // Do not validate company_email here — UCR-only fetch must be allowed.
-      '#limit_validation_errors' => [['company_id']],
+      // Do not run field #required checks — either email or UCR is enough.
+      '#limit_validation_errors' => [],
       '#weight' => 10,
     ];
 
@@ -361,7 +361,6 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['nav_step2']['next'] = [
         '#type' => 'submit',
         '#value' => $this->tFlow('Next'),
-        '#validate' => ['::validateCompanyReview'],
         '#submit' => ['::submitCompanyReview'],
         '#button_type' => 'primary',
       ];
@@ -574,10 +573,10 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * Loads company data by company email or Client UCR (either field).
+   * Loads company data by Client UCR, or by company email → UCR then same UCR fetch.
    *
-   * - Client UCR → loads client and fills company email.
-   * - Company email → resolves UCR (domain map / most-used) and fills Client UCR.
+   * - Client UCR: fetch details as before (email not required).
+   * - Company email: resolve UCR via domain map / most-used, then fetch by that UCR.
    */
   public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
     $form_state->set('company_id_alert', NULL);
@@ -591,19 +590,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       return;
     }
 
-    $client = NULL;
-    $resolved_ucr = '';
-
-    // Path 1: Client UCR → company details + email.
-    if ($company_id !== '') {
-      $client = $this->lookupSentinelClientByCompanyId($company_id);
-      if ($client) {
-        $resolved_ucr = $this->formatClientUcrForForm($client, $company_id);
-      }
-    }
-
-    // Path 2: Company email → UCR (domain JSON / most-used) → company details.
-    if (!$client && $company_email !== '') {
+    // Email only (or email when UCR empty): resolve UCR, then use normal UCR fetch.
+    if ($company_id === '' && $company_email !== '') {
       if (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
         $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a valid company email.'));
         $form_state->setRebuild(TRUE);
@@ -614,19 +602,24 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         ? sentinel_portal_entities_resolve_company_ucr_for_email($company_email)
         : NULL;
 
-      if ($ucr) {
-        $resolved_ucr = (string) (int) $ucr;
-        if (function_exists('sentinel_portal_entities_get_client_by_ucr')) {
-          $loaded = sentinel_portal_entities_get_client_by_ucr($ucr);
-          if ($loaded instanceof SentinelClient) {
-            $client = $loaded;
-          }
-        }
-        if (!$client) {
-          $client = $this->lookupSentinelClientByCompanyId($resolved_ucr);
-        }
-        if ($client) {
-          $resolved_ucr = $this->formatClientUcrForForm($client, $resolved_ucr);
+      if (!$ucr) {
+        $form_state->set('company_id_alert', (string) $this->tFlow('No record found.'));
+        $form_state->setRebuild(TRUE);
+        return;
+      }
+
+      $company_id = (string) (int) $ucr;
+      $form_state->setValue('company_id', $company_id);
+    }
+
+    // UCR fetch (entered directly, or resolved from company email above).
+    $client = $this->lookupSentinelClientByCompanyId($company_id);
+    if (!$client && function_exists('sentinel_portal_entities_get_client_by_ucr')) {
+      $digits = preg_replace('/\D/', '', $company_id);
+      if ($digits !== '') {
+        $loaded = sentinel_portal_entities_get_client_by_ucr((int) $digits);
+        if ($loaded instanceof SentinelClient) {
+          $client = $loaded;
         }
       }
     }
@@ -637,15 +630,12 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       return;
     }
 
-    if ($resolved_ucr === '') {
-      $resolved_ucr = $this->formatClientUcrForForm($client, $company_id);
-    }
+    $resolved_ucr = $this->formatClientUcrForForm($client, $company_id);
 
     $form_state->set('company_id_alert', NULL);
     $wizard_data = $this->clientToWizardData($client, $resolved_ucr);
 
-    // Cross-fill: UCR fetch fills email; email fetch fills UCR.
-    // Prefer client email; keep typed email only when client has none.
+    // Prefer client email from UCR fetch; keep typed email if client has none.
     $filled_email = trim((string) ($wizard_data['email'] ?? ''));
     if ($filled_email === '' && $company_email !== '') {
       $filled_email = $company_email;
@@ -679,7 +669,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     // Clear user-entered values so they are replaced by the new fetched data.
-    // Keep company_email / company_id so both lookup fields stay cross-filled.
+    // Keep company_email / company_id so both fields stay populated after fetch.
     $input = $form_state->getUserInput();
     unset($input['company_name'], $input['company_address'], $input['company_phone']);
     $input['company_id'] = $resolved_ucr;
@@ -704,20 +694,6 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
     $digits = preg_replace('/\D/', '', $fallback);
     return $digits !== '' ? $digits : $fallback;
-  }
-
-  /**
-   * Requires company email before continuing to property details.
-   */
-  public function validateCompanyReview(array &$form, FormStateInterface $form_state) {
-    $email = trim((string) $form_state->getValue('company_email'));
-    if ($email === '') {
-      $form_state->setErrorByName('company_email', $this->tFlow('Company email field is required.'));
-      return;
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-      $form_state->setErrorByName('company_email', $this->tFlow('Please enter a valid company email.'));
-    }
   }
 
   /**
