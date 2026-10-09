@@ -53,11 +53,50 @@
             // Initialize the AJAX command
             addAjaxCommand();
 
+            /**
+             * Prefill company wizard manual fields from the address dropdown.
+             */
+            function applyCompanyAddressSelection($form) {
+                var map = (settings.sentinelCompanyAddresses) || {};
+                var $select = $form.find('select.sentinel-company-address-select');
+                if (!$select.length) {
+                    return;
+                }
+                var id = String($select.val() || '');
+                if (!id || !map[id]) {
+                    return;
+                }
+                var row = map[id];
+                Object.keys(row).forEach(function(name) {
+                    var $field = $form.find('[name="' + name + '"]');
+                    if ($field.length) {
+                        $field.val(row[name]);
+                    }
+                });
+            }
+
+            // Company address dropdown: prefill via JS only (no AJAX rebuild).
+            once('company-address-select', 'select.sentinel-company-address-select', context).forEach(function(element) {
+                $(element).on('change', function() {
+                    var $form = $(element).closest('form');
+                    applyCompanyAddressSelection($form);
+                    if ($form.find('.sample-address-manual-mode').val() === '1') {
+                        $form.find('.sample-address-fields').show();
+                        $form.find('.sample-address-add-button').hide();
+                    }
+                    else {
+                        $form.find('.sample-address-fields').hide();
+                        $form.find('.sample-address-add-button').show();
+                    }
+                });
+            });
+
             // Handle the "Enter address" button click (portal + anonymous wizard).
             once('sample-address-toggle', '.sample-address-add-button', context).forEach(function(element) {
                 $(element).on('click', function(e) {
                     e.preventDefault();
                     var $form = $(element).closest('form');
+                    applyCompanyAddressSelection($form);
                     $form.find('.sample-address-fields').show();
                     $form.find('.sample-address-manual-mode').val('1');
                     $(element).hide();

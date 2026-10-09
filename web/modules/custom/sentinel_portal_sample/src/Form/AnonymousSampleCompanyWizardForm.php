@@ -287,18 +287,38 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         '#title' => $this->tFlow('Select company address From Dropdown'),
         '#options' => $options,
         '#default_value' => $selected_address !== NULL ? (string) $selected_address : NULL,
-        '#limit_validation_errors' => [['company_address_select']],
-        '#ajax' => [
-          'callback' => '::ajaxCompanyAddressSelect',
-          'wrapper' => 'company-address-wrapper',
-          'event' => 'change',
-          'progress' => [
-            'type' => 'throbber',
-            'message' => NULL,
-          ],
+        '#attributes' => [
+          'class' => ['sentinel-company-address-select'],
         ],
         '#weight' => 11.5,
       ];
+
+      // Address rows for JS prefill on dropdown change (no AJAX).
+      $js_addresses = [];
+      foreach ($addresses as $entity_id => $addr_data) {
+        if (!is_array($addr_data)) {
+          continue;
+        }
+        $line1 = trim((string) ($addr_data['address1'] ?? ''));
+        $extra = trim(implode(' ', array_filter([
+          trim((string) ($addr_data['address2'] ?? '')),
+          trim((string) ($addr_data['address3'] ?? '')),
+        ], static function ($v) {
+          return $v !== '';
+        })));
+        if ($extra !== '') {
+          $line1 = $line1 !== '' ? $line1 . ', ' . $extra : $extra;
+        }
+        $country = strtoupper(trim((string) ($addr_data['country'] ?? '')));
+        $js_addresses[(string) $entity_id] = [
+          'company_country' => $country !== '' ? $country : 'GB',
+          'company_address_1' => $line1,
+          'company_town_city' => trim((string) ($addr_data['locality'] ?? '')),
+          'company_postcode' => trim((string) ($addr_data['postcode'] ?? '')),
+          'company' => trim((string) ($data['name'] ?? '')),
+        ];
+      }
+      $form['#attached']['drupalSettings']['sentinelCompanyAddresses'] = $js_addresses;
 
       // Show/hide via js/sentinel_portal_sample_sample.address.js (no AJAX).
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['manual_address_mode'] = [
@@ -423,13 +443,6 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $raw = $input['manual_address_mode'] ?? $form_state->get('manual_address_mode') ?? '0';
     }
     return in_array((string) $raw, ['1', 'true'], TRUE) || $raw === TRUE || $raw === 1;
-  }
-
-  /**
-   * AJAX: refresh prefilled manual fields when the address dropdown changes.
-   */
-  public function ajaxCompanyAddressSelect(array &$form, FormStateInterface $form_state) {
-    return $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper'];
   }
 
   /**
