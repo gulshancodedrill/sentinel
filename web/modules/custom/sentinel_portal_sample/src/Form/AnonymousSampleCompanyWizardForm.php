@@ -2,7 +2,6 @@
 
 namespace Drupal\sentinel_portal_sample\Form;
 
-use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\NestedArray;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -163,16 +162,18 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $company_id_alert = $form_state->get('company_id_alert');
     if (is_string($company_id_alert) && $company_id_alert !== '') {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_id_alert'] = [
-        '#type' => 'container',
-        '#attributes' => [
-          'id' => 'company-id-alert',
-          'class' => ['messages', 'messages--error', 'sentinel-company-id-alert'],
-          'role' => 'alert',
+        '#theme' => 'status_messages',
+        '#message_list' => [
+          'error' => [$company_id_alert],
+        ],
+        '#status_headings' => [
+          'status' => $this->tFlow('Status message'),
+          'error' => $this->tFlow('Error message'),
+          'warning' => $this->tFlow('Warning message'),
         ],
         '#weight' => -8,
-        'text' => [
-          '#markup' => '<p>' . Html::escape($company_id_alert) . '</p>',
-        ],
+        '#prefix' => '<div id="company-id-alert" class="sentinel-company-id-alert" role="alert">',
+        '#suffix' => '</div>',
       ];
     }
 
@@ -203,6 +204,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['fetch'] = [
       '#type' => 'submit',
       '#value' => $this->tFlow('Fetch Details'),
+      '#validate' => ['::validateFetchCompany'],
       '#submit' => ['::submitFetchCompany'],
       '#ajax' => [
         'callback' => '::ajaxWizardRefresh',
@@ -600,54 +602,104 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * Loads company data via Client UCR, or company email → UCR then the same flow.
+   * Sets a fetch-lookup error on the form (status message + field error).
    */
-  public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
+  protected function setFetchCompanyError(FormStateInterface $form_state, string $message, string $field = 'company_email'): void {
+    $form_state->set('company_id_alert', $message);
+    $form_state->setErrorByName($field, $message);
+  }
+
+  /**
+   * Validates company email / Client UCR before Fetch Details submit.
+   */
+  public function validateFetchCompany(array &$form, FormStateInterface $form_state) {
     $form_state->set('company_id_alert', NULL);
+    $form_state->set('fetch_company_client_id', NULL);
 
     $input = $form_state->getUserInput();
     $company_id = trim((string) ($form_state->getValue('company_id') ?? ($input['company_id'] ?? '')));
     $company_email = trim((string) ($form_state->getValue('company_email') ?? ($input['company_email'] ?? '')));
     $resolved_from_email = FALSE;
+    $error_field = $company_id !== '' ? 'company_id' : 'company_email';
 
     // Prefer Client UCR when provided (existing behaviour).
     if ($company_id === '' && $company_email !== '') {
       if (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
-        $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a valid company email.'));
-        $form_state->setRebuild(TRUE);
+        $this->setFetchCompanyError(
+          $form_state,
+          (string) $this->tFlow('Please enter a valid company email.'),
+          'company_email'
+        );
         return;
       }
 
       $resolved_ucr = sentinel_portal_entities_resolve_company_ucr_for_email($company_email);
       if (!$resolved_ucr) {
-        $form_state->set('company_id_alert', (string) $this->tFlow('No record found.'));
-        $form_state->setRebuild(TRUE);
+        $this->setFetchCompanyError(
+          $form_state,
+          (string) $this->tFlow('No record found.'),
+          'company_email'
+        );
         return;
       }
 
       $company_id = (string) $resolved_ucr;
       $resolved_from_email = TRUE;
       $form_state->setValue('company_id', $company_id);
+      $error_field = 'company_email';
     }
 
     if ($company_id === '') {
-      $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a company email or Client UCR.'));
-      $form_state->setRebuild(TRUE);
+      $this->setFetchCompanyError(
+        $form_state,
+        (string) $this->tFlow('Please enter a company email or Client UCR.'),
+        'company_email'
+      );
       return;
     }
 
     $client = $this->lookupSentinelClientByCompanyId($company_id);
     if (!$client) {
-      $form_state->set(
-        'company_id_alert',
-        (string) $this->tFlow($resolved_from_email ? 'No record found.' : 'Company ID is not valid.')
+      $this->setFetchCompanyError(
+        $form_state,
+        (string) $this->tFlow($resolved_from_email ? 'No record found.' : 'Company ID is not valid.'),
+        $error_field
+      );
+      return;
+    }
+
+    $form_state->set('fetch_company_client_id', (int) $client->id());
+    $form_state->set('fetch_company_resolved_id', $company_id);
+    $form_state->set('fetch_company_email', $company_email);
+  }
+
+  /**
+   * Loads company data via Client UCR, or company email → UCR then the same flow.
+   */
+  public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
+    $form_state->set('company_id_alert', NULL);
+
+    $client_id = (int) ($form_state->get('fetch_company_client_id') ?? 0);
+    $company_id = trim((string) ($form_state->get('fetch_company_resolved_id') ?? $form_state->getValue('company_id') ?? ''));
+    $company_email = trim((string) ($form_state->get('fetch_company_email') ?? $form_state->getValue('company_email') ?? ''));
+
+    $client = $client_id > 0
+      ? $this->entityTypeManager->getStorage('sentinel_client')->load($client_id)
+      : NULL;
+    if (!$client instanceof SentinelClient) {
+      $client = $company_id !== '' ? $this->lookupSentinelClientByCompanyId($company_id) : NULL;
+    }
+    if (!$client instanceof SentinelClient) {
+      $this->setFetchCompanyError(
+        $form_state,
+        (string) $this->tFlow('No record found.'),
+        'company_email'
       );
       $form_state->setRebuild(TRUE);
       return;
     }
 
-    $form_state->set('company_id_alert', NULL);
-    $wizard_data = $this->clientToWizardData($client, $company_id);
+    $wizard_data = $this->clientToWizardData($client, $company_id !== '' ? $company_id : (string) $client->getRealUcr());
     // Prefer the email the user entered when present.
     if ($company_email !== '') {
       $wizard_data['email'] = $company_email;
