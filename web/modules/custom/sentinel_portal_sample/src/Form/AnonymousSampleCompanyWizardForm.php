@@ -2,7 +2,6 @@
 
 namespace Drupal\sentinel_portal_sample\Form;
 
-use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\NestedArray;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -76,15 +75,9 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       return $form;
     }
 
-    $sample = $this->loadAnonymousSampleByPrn($prn);
-    if (!$sample || !$sample->id()) {
-      $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
-      $form['#redirect'] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
-      return $form;
-    }
-
-    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($sample)) {
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
       $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['#cache']['max-age'] = 0;
       $form['message'] = [
         '#markup' => '<div class="messages messages--warning">' .
           '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
@@ -93,6 +86,13 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           ]) . '</p></div>',
         '#weight' => -10,
       ];
+      return $form;
+    }
+
+    $sample = $this->loadAnonymousSampleByPrn($prn);
+    if (!$sample || !$sample->id()) {
+      $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
+      $form['#redirect'] = Url::fromRoute('sentinel_portal_sample.anonymous_submit', [], AnonymousSampleWizardProgress::prnRedirectOptions($prn));
       return $form;
     }
 
@@ -148,7 +148,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     ];
 
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['help'] = [
-      '#markup' => '<p>' . $this->tFlow('Enter your Client UCR. We will load your company name and email where available.') . '</p>',
+      '#markup' => '<p>' . $this->tFlow('Enter your company email or Client UCR (either field). We will load your company details where available.') . '</p>',
       '#weight' => -10,
     ];
 
@@ -163,34 +163,49 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     $company_id_alert = $form_state->get('company_id_alert');
     if (is_string($company_id_alert) && $company_id_alert !== '') {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_id_alert'] = [
-        '#type' => 'container',
-        '#attributes' => [
-          'id' => 'company-id-alert',
-          'class' => ['messages', 'messages--error', 'sentinel-company-id-alert'],
-          'role' => 'alert',
+        '#theme' => 'status_messages',
+        '#message_list' => [
+          'error' => [$company_id_alert],
+        ],
+        '#status_headings' => [
+          'status' => $this->tFlow('Status message'),
+          'error' => $this->tFlow('Error message'),
+          'warning' => $this->tFlow('Warning message'),
         ],
         '#weight' => -8,
-        'text' => [
-          '#markup' => '<p>' . Html::escape($company_id_alert) . '</p>',
-        ],
+        '#prefix' => '<div id="company-id-alert" class="sentinel-company-id-alert" role="alert">',
+        '#suffix' => '</div>',
       ];
     }
+
+    $lookup_field_attributes = (is_string($company_id_alert) && $company_id_alert !== '') ? [
+      'aria-invalid' => 'true',
+      'aria-describedby' => 'company-id-alert',
+    ] : [];
+
+    $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
+      '#type' => 'email',
+      '#title' => $this->tFlow('Company email'),
+      // Not required here: Fetch accepts email OR UCR. Enforced on Next in submitCompanyReview.
+      '#required' => FALSE,
+      '#default_value' => $form_state->getValue('company_email') ?? ($fetched['email'] ?? ''),
+      '#weight' => 0,
+      '#attributes' => $lookup_field_attributes,
+    ];
 
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_id'] = [
       '#type' => 'textfield',
       '#title' => $this->tFlow('Client UCR'),
-      '#required' => TRUE,
+      '#required' => FALSE,
       '#default_value' => $form_state->getValue('company_id') ?? ($fetched['company_id'] ?? ''),
-      '#weight' => 0,
-      '#attributes' => (is_string($company_id_alert) && $company_id_alert !== '') ? [
-        'aria-invalid' => 'true',
-        'aria-describedby' => 'company-id-alert',
-      ] : [],
+      '#weight' => 1,
+      '#attributes' => $lookup_field_attributes,
     ];
-  
+
     $form['company_wizard_ajax_root']['company_wizard_wrapper']['fetch'] = [
       '#type' => 'submit',
       '#value' => $this->tFlow('Fetch Details'),
+      '#validate' => ['::validateFetchCompany'],
       '#submit' => ['::submitFetchCompany'],
       '#ajax' => [
         'callback' => '::ajaxWizardRefresh',
@@ -200,7 +215,11 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           'message' => NULL,
         ],
       ],
-      '#limit_validation_errors' => [['company_id']],
+      // Must list both fields: empty [] prevents values from being submitted in Drupal.
+      '#limit_validation_errors' => [
+        ['company_email'],
+        ['company_id'],
+      ],
       '#weight' => 10,
     ];
 
@@ -212,7 +231,13 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     ];
     $addresses = $data['addresses'] ?? [];
     $has_fetched_company = !empty($fetched);
-    $manual_mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
+    $manual_mode_raw = $form_state->getValue('manual_address_mode');
+    if ($manual_mode_raw === NULL) {
+      $manual_mode_raw = $form_state->get('manual_address_mode') ?? '0';
+    }
+    $manual_mode = in_array((string) $manual_mode_raw, ['1', 'true'], TRUE)
+      || $manual_mode_raw === TRUE
+      || $manual_mode_raw === 1;
 
     {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_name'] = [
@@ -222,6 +247,11 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         '#weight' => 11,
       ];
 
+      // Drop addresses with no street/town/postcode so the select has no blank rows.
+      $addresses = array_filter($addresses, function ($addr_data) {
+        return is_array($addr_data) && $this->formatCompanyAddressSelectLabel($addr_data) !== '';
+      });
+
       $options = ['' => $this->tFlow('- Select an address or enter manually below -')];
       if (count($addresses) > 0) {
         foreach ($addresses as $entity_id => $addr_data) {
@@ -229,6 +259,10 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
         }
       }
       $selected_address = $this->getCompanyAddressSelectValue($form_state);
+      if ($selected_address !== NULL && !isset($addresses[$selected_address]) && !isset($addresses[(int) $selected_address])) {
+        $selected_address = NULL;
+        $form_state->set('company_address_selected_id', NULL);
+      }
       if ($selected_address === NULL && count($addresses) > 0) {
         $client = NULL;
         if (!empty($data['client_cid'])) {
@@ -241,88 +275,126 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
           $form_state->setValue('company_address_select', $selected_address);
         }
       }
-      if ($selected_address !== NULL && empty($form_state->get('company_address_prefill'))) {
-        $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
+      if ($selected_address !== NULL) {
+        $prev_selected = $form_state->get('company_address_selected_id');
+        $selection_changed = $prev_selected === NULL
+          || (string) $prev_selected !== (string) $selected_address;
+        // Sync prefill when dropdown changes, or when not editing manually.
+        if ($selection_changed || !$manual_mode) {
+          $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
+        }
       }
+
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_select'] = [
         '#type' => 'select',
         '#title' => $this->tFlow('Select company address From Dropdown'),
         '#options' => $options,
         '#default_value' => $selected_address !== NULL ? (string) $selected_address : NULL,
-        '#limit_validation_errors' => [],
-        '#ajax' => [
-          'callback' => '::ajaxCompanyAddressSelect',
-          'wrapper' => 'company-wizard-ajax-root',
-          'event' => 'change',
+        '#attributes' => [
+          'class' => ['sentinel-company-address-select'],
         ],
         '#weight' => 11.5,
       ];
 
-      $form['company_wizard_ajax_root']['company_wizard_wrapper']['manual_address_btn'] = [
-        '#type' => 'submit',
-        '#value' => $manual_mode ? $this->tFlow('Cancel manual address') : $this->tFlow('Enter address manually'),
-        '#submit' => ['::submitToggleManualAddress'],
-        '#ajax' => [
-          'callback' => '::ajaxWizardRefresh',
-          'wrapper' => 'company-wizard-ajax-root',
-          'progress' => ['type' => 'none'],
-        ],
-        '#limit_validation_errors' => [],
-        '#weight' => 11.6,
-        '#attributes' => ['class' => ['button', 'button--small']],
+      // Address rows for JS prefill on dropdown change (no AJAX).
+      $js_addresses = [];
+      foreach ($addresses as $entity_id => $addr_data) {
+        if (!is_array($addr_data)) {
+          continue;
+        }
+        $line1 = trim((string) ($addr_data['address1'] ?? ''));
+        $extra = trim(implode(' ', array_filter([
+          trim((string) ($addr_data['address2'] ?? '')),
+          trim((string) ($addr_data['address3'] ?? '')),
+        ], static function ($v) {
+          return $v !== '';
+        })));
+        if ($extra !== '') {
+          $line1 = $line1 !== '' ? $line1 . ', ' . $extra : $extra;
+        }
+        $country = strtoupper(trim((string) ($addr_data['country'] ?? '')));
+        $js_addresses[(string) $entity_id] = [
+          'company_country' => $country !== '' ? $country : 'GB',
+          'company_address_1' => $line1,
+          'company_town_city' => trim((string) ($addr_data['locality'] ?? '')),
+          'company_postcode' => trim((string) ($addr_data['postcode'] ?? '')),
+          'company' => trim((string) ($data['name'] ?? '')),
+        ];
+      }
+      $form['#attached']['drupalSettings']['sentinelCompanyAddresses'] = $js_addresses;
+
+      // Show/hide via js/sentinel_portal_sample_sample.address.js (no AJAX).
+      $form['company_wizard_ajax_root']['company_wizard_wrapper']['manual_address_mode'] = [
+        '#type' => 'hidden',
+        '#default_value' => $manual_mode ? '1' : '0',
+        '#attributes' => ['class' => ['sample-address-manual-mode']],
+        '#weight' => 11.55,
       ];
+
+      $form['company_wizard_ajax_root']['company_wizard_wrapper']['enter_address_btn'] = [
+        '#type' => 'button',
+        '#value' => $this->tFlow('Enter address manually'),
+        '#attributes' => ['class' => ['button', 'button--small', 'sample-address-add-button']],
+        '#weight' => 11.6,
+      ];
+      if ($manual_mode) {
+        $form['company_wizard_ajax_root']['company_wizard_wrapper']['enter_address_btn']['#attributes']['style'] = 'display: none;';
+      }
+
+      $prefill = $form_state->get('company_address_prefill');
+      if (!is_array($prefill)) {
+        $prefill = [];
+      }
+      $company_name_default = $form_state->getValue('company_name') ?? ($data['name'] ?? '');
 
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper'] = [
         '#type' => 'container',
-        '#attributes' => ['id' => 'company-address-wrapper'],
+        '#attributes' => [
+          'id' => 'company-address-wrapper',
+          'class' => ['sample-address-fields'],
+        ],
         '#weight' => 12,
       ];
-
       if ($manual_mode) {
-        $prefill = $form_state->get('company_address_prefill');
-        if (!is_array($prefill)) {
-          $prefill = [];
-        }
-        $company_name_default = $form_state->getValue('company_name') ?? ($data['name'] ?? '');
-
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_country'] = [
-          '#type' => 'select',
-          '#title' => $this->tFlow('Country'),
-          '#options' => PortalSampleCountryOptions::anonymousOptions(),
-          '#default_value' => $prefill['company_country'] ?? $form_state->getValue('company_country') ?: 'GB',
-          '#weight' => 0,
-        ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_address_1'] = [
-          '#type' => 'textfield',
-          '#title' => $this->tFlow('Address'),
-          '#default_value' => $prefill['company_address_1'] ?? $form_state->getValue('company_address_1') ?? '',
-          '#weight' => 1,
-        ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_town_city'] = [
-          '#type' => 'textfield',
-          '#title' => $this->tFlow('Town/City'),
-          '#default_value' => $prefill['company_town_city'] ?? $form_state->getValue('company_town_city') ?? '',
-          '#weight' => 2,
-        ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company_postcode'] = [
-          '#type' => 'textfield',
-          '#title' => $this->tFlow('Postcode'),
-          '#default_value' => $prefill['company_postcode'] ?? $form_state->getValue('company_postcode') ?? '',
-          '#weight' => 3,
-        ];
-        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['company'] = [
-          '#type' => 'hidden',
-          '#value' => $prefill['company'] ?? $form_state->getValue('company') ?? $company_name_default,
-          '#weight' => 4,
-        ];
+        $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper']['#attributes']['style'] = 'display: block;';
       }
 
-      $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_email'] = [
-        '#type' => 'email',
-        '#required' => TRUE,
-        '#title' => $this->tFlow('Company email'),
-        '#default_value' => $form_state->getValue('company_email') ?? ($data['email'] ?? ''),
-        '#weight' => 13,
+      $address_fields = &$form['company_wizard_ajax_root']['company_wizard_wrapper']['company_address_wrapper'];
+      $address_fields['company_country'] = [
+        '#type' => 'select',
+        '#title' => $this->tFlow('Country'),
+        '#options' => PortalSampleCountryOptions::anonymousOptions(),
+        '#default_value' => $prefill['company_country'] ?? $form_state->getValue('company_country') ?: 'GB',
+        '#weight' => 0,
+      ];
+      $address_fields['company_address_1'] = [
+        '#type' => 'textfield',
+        '#title' => $this->tFlow('Address'),
+        '#default_value' => $prefill['company_address_1'] ?? $form_state->getValue('company_address_1') ?? '',
+        '#weight' => 1,
+      ];
+      $address_fields['company_town_city'] = [
+        '#type' => 'textfield',
+        '#title' => $this->tFlow('Town/City'),
+        '#default_value' => $prefill['company_town_city'] ?? $form_state->getValue('company_town_city') ?? '',
+        '#weight' => 2,
+      ];
+      $address_fields['company_postcode'] = [
+        '#type' => 'textfield',
+        '#title' => $this->tFlow('Postcode'),
+        '#default_value' => $prefill['company_postcode'] ?? $form_state->getValue('company_postcode') ?? '',
+        '#weight' => 3,
+      ];
+      $address_fields['company'] = [
+        '#type' => 'hidden',
+        '#default_value' => $prefill['company'] ?? $form_state->getValue('company') ?? $company_name_default,
+        '#weight' => 4,
+      ];
+      $address_fields['close_address_btn'] = [
+        '#type' => 'button',
+        '#value' => $this->tFlow('Close address'),
+        '#attributes' => ['class' => ['button', 'button--small', 'sample-address-close-button']],
+        '#weight' => 5,
       ];
 
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['company_phone'] = [
@@ -349,6 +421,7 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $form['company_wizard_ajax_root']['company_wizard_wrapper']['nav_step2']['next'] = [
         '#type' => 'submit',
         '#value' => $this->tFlow('Next'),
+        '#validate' => ['::validateCompanyReview'],
         '#submit' => ['::submitCompanyReview'],
         '#button_type' => 'primary',
       ];
@@ -365,16 +438,15 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * Fills manual address fields when an address is chosen from the dropdown.
+   * Whether the user opened manual company address fields (JS show/hide).
    */
-  public function ajaxCompanyAddressSelect(array &$form, FormStateInterface $form_state) {
-    $selected_id = $this->getCompanyAddressSelectValue($form_state);
-    if ($selected_id !== NULL) {
-      $form_state->setValue('company_address_select', $selected_id);
+  protected function isManualCompanyAddressMode(FormStateInterface $form_state): bool {
+    $raw = $form_state->getValue('manual_address_mode');
+    if ($raw === NULL) {
+      $input = $form_state->getUserInput();
+      $raw = $input['manual_address_mode'] ?? $form_state->get('manual_address_mode') ?? '0';
     }
-    $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
-    $form_state->setRebuild(TRUE);
-    return $form['company_wizard_ajax_root'];
+    return in_array((string) $raw, ['1', 'true'], TRUE) || $raw === TRUE || $raw === 1;
   }
 
   /**
@@ -427,22 +499,17 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $form_state->setValue($key, $value);
     }
 
+    // Prefill field values for JS show/hide (fields stay in the DOM).
+    $user_input = $form_state->getUserInput();
+    foreach ($values as $key => $value) {
+      $user_input[$key] = $value;
+    }
     if ($open_manual_fields) {
+      $user_input['manual_address_mode'] = '1';
+      $form_state->setValue('manual_address_mode', '1');
       $form_state->set('manual_address_mode', TRUE);
-      $user_input = $form_state->getUserInput();
-      foreach ($values as $key => $value) {
-        $user_input[$key] = $value;
-      }
-      $form_state->setUserInput($user_input);
     }
-    else {
-      $form_state->set('manual_address_mode', FALSE);
-      $user_input = $form_state->getUserInput();
-      foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
-        unset($user_input[$k]);
-      }
-      $form_state->setUserInput($user_input);
-    }
+    $form_state->setUserInput($user_input);
   }
 
   /**
@@ -537,53 +604,111 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
   }
 
   /**
-   * Toggles the manual address entry mode.
+   * Sets a fetch-lookup error on the form (status message + field error).
    */
-  public function submitToggleManualAddress(array &$form, FormStateInterface $form_state) {
-    $mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
-
-    if (!$mode) {
-      $form_state->set('manual_address_mode', TRUE);
-      $this->applyCompanyAddressSelectionToFormState($form_state, TRUE);
-    }
-    else {
-      // Closing manual fields: clear manual input only, keep address dropdown.
-      $form_state->set('manual_address_mode', FALSE);
-      $form_state->set('company_address_prefill', []);
-      $input = $form_state->getUserInput();
-      foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
-        unset($input[$k]);
-      }
-      $form_state->setUserInput($input);
-    }
-
-    $form_state->setRebuild(TRUE);
+  protected function setFetchCompanyError(FormStateInterface $form_state, string $message, string $field = 'company_email'): void {
+    $form_state->set('company_id_alert', $message);
+    $form_state->setErrorByName($field, $message);
   }
 
   /**
-   * Loads company data from the portal client table (UCR / Company ID).
+   * Validates company email / Client UCR before Fetch Details submit.
    */
-  public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
+  public function validateFetchCompany(array &$form, FormStateInterface $form_state) {
     $form_state->set('company_id_alert', NULL);
+    $form_state->set('fetch_company_client_id', NULL);
 
-    $company_id = trim((string) $form_state->getValue('company_id'));
+    $input = $form_state->getUserInput();
+    $company_id = trim((string) ($form_state->getValue('company_id') ?? ($input['company_id'] ?? '')));
+    $company_email = trim((string) ($form_state->getValue('company_email') ?? ($input['company_email'] ?? '')));
+    $resolved_from_email = FALSE;
+    $error_field = $company_id !== '' ? 'company_id' : 'company_email';
+
+    // Prefer Client UCR when provided (existing behaviour).
+    if ($company_id === '' && $company_email !== '') {
+      if (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
+        $this->setFetchCompanyError(
+          $form_state,
+          (string) $this->tFlow('Please enter a valid company email.'),
+          'company_email'
+        );
+        return;
+      }
+
+      $resolved_ucr = sentinel_portal_entities_resolve_company_ucr_for_email($company_email);
+      if (!$resolved_ucr) {
+        $this->setFetchCompanyError(
+          $form_state,
+          (string) $this->tFlow('No record found.'),
+          'company_email'
+        );
+        return;
+      }
+
+      $company_id = (string) $resolved_ucr;
+      $resolved_from_email = TRUE;
+      $form_state->setValue('company_id', $company_id);
+      $error_field = 'company_email';
+    }
+
     if ($company_id === '') {
-      $form_state->set('company_id_alert', (string) $this->tFlow('Please enter a Company ID.'));
-      $form_state->setRebuild(TRUE);
+      $this->setFetchCompanyError(
+        $form_state,
+        (string) $this->tFlow('Please enter a company email or Client UCR.'),
+        'company_email'
+      );
       return;
     }
 
     $client = $this->lookupSentinelClientByCompanyId($company_id);
     if (!$client) {
-      $form_state->set('company_id_alert', (string) $this->tFlow('Company ID is not valid.'));
+      $this->setFetchCompanyError(
+        $form_state,
+        (string) $this->tFlow($resolved_from_email ? 'No record found.' : 'Company ID is not valid.'),
+        $error_field
+      );
+      return;
+    }
+
+    $form_state->set('fetch_company_client_id', (int) $client->id());
+    $form_state->set('fetch_company_resolved_id', $company_id);
+    $form_state->set('fetch_company_email', $company_email);
+  }
+
+  /**
+   * Loads company data via Client UCR, or company email → UCR then the same flow.
+   */
+  public function submitFetchCompany(array &$form, FormStateInterface $form_state) {
+    $form_state->set('company_id_alert', NULL);
+
+    $client_id = (int) ($form_state->get('fetch_company_client_id') ?? 0);
+    $company_id = trim((string) ($form_state->get('fetch_company_resolved_id') ?? $form_state->getValue('company_id') ?? ''));
+    $company_email = trim((string) ($form_state->get('fetch_company_email') ?? $form_state->getValue('company_email') ?? ''));
+
+    $client = $client_id > 0
+      ? $this->entityTypeManager->getStorage('sentinel_client')->load($client_id)
+      : NULL;
+    if (!$client instanceof SentinelClient) {
+      $client = $company_id !== '' ? $this->lookupSentinelClientByCompanyId($company_id) : NULL;
+    }
+    if (!$client instanceof SentinelClient) {
+      $this->setFetchCompanyError(
+        $form_state,
+        (string) $this->tFlow('No record found.'),
+        'company_email'
+      );
       $form_state->setRebuild(TRUE);
       return;
     }
 
-    $form_state->set('company_id_alert', NULL);
-    $wizard_data = $this->clientToWizardData($client, $company_id);
+    $wizard_data = $this->clientToWizardData($client, $company_id !== '' ? $company_id : (string) $client->getRealUcr());
+    // Prefer the email the user entered when present.
+    if ($company_email !== '') {
+      $wizard_data['email'] = $company_email;
+    }
     $form_state->set('fetched_company', $wizard_data);
     $form_state->set('manual_address_mode', FALSE);
+    $form_state->setValue('manual_address_mode', '0');
     $form_state->set('company_address_prefill', []);
 
     $addresses = $wizard_data['addresses'] ?? [];
@@ -595,9 +720,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
       $input = $form_state->getUserInput();
       $input['company_address_select'] = $selection;
       $form_state->setUserInput($input);
-      // Match portal submit behavior by showing the selected address prefilled
-      // in the editable company address fields right after company fetch.
-      $this->applyCompanyAddressSelectionToFormState($form_state, TRUE);
+      // Prefill manual fields (kept hidden; JS show/hide opens them).
+      $this->applyCompanyAddressSelectionToFormState($form_state, FALSE);
     }
     else {
       $form_state->set('company_address_selected_id', NULL);
@@ -606,13 +730,64 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
 
     // Clear user-entered values so they are replaced by the new fetched data.
     $input = $form_state->getUserInput();
-    unset($input['company_name'], $input['company_address'], $input['company_email'], $input['company_phone']);
+    unset($input['company_name'], $input['company_address'], $input['company_phone']);
+    // Refresh email/UCR from wizard payload (email path keeps typed address).
+    $input['company_id'] = $company_id;
+    $input['company_email'] = $wizard_data['email'] ?? $company_email;
+    $input['manual_address_mode'] = '0';
     foreach ($this->portalStyleManualCompanyAddressInputKeys() as $k) {
       unset($input[$k]);
     }
+    // Re-apply prefill into input after clearing keys.
+    $prefill = $form_state->get('company_address_prefill');
+    if (is_array($prefill)) {
+      foreach ($prefill as $key => $value) {
+        $input[$key] = $value;
+      }
+    }
     $form_state->setUserInput($input);
+    $form_state->setValue('company_email', $input['company_email']);
 
     $form_state->setRebuild(TRUE);
+  }
+
+  /**
+   * Ensures company email and Client UCR are present before continuing.
+   */
+  public function validateCompanyReview(array &$form, FormStateInterface $form_state) {
+    $form_state->set('company_id_alert', NULL);
+
+    $input = $form_state->getUserInput();
+    $company_email = trim((string) ($form_state->getValue('company_email') ?? ($input['company_email'] ?? '')));
+    $company_id = trim((string) ($form_state->getValue('company_id') ?? ($input['company_id'] ?? '')));
+    $alerts = [];
+
+    if ($company_email === '') {
+      $msg = (string) $this->tFlow('Company email is required.');
+      $form_state->setErrorByName('company_email', $msg);
+      $alerts[] = $msg;
+    }
+    elseif (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) {
+      $msg = (string) $this->tFlow('Please enter a valid company email.');
+      $form_state->setErrorByName('company_email', $msg);
+      $alerts[] = $msg;
+    }
+
+    if ($company_id === '') {
+      $msg = (string) $this->tFlow('Client UCR is required.');
+      $form_state->setErrorByName('company_id', $msg);
+      $alerts[] = $msg;
+    }
+
+    if (empty($this->getFetchedCompanyData($form_state))) {
+      $msg = (string) $this->tFlow('Please fetch company details first.');
+      $form_state->setErrorByName('company_email', $msg);
+      $alerts[] = $msg;
+    }
+
+    if ($alerts !== []) {
+      $form_state->set('company_id_alert', implode(' ', array_unique($alerts)));
+    }
   }
 
   /**
@@ -651,7 +826,8 @@ class AnonymousSampleCompanyWizardForm extends FormBase {
     }
 
     $addresses = $data['addresses'] ?? [];
-    $manual_mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
+    $manual_mode = $this->isManualCompanyAddressMode($form_state);
+    $form_state->set('manual_address_mode', $manual_mode);
     $selected_id = $this->getCompanyAddressSelectValue($form_state);
 
     if ($selected_id !== NULL && !$manual_mode) {
@@ -813,7 +989,7 @@ if (method_exists($client, 'getUcr')) {
         ->execute();
 
       foreach ($address_query as $address_row) {
-        $addresses[$address_row->entity_id] = [
+        $row = [
           'organization' => $address_row->field_address_organization ?? '',
           'address1' => $address_row->field_address_address_line1 ?? '',
           'address2' => $address_row->field_address_address_line2 ?? '',
@@ -823,6 +999,11 @@ if (method_exists($client, 'getUcr')) {
           'postcode' => $address_row->field_address_postal_code ?? '',
           'country' => $address_row->field_address_country_code ?? '',
         ];
+        // Skip empty address rows (no street / town / postcode).
+        if ($this->formatCompanyAddressSelectLabel($row) === '') {
+          continue;
+        }
+        $addresses[$address_row->entity_id] = $row;
       }
     }
 
@@ -886,6 +1067,11 @@ if (method_exists($client, 'getUcr')) {
       }
     }
 
+    $email = '';
+    if ($sample->hasField('company_email') && !$sample->get('company_email')->isEmpty()) {
+      $email = trim((string) $sample->get('company_email')->value);
+    }
+
     return [
       'company_id' => $entered_id,
       'customer_ucr_display' => $entered_id,
@@ -893,7 +1079,7 @@ if (method_exists($client, 'getUcr')) {
       'name' => '',
       'address' => '',
       'addresses' => [],
-      'email' => '',
+      'email' => $email,
       'phone' => '',
     ];
   }
@@ -1037,7 +1223,7 @@ if (method_exists($client, 'getUcr')) {
   ): ?int {
     $addresses = $data['addresses'] ?? [];
     $selected_id = $this->getCompanyAddressSelectValue($form_state);
-    $manual_mode = (bool) ($form_state->get('manual_address_mode') ?? FALSE);
+    $manual_mode = $this->isManualCompanyAddressMode($form_state);
 
     // Dropdown selection: always reuse the existing address entity.
     if ($selected_id !== NULL && !$manual_mode) {

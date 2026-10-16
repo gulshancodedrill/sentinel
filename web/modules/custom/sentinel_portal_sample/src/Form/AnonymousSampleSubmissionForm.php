@@ -66,9 +66,10 @@ class AnonymousSampleSubmissionForm extends FormBase {
 
     $request->getSession()->set('sentinel_anonymous_entry', 'submit');
 
-    $existing_sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
-    if ($existing_sample && AnonymousSampleWizardProgress::sampleIsFullySubmitted($existing_sample)) {
+    // Cheap SQL gate before any entity load.
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
       $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['#cache']['max-age'] = 0;
       $form['message'] = [
         '#markup' => '<div class="messages messages--warning">' .
           '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
@@ -79,6 +80,8 @@ class AnonymousSampleSubmissionForm extends FormBase {
       ];
       return $form;
     }
+
+    $existing_sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
 
     // PRN should be present (controller handles validation, but we need it for the form)
     $form['#title'] = $this->tFlow('Welcome to Sentinel. Please proceed by submitting a sample.');
@@ -149,8 +152,8 @@ class AnonymousSampleSubmissionForm extends FormBase {
       '#type' => 'radios',
       '#title' => $this->tFlow('Please select your account type'),
       '#options' => [
-        'company' => $this->tFlow('Company'),
-        'individual' => $this->tFlow('Individual'),
+        'company' => $this->tFlow('Company Account (UCR)'),
+        'individual' => $this->tFlow('Individual User (Non-UCR)'),
       ],
       '#required' => TRUE,
       '#weight' => 10,

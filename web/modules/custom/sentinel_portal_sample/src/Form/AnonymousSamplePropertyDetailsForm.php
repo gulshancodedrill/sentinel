@@ -50,6 +50,20 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
 
     $form_state->set('property_prn', $prn);
 
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
+      $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['#cache']['max-age'] = 0;
+      $form['message'] = [
+        '#markup' => '<div class="messages messages--warning">' .
+          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
+          '<p>' . $this->tFlow('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+            '@prn' => $prn,
+          ]) . '</p></div>',
+        '#weight' => -10,
+      ];
+      return $form;
+    }
+
     $this->sample = $this->loadAnonymousSampleByPrn($prn);
     if (!$this->sample || !$this->sample->id()) {
       $this->messenger()->addWarning($this->tFlow('Please complete the first step before continuing.'));
@@ -85,23 +99,6 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       return $this->buildAnonymousVerificationForm((int) $this->sample->id(), $form, $form_state);
     }
 
-    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($this->sample)) {
-      $prn = $this->sample->hasField('pack_reference_number') && !$this->sample->get('pack_reference_number')->isEmpty()
-        ? $this->sample->get('pack_reference_number')->value
-        : $this->tFlow('N/A');
-      $form['#title'] = $this->tFlow('Sample Already Submitted');
-      $form['message'] = [
-        '#markup' => '<div class="messages messages--warning">' .
-          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
-          '<p>' . $this->tFlow('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
-            '@prn' => $prn,
-          ]) . '</p>' .
-          '</div>',
-        '#weight' => -10,
-      ];
-      return $form;
-    }
-
     AnonymousSampleWizardProgress::prependToForm($form, $form_state, 'anonymous_sample_property_details_form', $this->sample);
 
     $form['#title'] = $this->tFlow('Property details');
@@ -126,6 +123,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
         ['property_ajax_root', 'property_house_no'],
         ['property_house_no'],
       ]),
+      '#required' => TRUE,
       '#size' => 12,
       '#weight' => -14,
     ];
@@ -133,6 +131,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#type' => 'textfield',
       '#title' => $this->tFlow('Postcode'),
       '#default_value' => $form_state->getValue('property_postcode') ?? '',
+      '#required' => TRUE,
       '#size' => 16,
       '#weight' => -13,
     ];
@@ -259,10 +258,28 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     ];
 
     $known_manufacturers = [
+      'Worcester Bosch' => 'Worcester Bosch',
       'Vaillant' => 'Vaillant',
-      'Worcester' => 'Worcester',
-      'Ideal' => 'Ideal',
-      'baxi' => 'baxi',
+      'Ideal Heating' => 'Ideal Heating',
+      'Baxi' => 'Baxi',
+      'Viessmann' => 'Viessmann',
+      'Alpha Heating Innovation' => 'Alpha Heating Innovation',
+      'Ariston' => 'Ariston',
+      'ATAG' => 'ATAG',
+      'Biasi' => 'Biasi',
+      'Ferroli' => 'Ferroli',
+      'Glow-worm' => 'Glow-worm',
+      'Grant' => 'Grant',
+      'Intergas' => 'Intergas',
+      'Main Heating' => 'Main Heating',
+      'Potterton' => 'Potterton',
+      'Vokèra' => 'Vokèra',
+    ];
+    // Map previously stored option values to the renamed keys.
+    $manufacturer_aliases = [
+      'Worcester' => 'Worcester Bosch',
+      'Ideal' => 'Ideal Heating',
+      'baxi' => 'Baxi',
     ];
 
     $stored_manufacturer = trim((string) ($form_state->getValue('boiler_manufacturer')
@@ -274,16 +291,28 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       $manufacturer_select_default = (string) $form_state->getValue('boiler_manufacturer');
     }
     elseif ($stored_manufacturer !== '' && strcasecmp($stored_manufacturer, 'Not specified') !== 0) {
+      if (isset($manufacturer_aliases[$stored_manufacturer])) {
+        $stored_manufacturer = $manufacturer_aliases[$stored_manufacturer];
+      }
       if (isset($known_manufacturers[$stored_manufacturer])) {
         $manufacturer_select_default = $stored_manufacturer;
       }
       else {
         $matched = FALSE;
-        foreach (array_keys($known_manufacturers) as $known) {
-          if (strcasecmp($known, $stored_manufacturer) === 0) {
-            $manufacturer_select_default = $known;
+        foreach ($manufacturer_aliases as $alias => $canonical) {
+          if (strcasecmp($alias, $stored_manufacturer) === 0) {
+            $manufacturer_select_default = $canonical;
             $matched = TRUE;
             break;
+          }
+        }
+        if (!$matched) {
+          foreach (array_keys($known_manufacturers) as $known) {
+            if (strcasecmp($known, $stored_manufacturer) === 0) {
+              $manufacturer_select_default = $known;
+              $matched = TRUE;
+              break;
+            }
           }
         }
         if (!$matched) {
@@ -385,7 +414,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => 9,
       '#states' => [
         'visible' => [
-          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester'],
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester Bosch'],
         ],
       ],
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
@@ -400,7 +429,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => 10,
       '#states' => [
         'visible' => [
-          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester'],
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester Bosch'],
         ],
       ],
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],

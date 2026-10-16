@@ -61,6 +61,18 @@ class AnonymousSampleOptionsForm extends FormBase {
       return $form;
     }
 
+    if (!str_starts_with($token, 'draft_') && AnonymousSampleWizardProgress::pidIsFullySubmitted((int) $token)) {
+      $form['#title'] = $this->tFlow('Sample Already Submitted');
+      $form['#cache']['max-age'] = 0;
+      $form['message'] = [
+        '#markup' => '<div class="messages messages--warning">' .
+          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
+          '<p>' . $this->tFlow('This sample has already been submitted with complete details.') . '</p></div>',
+        '#weight' => -10,
+      ];
+      return $form;
+    }
+
     $storage = $this->entityTypeManager->getStorage('sentinel_sample');
     if (str_starts_with($token, 'draft_')) {
       $draft_data = $this->getRequest()->getSession()->get('sentinel_draft_' . $token, []);
@@ -71,17 +83,6 @@ class AnonymousSampleOptionsForm extends FormBase {
 
     if (!$sample) {
       $this->messenger()->addError($this->tFlow('Sample not found.'));
-      return $form;
-    }
-
-    if (AnonymousSampleWizardProgress::sampleIsFullySubmitted($sample)) {
-      $form['#title'] = $this->tFlow('Sample Already Submitted');
-      $form['message'] = [
-        '#markup' => '<div class="messages messages--warning">' .
-          '<p><strong>' . $this->tFlow('This record already exists.') . '</strong></p>' .
-          '<p>' . $this->tFlow('This sample has already been submitted with complete details.') . '</p></div>',
-        '#weight' => -10,
-      ];
       return $form;
     }
 
@@ -146,8 +147,8 @@ class AnonymousSampleOptionsForm extends FormBase {
       '#type' => 'radios',
       '#title' => $this->tFlow('Please select your account type'),
       '#options' => [
-        'company' => $this->tFlow('Company'),
-        'individual' => $this->tFlow('Individual'),
+        'company' => $this->tFlow('Company Account (UCR)'),
+        'individual' => $this->tFlow('Individual User (Non-UCR)'),
       ],
       '#required' => TRUE,
       '#parents' => ['user_type'],

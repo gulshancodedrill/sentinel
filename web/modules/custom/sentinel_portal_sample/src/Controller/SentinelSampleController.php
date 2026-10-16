@@ -443,49 +443,27 @@ class SentinelSampleController extends ControllerBase {
       ];
     }
 
-    // Check if sample with this PRN already exists.
-    $sample = AnonymousSampleWizardProgress::loadSampleByPrn($prn);
-
-    if ($sample) {
-        // Check if sample has both company address and system address
-        // Check new entity reference fields first
-        $has_company_address = FALSE;
-        if ($sample->hasField('field_company_address') && !$sample->get('field_company_address')->isEmpty()) {
-          $has_company_address = TRUE;
-        }
-        // Fall back to legacy field
-        elseif ($sample->hasField('sentinel_company_address_target_id')) {
-          $legacy_company_id = $sample->get('sentinel_company_address_target_id')->value;
-          $has_company_address = !empty($legacy_company_id);
-        }
-
-        $has_system_address = FALSE;
-        if ($sample->hasField('field_sentinel_sample_address') && !$sample->get('field_sentinel_sample_address')->isEmpty()) {
-          $has_system_address = TRUE;
-        }
-        // Fall back to legacy field
-        elseif ($sample->hasField('sentinel_sample_address_target_id')) {
-          $legacy_system_id = $sample->get('sentinel_sample_address_target_id')->value;
-          $has_system_address = !empty($legacy_system_id);
-        }
-
-        if ($has_company_address && $has_system_address) {
-          // Sample is complete - show message
-          return [
-            '#title' => AnonymousSampleWizardProgress::trans('Sample Already Submitted'),
-            'message' => [
-              '#markup' => '<div class="messages messages--warning">' .
-                '<p><strong>' . AnonymousSampleWizardProgress::trans('This record already exists.') . '</strong></p>' .
-                '<p>' . AnonymousSampleWizardProgress::trans('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
-                  '@prn' => $prn,
-                ]) . '</p>' .
-                '</div>',
-            ],
-          ];
-        }
+    // Block re-entry when this PRN already has a completed submission.
+    if (AnonymousSampleWizardProgress::prnIsFullySubmitted($prn)) {
+      return [
+        '#title' => AnonymousSampleWizardProgress::trans('Sample Already Submitted'),
+        '#cache' => [
+          'max-age' => 0,
+          'contexts' => ['url.query_args:prn', 'session'],
+        ],
+        'message' => [
+          '#markup' => '<div class="messages messages--warning">' .
+            '<p><strong>' . AnonymousSampleWizardProgress::trans('This record already exists.') . '</strong></p>' .
+            '<p>' . AnonymousSampleWizardProgress::trans('A sample with Packet Reference Number @prn has already been submitted with complete details.', [
+              '@prn' => $prn,
+            ]) . '</p>' .
+            '</div>',
+        ],
+      ];
     }
 
     $form = $this->formBuilder()->getForm('\Drupal\sentinel_portal_sample\Form\AnonymousSampleSubmissionForm');
+    $form['#cache']['max-age'] = 0;
     return $form;
   }
 

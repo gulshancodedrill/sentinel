@@ -131,6 +131,7 @@ class BulkUploadBatch {
       }
 
       $data = self::applyTemplateFieldMappings($data);
+      $data = self::normalizeEmailFieldsInRow($data);
       $user_type = self::normalizeUserType($data['user_type'] ?? '');
 
       if ($user_type === 'individual') {
@@ -618,6 +619,116 @@ class BulkUploadBatch {
       $data['company_id'] = $data['customer_id'];
     }
     return $data;
+  }
+
+  /**
+   * Email column keys used across company / individual bulk templates.
+   *
+   * @return string[]
+   */
+  protected static function emailFieldKeys(): array {
+    return [
+      'company_email',
+      'installer_email',
+      'contact_email',
+      'email',
+    ];
+  }
+
+  /**
+   * Normalizes accented characters in all email fields on a CSV row.
+   *
+   * Example: josÉ@domain.com → jose@domain.com (È/Ê/Ë → E/e, etc.).
+   *
+   * @param array $data
+   *   Mapped bulk row.
+   *
+   * @return array
+   *   Row with normalized email values.
+   */
+  protected static function normalizeEmailFieldsInRow(array $data): array {
+    foreach (self::emailFieldKeys() as $key) {
+      if (!isset($data[$key]) || $data[$key] === '' || $data[$key] === NULL) {
+        continue;
+      }
+      $data[$key] = self::normalizeEmailValue((string) $data[$key]);
+    }
+    return $data;
+  }
+
+  /**
+   * Converts special/accented letters in an email to plain ASCII equivalents.
+   *
+   * Handles real accents (É) and common CSV mojibake (Ã‰ from UTF-8 misread as
+   * Windows-1252), e.g. josÃ‰.prÃŠgent@pÃ‹gaz.fr → jose.pregent@pegaz.fr.
+   *
+   * @param string $email
+   *   Raw email from CSV.
+   *
+   * @return string
+   *   Transliterated email safe for validation/storage.
+   */
+  protected static function normalizeEmailValue(string $email): string {
+    $email = trim($email);
+    if ($email === '') {
+      return '';
+    }
+
+    // Ensure we work with UTF-8 (CSV exports sometimes arrive as Windows-1252).
+    if (!mb_check_encoding($email, 'UTF-8')) {
+      $converted = @mb_convert_encoding($email, 'UTF-8', 'Windows-1252, ISO-8859-1, UTF-8');
+      if (is_string($converted) && $converted !== '') {
+        $email = $converted;
+      }
+    }
+
+    // Fix mojibake: UTF-8 bytes were shown/saved as Latin-1 (É → Ã‰, Ê → ÃŠ).
+    $email = self::repairUtf8Mojibake($email);
+
+    if (\Drupal::hasService('transliteration')) {
+      $email = \Drupal::transliteration()->transliterate($email, 'en');
+    }
+    elseif (function_exists('iconv')) {
+      $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $email);
+      if ($converted !== FALSE) {
+        $email = $converted;
+      }
+    }
+
+    // Drop leftover non-email characters occasionally produced by transliteration.
+    $email = preg_replace('/[^a-zA-Z0-9.@_+\\-]/', '', $email) ?? $email;
+
+    // Emails are case-insensitive; lowercase keeps results consistent.
+    return strtolower(trim($email));
+  }
+
+  /**
+   * Repairs UTF-8 text that was mis-decoded as Windows-1252 / ISO-8859-1.
+   *
+   * Example: "josÃ‰" (mojibake) → "josÉ".
+   */
+  protected static function repairUtf8Mojibake(string $text): string {
+    // Typical markers when UTF-8 accented letters were read as Windows-1252.
+    if (strpos($text, 'Ã') === FALSE && strpos($text, 'Â') === FALSE) {
+      return $text;
+    }
+
+    foreach (['Windows-1252', 'ISO-8859-1'] as $encoding) {
+      $bytes = @mb_convert_encoding($text, $encoding, 'UTF-8');
+      if (!is_string($bytes) || $bytes === '') {
+        continue;
+      }
+      if (!mb_check_encoding($bytes, 'UTF-8')) {
+        continue;
+      }
+      // Prefer the repaired value when mojibake markers are reduced.
+      if (substr_count($bytes, 'Ã') < substr_count($text, 'Ã')
+        || substr_count($bytes, 'Â') < substr_count($text, 'Â')) {
+        return $bytes;
+      }
+    }
+
+    return $text;
   }
 
   /**
