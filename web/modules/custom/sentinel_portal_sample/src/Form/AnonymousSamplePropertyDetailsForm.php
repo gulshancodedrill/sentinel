@@ -258,10 +258,28 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     ];
 
     $known_manufacturers = [
+      'Worcester Bosch' => 'Worcester Bosch',
       'Vaillant' => 'Vaillant',
-      'Worcester' => 'Worcester',
-      'Ideal' => 'Ideal',
-      'baxi' => 'baxi',
+      'Ideal Heating' => 'Ideal Heating',
+      'Baxi' => 'Baxi',
+      'Viessmann' => 'Viessmann',
+      'Alpha Heating Innovation' => 'Alpha Heating Innovation',
+      'Ariston' => 'Ariston',
+      'ATAG' => 'ATAG',
+      'Biasi' => 'Biasi',
+      'Ferroli' => 'Ferroli',
+      'Glow-worm' => 'Glow-worm',
+      'Grant' => 'Grant',
+      'Intergas' => 'Intergas',
+      'Main Heating' => 'Main Heating',
+      'Potterton' => 'Potterton',
+      'Vokèra' => 'Vokèra',
+    ];
+    // Map previously stored option values to the renamed keys.
+    $manufacturer_aliases = [
+      'Worcester' => 'Worcester Bosch',
+      'Ideal' => 'Ideal Heating',
+      'baxi' => 'Baxi',
     ];
 
     $stored_manufacturer = trim((string) ($form_state->getValue('boiler_manufacturer')
@@ -273,16 +291,28 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       $manufacturer_select_default = (string) $form_state->getValue('boiler_manufacturer');
     }
     elseif ($stored_manufacturer !== '' && strcasecmp($stored_manufacturer, 'Not specified') !== 0) {
+      if (isset($manufacturer_aliases[$stored_manufacturer])) {
+        $stored_manufacturer = $manufacturer_aliases[$stored_manufacturer];
+      }
       if (isset($known_manufacturers[$stored_manufacturer])) {
         $manufacturer_select_default = $stored_manufacturer;
       }
       else {
         $matched = FALSE;
-        foreach (array_keys($known_manufacturers) as $known) {
-          if (strcasecmp($known, $stored_manufacturer) === 0) {
-            $manufacturer_select_default = $known;
+        foreach ($manufacturer_aliases as $alias => $canonical) {
+          if (strcasecmp($alias, $stored_manufacturer) === 0) {
+            $manufacturer_select_default = $canonical;
             $matched = TRUE;
             break;
+          }
+        }
+        if (!$matched) {
+          foreach (array_keys($known_manufacturers) as $known) {
+            if (strcasecmp($known, $stored_manufacturer) === 0) {
+              $manufacturer_select_default = $known;
+              $matched = TRUE;
+              break;
+            }
           }
         }
         if (!$matched) {
@@ -384,7 +414,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => 9,
       '#states' => [
         'visible' => [
-          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester'],
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester Bosch'],
         ],
       ],
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],
@@ -399,7 +429,7 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       '#weight' => 10,
       '#states' => [
         'visible' => [
-          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester'],
+          ':input[name="boiler_manufacturer"]' => ['value' => 'Worcester Bosch'],
         ],
       ],
       '#wrapper_attributes' => ['class' => ['sentinel-anon-hint-red-label']],

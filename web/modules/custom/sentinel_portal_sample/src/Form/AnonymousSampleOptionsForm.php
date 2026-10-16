@@ -147,8 +147,8 @@ class AnonymousSampleOptionsForm extends FormBase {
       '#type' => 'radios',
       '#title' => $this->tFlow('Please select your account type'),
       '#options' => [
-        'company' => $this->tFlow('Company'),
-        'individual' => $this->tFlow('Individual'),
+        'company' => $this->tFlow('Company Account (UCR)'),
+        'individual' => $this->tFlow('Individual User (Non-UCR)'),
       ],
       '#required' => TRUE,
       '#parents' => ['user_type'],
