@@ -464,11 +464,11 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
     $form['marketing_consent'] = [
       '#type' => 'checkbox',
       '#title' => $this->tFlow('I agree to receive marketing communications from Sentinel Performance Solutions Ltd. Part of Aalberts Group. My contact details may be shared with trusted third-party service providers who assist in delivering these communications. I can withdraw my consent at any time.'),
-      '#required' => TRUE,
+      // '#required' => TRUE,
       '#return_value' => 1,
       '#weight' => 19,
-      '#wrapper_attributes' => ['class' => ['sentinel-anon-marketing-consent']],
-      '#label_attributes' => ['class' => ['sentinel-anon-marketing-consent-label']],
+      '#wrapper_attributes' => ['class' => ['sentinel-anon-marketing-consent1']],
+      '#label_attributes' => ['class' => ['sentinel-anon-marketing-consent-label1']],
     ];
 
     $form['actions'] = ['#type' => 'actions', '#weight' => 20];
@@ -584,13 +584,13 @@ class AnonymousSamplePropertyDetailsForm extends SentinelSampleSubmissionForm {
       (string) $this->tFlow('Please enter a valid installer email address.')
     );
 
-    $trigger = $form_state->getTriggeringElement();
-    $trigger_name = is_array($trigger) ? (string) ($trigger['#name'] ?? '') : '';
-    if ($trigger_name === 'property_next' || $trigger_name === '') {
-      if (empty($form_state->getValue('marketing_consent'))) {
-        $form_state->setErrorByName('marketing_consent', $this->tFlow('You must agree before submitting.'));
-      }
-    }
+    // $trigger = $form_state->getTriggeringElement();
+    // $trigger_name = is_array($trigger) ? (string) ($trigger['#name'] ?? '') : '';
+    // if ($trigger_name === 'property_next' || $trigger_name === '') {
+    //   if (empty($form_state->getValue('marketing_consent'))) {
+    //     $form_state->setErrorByName('marketing_consent', $this->tFlow('You must agree before submitting.'));
+    //   }
+    // }
   }
 
   public function ajaxPropertyRefresh(array &$form, FormStateInterface $form_state) {

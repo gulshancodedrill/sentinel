@@ -79,6 +79,10 @@ class BulkUploadForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $module_path = $this->moduleHandler->getModule('sentinel_portal_bulk_upload')->getPath();
 
+    $standard_template_link = $this->buildTemplateDownloadLink(
+      $module_path . '/includes/template.csv',
+      $this->t('Standard Template (CSV)')
+    );
     $company_template_link = $this->buildTemplateDownloadLink(
       $module_path . '/includes/template_company.csv',
       $this->t('Company template (CSV)')
@@ -94,7 +98,8 @@ class BulkUploadForm extends FormBase {
     )->toString();
 
     $form['wrapper_start'] = [
-      '#markup' => '<div class="landing-well clearfix"><h2><i class="fa fa-upload"></i> &nbsp; ' . $this->t('Submit multiple packs at once') . '</h2><p>' . $this->t('Download the @company_template or @individual_template, populate it with your pack data, then upload the file below. Guidance on correct use of the templates can be found below.', [
+      '#markup' => '<div class="landing-well clearfix"><h2><i class="fa fa-upload"></i> &nbsp; ' . $this->t('Submit multiple packs at once') . '</h2><p>' . $this->t('Download the @standard_template, @company_template or @individual_template, populate it with your pack data, then upload the file below. Guidance on correct use of the templates can be found below.', [
+        '@standard_template' => Markup::create($standard_template_link),
         '@company_template' => Markup::create($company_template_link),
         '@individual_template' => Markup::create($individual_template_link),
       ]) . '</p>',
@@ -140,7 +145,7 @@ class BulkUploadForm extends FormBase {
     $help_text = '<p>' . $this->t('Any issues found during the import process will be available to view in the @notices area.', ['@notices' => $notices_markup]) . '</p>';
 
     $form['help_text'] = [
-      '#markup' => $help_header . $guide_link . '<br><ul><li>' . $company_template_link . '</li><li>' . $individual_template_link . '</li></ul>' . $help_text,
+      '#markup' => $help_header . $guide_link . '<br><ul><li>' . $standard_template_link . '</li><li>' . $company_template_link . '</li><li>' . $individual_template_link . '</li></ul>' . $help_text,
     ];
 
     return $form;
