@@ -389,7 +389,12 @@ class BulkUploadBatch {
       'installer name' => 'installer_name',
       'installer email' => 'installer_email',
       'company name' => 'company_name',
+      'company address1' => 'company_address1',
+      'company_address1' => 'company_address1',
+      'company address 1' => 'company_address1',
       'company postcode' => 'company_postcode',
+      'company town' => 'company_town',
+      'company_town' => 'company_town',
       'company tel' => 'company_tel',
       'system location' => 'system_location',
       'uprn' => 'uprn',
@@ -403,10 +408,12 @@ class BulkUploadBatch {
       'boiler manufacturer' => 'boiler_manufacturer',
       'date sent' => 'date_sent',
       'dt_sent' => 'date_sent',
+      'dt sent' => 'date_sent',
       'boiler id' => 'boiler_id',
       'boiler type' => 'boiler_type',
       'date installed' => 'date_installed',
       'dt_installed' => 'date_installed',
+      'dt installed' => 'date_installed',
       'project id' => 'project_id',
       'customer id' => 'customer_id',
     ];
@@ -450,7 +457,7 @@ class BulkUploadBatch {
   }
 
   /**
-   * Default headers mapping (fallback).
+   * Default headers mapping for Standard Template (CSV) when no header row.
    */
   protected static function defaultHeaders(): array {
     return [
@@ -459,24 +466,20 @@ class BulkUploadBatch {
       2 => 'installer_name',
       3 => 'installer_email',
       4 => 'company_name',
-      5 => 'company_postcode',
-      6 => 'company_tel',
-      7 => 'system_location',
-      8 => 'uprn',
+      5 => 'company_address1',
+      6 => 'company_postcode',
+      7 => 'company_town',
+      8 => 'company_tel',
       9 => 'property_number',
       10 => 'street',
       11 => 'town_city',
-      12 => 'county',
-      13 => 'postcode',
-      14 => 'landlord',
-      15 => 'system_age',
-      16 => 'boiler_manufacturer',
-      17 => 'date_sent',
-      18 => 'boiler_id',
-      19 => 'boiler_type',
-      20 => 'date_installed',
-      21 => 'project_id',
-      22 => 'customer_id',
+      12 => 'postcode',
+      13 => 'system_age',
+      14 => 'boiler_manufacturer',
+      15 => 'date_sent',
+      16 => 'boiler_id',
+      17 => 'date_installed',
+      18 => 'project_id',
     ];
   }
 
